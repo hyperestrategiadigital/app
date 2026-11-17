@@ -128,6 +128,8 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
       entrada.valor = () => [...entrada.querySelectorAll("input:checked")].map((i) => i.value);
     } else if (c.tipo === "checklist") {
       entrada = editorChecklist(v || []);
+    } else if (c.tipo === "cor") {
+      entrada = campoCor(v || c.padrao || "#4E2CA3");
     } else {
       entrada = el("input", { type: c.tipo || "text", placeholder: c.dica || "", step: c.tipo === "number" ? "0.01" : undefined });
       entrada.value = v;
@@ -145,7 +147,7 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
     const out = {};
     for (const [nome, { c, entrada }] of Object.entries(entradas)) {
       if (c.tipo === "checkbox") out[nome] = entrada.checked;
-      else if (c.tipo === "multi" || c.tipo === "checklist") out[nome] = entrada.valor();
+      else if (c.tipo === "multi" || c.tipo === "checklist" || c.tipo === "cor") out[nome] = entrada.valor();
       else if (c.tipo === "number") out[nome] = entrada.value === "" ? null : Number(entrada.value);
       else out[nome] = entrada.value.trim();
     }
@@ -187,6 +189,26 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
     fechar = abrirModal(titulo, form, { largo });
   });
 }
+
+/** Seletor de cor que mostra a cor de verdade: quadrado clicável + código #RRGGBB. */
+export function campoCor(valor, aoMudar) {
+  const valido = (h) => /^#[0-9a-f]{6}$/i.test(h || "");
+  const amostra = el("input", { type: "color", value: valido(valor) ? valor : "#4E2CA3", "aria-label": "Escolher cor" });
+  const texto = el("input", { type: "text", value: (valor || "").toUpperCase(), maxlength: 7, class: "hex", "aria-label": "Código da cor" });
+  const caixa = el("div", { class: "campo-cor" }, amostra, texto);
+  amostra.addEventListener("input", () => { texto.value = amostra.value.toUpperCase(); });
+  amostra.addEventListener("change", () => { texto.value = amostra.value.toUpperCase(); aoMudar?.(texto.value); });
+  texto.addEventListener("change", () => {
+    const v = texto.value.trim().replace(/^([^#])/, "#$1").toUpperCase();
+    if (!valido(v)) { avisar("Use o formato #RRGGBB.", "erro"); texto.value = amostra.value.toUpperCase(); return; }
+    texto.value = v; amostra.value = v; aoMudar?.(v);
+  });
+  caixa.valor = () => texto.value.toUpperCase();
+  return caixa;
+}
+
+/** Bolinha com a cor + o código, para mostrar cores em listas e textos. */
+export const amostraCor = (hex) => el("span", { class: "amostra-cor" }, el("span", { class: "bolinha-cor", style: { background: hex } }), hex);
 
 function editorChecklist(itens) {
   const lista = el("ul", { class: "checklist-editor" });

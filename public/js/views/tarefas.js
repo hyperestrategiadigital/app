@@ -1,7 +1,7 @@
 // Tarefas: quadro por status (A fazer / Em andamento / Concluído) ou lista, com filtros.
 import { el, hojeISO, addDias, normalizar, vazio } from "../ui.js";
 import { dados, atualizar, opcoesClientes } from "../db.js";
-import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas } from "./componentes.js";
+import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas, opcoesResponsaveis } from "./componentes.js";
 import { STATUS_TAREFA, TIPOS_TAREFA } from "../constantes.js";
 
 export function render({ estado, renderizar }) {
@@ -13,6 +13,7 @@ export function render({ estado, renderizar }) {
   const filtradas = dados.tarefas.filter((t) =>
     (!f.cliente || t.clienteId === f.cliente) &&
     (!f.tipo || t.tipo === f.tipo) &&
+    (!f.responsavel || (t.responsavel || "") === f.responsavel) &&
     (!busca || normalizar(t.titulo + " " + (t.checklist || []).map((i) => i.texto).join(" ") + " " + (t.notas || "")).includes(busca)));
 
   const limiteConcluidas = f.periodoConcluidas === "tudo" ? "" : addDias(hojeISO(), -Number(f.periodoConcluidas));
@@ -32,6 +33,9 @@ export function render({ estado, renderizar }) {
       opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (f.cliente || "") }, v ? r : "Todos os clientes"))),
     el("select", { onChange: set("tipo"), "aria-label": "Tipo" },
       el("option", { value: "" }, "Todos os tipos"), TIPOS_TAREFA.map((t) => el("option", { value: t, selected: t === f.tipo }, t))),
+    el("select", { onChange: set("responsavel"), "aria-label": "Responsável" },
+      el("option", { value: "" }, "Todos os responsáveis"),
+      [...new Set([...opcoesResponsaveis(), ...dados.tarefas.map((t) => t.responsavel).filter(Boolean)])].map((r) => el("option", { value: r, selected: r === f.responsavel }, r))),
     abas([["quadro", "Quadro"], ["lista", "Lista"]], f.modo, (m) => { f.modo = m; renderizar(); }));
 
   const seletorPeriodo = el("select", { class: "mini", onChange: set("periodoConcluidas"), "aria-label": "Período das concluídas" },

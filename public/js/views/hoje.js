@@ -5,7 +5,7 @@ import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, seloCliente } from "./c
 import { rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
 import { compromissosEntre } from "../agenda.js";
-import { abrirCompromisso, cartaoCompromisso } from "../compromissos.js";
+import { abrirCompromisso, cartaoCompromisso, avisoPendentes } from "../compromissos.js";
 
 export function render() {
   const hoje = hojeISO();
@@ -48,6 +48,7 @@ export function render() {
       cartaoNumero("Próximos 7 dias", semana.length),
       cartaoNumero("Concluídas hoje", concluidasHoje, "ok")),
 
+    avisoPendentes(),
     vencidas.length ? el("a", { class: "faixa-alerta", href: "#/financeiro" },
       `💰 ${vencidas.length} recebimento(s) vencido(s): ${fmtMoeda(vencidas.reduce((s, f) => s + (f.valor || 0), 0))}. Ver financeiro →`) : null,
 

@@ -4,6 +4,18 @@ import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId } 
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo } from "../constantes.js";
 import { promptCopy } from "../prompts.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
+import { abrirCompromisso } from "../compromissos.js";
+import { configEquipe } from "../agenda.js";
+import { linkAgendadorMeta, linkLinkedinAdmin } from "./contas.js";
+
+/** Nomes da equipe (Ajustes → Equipe) + quem já aparece nas tarefas. */
+export function opcoesResponsaveis(atual = "") {
+  const nomes = configEquipe().map((p) => p.nome).filter(Boolean);
+  if (!nomes.length) nomes.push("Matheus");
+  if (atual && !nomes.includes(atual)) nomes.push(atual);
+  return nomes;
+}
+export const iniciais = (nome = "") => nome.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("") || "?";
 
 export const atrasada = (t) => t.status !== "concluido" && t.prazo && t.prazo < hojeISO();
 
@@ -38,6 +50,7 @@ export function abrirTarefa(tarefa = {}) {
     { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 4, dica: "Cole aqui a copy aprovada", mostrarSe: conteudo },
 
     { tipo: "secao", rotulo: "Tarefa" },
+    { nome: "responsavel", rotulo: "Responsável", tipo: "select", opcoes: opcoesResponsaveis(tarefa.responsavel), padrao: opcoesResponsaveis()[0], largura: "metade" },
     { nome: "status", rotulo: "Status", tipo: "select", opcoes: STATUS_TAREFA, padrao: "a_fazer", largura: "metade" },
     { nome: "prazo", rotulo: "Prazo de entrega", tipo: "date", padrao: hojeISO(), largura: "metade" },
     { nome: "checklist", rotulo: "Checklist", tipo: "checklist" },
@@ -56,6 +69,11 @@ export function abrirTarefa(tarefa = {}) {
         window.open("https://claude.ai/new", "_blank", "noopener");
       }
     }, "✨ Copy com o Claude"),
+    editando && ehConteudo(tarefa) ? el("a", {
+      class: "botao-link secundario mini so-conteudo", target: "_blank", rel: "noopener",
+      href: tarefa.rede === "LinkedIn" && porId("clientes", tarefa.clienteId)?.linkedin ? linkLinkedinAdmin(porId("clientes", tarefa.clienteId)) : linkAgendadorMeta(porId("clientes", tarefa.clienteId) || {}),
+      onClick: async () => { if (tarefa.copy) { try { await navigator.clipboard.writeText(tarefa.copy); avisar("Legenda copiada. Cole no agendador."); } catch {} } }
+    }, "📅 Agendar") : null,
     editando ? el("button", {
       type: "button", class: "perigo-texto",
       onClick: async () => {
@@ -79,6 +97,18 @@ export function abrirTarefa(tarefa = {}) {
   if (form && tarefa.semanaInicio) form.querySelector(".acoes").before(secaoSemana(tarefa));
   if (form && tarefa.atalho) form.querySelector(".acoes").prepend(el("a", { class: "botao-link secundario mini", href: tarefa.atalho, onClick: () => document.querySelector(".modal-fundo")?.remove() },
     tarefa.rotina === "planejamento" ? "☷ Abrir planejamento" : tarefa.rotina === "cobranca" ? "$ Abrir financeiro" : "▦ Abrir calendário"));
+  // Reunião não é tarefa: vira compromisso (calendário de compromissos + Google Agenda)
+  const virarCompromisso = async () => {
+    const v = form.lerValores();
+    document.querySelector(".modal-fundo")?.remove();
+    const salvo = await abrirCompromisso({ titulo: v.titulo, clienteId: v.clienteId, data: v.prazo || hojeISO(), descricao: v.notas, tipo: "Reunião" });
+    if (salvo && tarefa.id) await excluir("tarefas", tarefa.id);
+  };
+  form?.querySelector("#f-tipo")?.addEventListener("change", (e) => {
+    if (e.target.value === "Reunião") { avisar("Reuniões entram como compromisso: aparecem no calendário e podem ir para a Google Agenda."); virarCompromisso(); }
+  });
+  if (form && tarefa.id && tarefa.tipo === "Reunião") form.querySelector(".acoes").prepend(
+    el("button", { type: "button", class: "destaque mini", onClick: virarCompromisso }, "◷ Transformar em compromisso"));
   const alternar = () => form?.querySelectorAll(".so-conteudo").forEach((b) => (b.hidden = !conteudo(form.lerValores())));
   form?.addEventListener("change", alternar);
   alternar();
@@ -182,6 +212,7 @@ export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
         ehConteudo(t) && t.copy ? el("span", { class: "progresso-mini", title: "Copy salva" }, "✎ copy") : null,
         linkExterno(t.linkCanva, "Canva"), linkExterno(t.linkDrive, "Drive"),
         t.atalho ? el("a", { class: "link-externo", href: t.atalho, onClick: (e) => e.stopPropagation() }, t.rotina === "planejamento" ? "Planejar →" : t.rotina === "cobranca" ? "Financeiro →" : "Ver posts →") : null,
+        t.responsavel ? el("span", { class: "avatar", title: `Responsável: ${t.responsavel}` }, iniciais(t.responsavel)) : null,
         el("span", { class: `prazo ${classePrazo}` }, t.status === "concluido" && t.concluidoEm ? `feita ${fmtPrazoRelativo(t.concluidoEm)}` : fmtPrazoRelativo(t.prazo)))));
 }
 

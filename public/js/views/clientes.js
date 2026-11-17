@@ -8,14 +8,16 @@ import { dataPost } from "../exportacao.js";
 import { TIPO_CONTEUDO } from "../constantes.js";
 import { abrirConta, abrirManutencao } from "./trafego.js";
 import { abaMarca } from "./marca.js";
+import { abaContas } from "./contas.js";
 
 const CORES = ["#4E2CA3", "#592C85", "#16626A", "#606060", "#C98A00", "#2D6CDF", "#B4415A", "#2E8B57"];
 
 export function abrirCliente(cliente = {}) {
   const editando = !!cliente.id;
+  const valores = { ...cliente, cor: cliente.paleta?.[0] || cliente.cor };
   return formulario(editando ? `Editar ${cliente.nome}` : "Novo cliente", [
     { nome: "nome", rotulo: "Nome do cliente", obrigatorio: true, largura: "metade" },
-    { nome: "cor", rotulo: "Cor de identificação", tipo: "select", opcoes: CORES.map((c) => [c, c]), padrao: CORES[dados.clientes.length % CORES.length], largura: "metade" },
+    { nome: "cor", rotulo: "Cor principal da marca", tipo: "cor", padrao: CORES[dados.clientes.length % CORES.length], largura: "metade" },
     { nome: "servicos", rotulo: "Serviços contratados", tipo: "multi", opcoes: SERVICOS },
     { tipo: "secao", rotulo: "Contato" },
     { nome: "contato", rotulo: "Pessoa de contato", largura: "metade" },
@@ -31,9 +33,10 @@ export function abrirCliente(cliente = {}) {
     { tipo: "secao", rotulo: "Para criar copy" },
     { nome: "tomDeVoz", rotulo: "Tom de voz da marca", tipo: "textarea", linhas: 2, dica: "Ex.: próximo, bem-humorado, sem gírias, usa emojis com moderação" },
     { nome: "publico", rotulo: "Público-alvo", tipo: "textarea", linhas: 2, dica: "Ex.: mulheres 25-45, região de Sorocaba, classe B" },
+    { nome: "persona", rotulo: "Persona", tipo: "textarea", linhas: 3, dica: "Quem é o cliente ideal: nome fictício, idade, rotina, dores, desejos, objeções" },
     { nome: "observacoes", rotulo: "Observações", tipo: "textarea", linhas: 3 },
     { nome: "ativo", rotulo: "Cliente ativo", tipo: "checkbox", padrao: true }
-  ], cliente, {
+  ], valores, {
     largo: true,
     extras: editando ? [el("button", {
       type: "button", class: "perigo-texto", onClick: async () => {
@@ -45,6 +48,8 @@ export function abrirCliente(cliente = {}) {
       }
     }, "Excluir")] : [],
     aoSalvar: async (v) => {
+      // A cor principal é sempre a primeira da paleta
+      v.paleta = [v.cor, ...(cliente.paleta || []).slice(1)];
       if (editando) await atualizar("clientes", cliente.id, v);
       else await criar("clientes", v);
       avisar(editando ? "Cliente atualizado." : "Cliente criado.");
@@ -100,6 +105,7 @@ function ficha(id, estado, renderizar) {
 
   const conteudoAba = {
     marca: () => abaMarca(c),
+    contas: () => abaContas(c),
     tarefas: () => [
       el("div", { class: "com-acao" }, el("h2", {}, `Abertas (${abertas.length})`),
         el("button", { onClick: () => abrirTarefa({ clienteId: id, prazo: hojeISO() }) }, "+ Tarefa")),
@@ -148,9 +154,9 @@ function ficha(id, estado, renderizar) {
         info("E-mail", c.email), c.instagram ? el("div", { class: "info" }, el("span", {}, "Instagram"), insta) : null,
         el("div", { class: "links-cliente" }, linkExterno(c.linkDrive, "📁 Drive"), linkExterno(c.linkCanva, "🎨 Canva")),
         info("Mensalidade", c.mensalidade ? `${fmtMoeda(c.mensalidade)} · dia ${c.diaVencimento || "—"}` : null),
-        info("Tom de voz", c.tomDeVoz), info("Público", c.publico), info("Observações", c.observacoes),
+        info("Tom de voz", c.tomDeVoz), info("Persona", c.persona), info("Público", c.publico), info("Observações", c.observacoes),
         !c.contato && !c.tomDeVoz && !c.linkDrive ? el("p", { class: "subtitulo" }, "Complete a ficha (contato, links, tom de voz) em Editar. O tom de voz é usado para gerar copy.") : null),
       el("section", { class: "bloco" },
-        abas([["tarefas", "Tarefas"], ["conteudo", "Conteúdo"], ["marca", "Marca"], ["trafego", "Tráfego pago"], ["financeiro", "Financeiro"]], estado.aba, (a) => { estado.aba = a; renderizar(); }),
+        abas([["tarefas", "Tarefas"], ["conteudo", "Conteúdo"], ["marca", "Marca"], ["contas", "Contas"], ["trafego", "Tráfego pago"], ["financeiro", "Financeiro"]], estado.aba, (a) => { estado.aba = a; renderizar(); }),
         conteudoAba[estado.aba]())));
 }
