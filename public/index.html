@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hyper App</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>Hyper App</h1>
+
+    <p id="erro" class="erro" hidden></p>
+
+    <section id="area-login">
+      <p>Entre para começar.</p>
+      <button id="btn-entrar">Entrar com Google</button>
+    </section>
+
+    <section id="area-app" hidden>
+      <div class="topo">
+        <span>Olá, <strong id="nome-usuario"></strong></span>
+        <button id="btn-sair" class="secundario">Sair</button>
+      </div>
+
+      <form id="form-nota">
+        <input id="texto-nota" type="text" placeholder="Escreva uma nota..." autocomplete="off" />
+        <button type="submit">Salvar</button>
+      </form>
+
+      <ul id="lista-notas"></ul>
+    </section>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
