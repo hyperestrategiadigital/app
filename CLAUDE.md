@@ -9,6 +9,13 @@ Toda interface deste repositório segue `docs/identidade-visual.md`.
 - Logos e ícones ficam em `public/img/`. Não recrie o logo em SVG ou texto.
 - Os originais da marca estão em `docs/marca/` e não são publicados.
 
+## Código
+
+- Estrutura e coleções do Firestore descritas no `README.md`. Uma tela por arquivo em `public/js/views/`.
+- Todos os dados ficam em `users/{uid}/<coleção>` e são lidos da memória (`dados` em `db.js`). Não faça consultas com `where`/`orderBy` no Firestore: filtre em memória.
+- Datas são texto `AAAA-MM-DD`; use as funções de data de `ui.js`.
+- Formulários usam `formulario()` de `ui.js`.
+
 ## Publicação
 
 - Um push no `main` publica o Hosting pelo GitHub Actions (`.github/workflows/deploy.yml`, secret `FIREBASE_SERVICE_ACCOUNT`).
