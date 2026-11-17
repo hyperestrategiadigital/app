@@ -3,7 +3,7 @@ import { el, formulario, confirmar, avisar, abrirModal, hojeISO, addDias, vazio,
 import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes, nomeCliente, clientesAtivos } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { analisarPlanilha } from "../importacao.js";
-import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO } from "../openai.js";
+import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
 import { configAgenda, conectarAgenda, desconectarAgenda, configEquipe, sincronizar } from "../agenda.js";
 import { salvarComId } from "../db.js";
 
@@ -92,6 +92,8 @@ export function render() {
     blocoEquipe(),
     blocoOpenAI(),
 
+    blocoImportarMarcas(),
+
     el("section", { class: "bloco" },
       el("h2", {}, "Importar planilha"),
       el("p", {}, "Traga o histórico da planilha Fluxo de Trabalho: clientes, tarefas e entregas."),
@@ -107,8 +109,9 @@ function blocoOpenAI() {
   const cfg = configOpenAI();
   const chave = el("input", { id: "openai-chave", type: "password", placeholder: cfg.chave ? "•••••••• (já cadastrada — cole outra para trocar)" : "sk-...", autocomplete: "off" });
   const modelo = el("input", { id: "openai-modelo", type: "text", value: cfg.modelo || MODELO_PADRAO });
+  const modeloTexto = el("input", { id: "openai-modelo-texto", type: "text", value: cfg.modeloTexto || MODELO_TEXTO_PADRAO });
   return el("section", { class: "bloco" },
-    el("h2", {}, "Geração de imagem (OpenAI)"),
+    el("h2", {}, "OpenAI (imagens e sugestões de melhoria)"),
     el("p", {}, cfg.chave ? `✓ Chave cadastrada (termina em ${cfg.chave.slice(-4)}).` : "Cole a chave da API da OpenAI para gerar imagens no menu Criar."),
     el("ol", { class: "passos" },
       el("li", {}, "Acesse platform.openai.com → API keys → Create new secret key."),
@@ -116,17 +119,18 @@ function blocoOpenAI() {
       el("li", {}, "Cole a chave aqui e salve.")),
     el("div", { class: "form-grade" },
       el("label", { class: "campo metade", for: "openai-chave" }, el("span", {}, "Chave da API"), chave),
-      el("label", { class: "campo metade", for: "openai-modelo" }, el("span", {}, "Modelo de imagem"), modelo)),
+      el("label", { class: "campo metade", for: "openai-modelo" }, el("span", {}, "Modelo de imagem"), modelo),
+      el("label", { class: "campo metade", for: "openai-modelo-texto" }, el("span", {}, "Modelo de texto (sugestões de melhoria)"), modeloTexto)),
     el("p", { class: "subtitulo" }, "A chave fica guardada só na sua conta, protegida pelas regras do banco. Não compartilhe prints desta tela com a chave aparecendo."),
     el("div", { class: "acoes" },
       el("button", { onClick: async () => {
         const nova = chave.value.trim() || cfg.chave;
         if (!nova) { avisar("Cole a chave.", "erro"); return; }
-        await salvarConfigOpenAI({ chave: nova, modelo: modelo.value });
+        await salvarConfigOpenAI({ chave: nova, modelo: modelo.value, modeloTexto: modeloTexto.value });
         avisar("Configuração da OpenAI salva.");
       } }, "Salvar"),
       cfg.chave ? el("button", { class: "perigo-texto", onClick: async () => {
-        if (await confirmar("Remover a chave da OpenAI?")) { await salvarConfigOpenAI({ chave: "", modelo: modelo.value }); avisar("Chave removida."); }
+        if (await confirmar("Remover a chave da OpenAI?")) { await salvarConfigOpenAI({ chave: "", modelo: modelo.value, modeloTexto: modeloTexto.value }); avisar("Chave removida."); }
       } }, "Remover chave") : null));
 }
 
@@ -182,4 +186,51 @@ function blocoEquipe() {
         await salvarComId("config", "equipe", { pessoas: validas });
         avisar("Equipe salva.");
       } }, "Salvar equipe")));
+}
+
+const CAMPOS_MARCA = ["tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "fontes", "observacoes", "instagram", "linkDrive", "paleta"];
+const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", estiloVisual: "estilo de imagem", identidadeVisual: "diagramação", fontes: "fontes", observacoes: "observações", instagram: "Instagram", linkDrive: "Drive", paleta: "paleta" };
+
+/** Importa definições de marca (arquivo .json preparado pelo Claude a partir do ChatGPT). */
+function blocoImportarMarcas() {
+  const entrada = el("input", { type: "file", accept: ".json,application/json" });
+  const previa = el("div", { class: "importacao-previa" });
+  entrada.addEventListener("change", async () => {
+    const arquivo = entrada.files[0];
+    if (!arquivo) return;
+    let lista;
+    try { lista = JSON.parse(await arquivo.text()); if (!Array.isArray(lista)) lista = lista.marcas || lista.clientes || []; }
+    catch { previa.replaceChildren(el("p", { class: "erro" }, "Arquivo inválido. Use o .json que o Claude preparou.")); return; }
+    const itens = lista.map((m) => {
+      const alvo = dados.clientes.find((c) => normalizar(c.nome) === normalizar(m.cliente || m.nome || ""));
+      const campos = CAMPOS_MARCA.filter((k) => Array.isArray(m[k]) ? m[k].length : String(m[k] || "").trim());
+      return { m, alvo, campos };
+    });
+    const sobrescrever = el("input", { type: "checkbox", id: "marcas-sobrescrever" });
+    previa.replaceChildren(el("div", {},
+      el("ul", {}, itens.map(({ m, alvo, campos }) => el("li", {},
+        el("strong", {}, m.cliente || m.nome), alvo ? ` → ${alvo.nome}: ` : " → cliente não encontrado (será criado): ",
+        campos.map((k) => ROTULO_CAMPO[k]).join(", ") || "nada para importar"))),
+      el("label", { class: "check-inline", for: "marcas-sobrescrever" }, sobrescrever, "Substituir o que já está preenchido (sem marcar, só preenche campos vazios)"),
+      el("div", { class: "acoes" }, el("button", { class: "destaque", onClick: async (e) => {
+        e.currentTarget.disabled = true;
+        let n = 0;
+        for (const { m, alvo, campos } of itens) {
+          const v = {};
+          for (const k of campos) if (sobrescrever.checked || !alvo || !(Array.isArray(alvo[k]) ? alvo[k].length : alvo[k])) v[k] = m[k];
+          if (v.paleta) v.cor = v.paleta[0];
+          if (!Object.keys(v).length) continue;
+          if (alvo) await atualizar("clientes", alvo.id, v);
+          else await criar("clientes", { nome: m.cliente || m.nome, ativo: true, servicos: [], ...v });
+          n++;
+        }
+        avisar(`${n} cliente(s) atualizado(s). Revise cada um na aba Marca.`);
+        previa.replaceChildren();
+        entrada.value = "";
+      } }, "Importar definições"))));
+  });
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Importar definições de marca"),
+    el("p", {}, "Tom de voz, persona, público, identidade e cores de cada cliente, a partir do arquivo .json que o Claude monta com as suas conversas e agentes do ChatGPT."),
+    entrada, previa);
 }

@@ -12,6 +12,7 @@ export function promptCopy(post) {
     "## Sobre o cliente",
     c.tomDeVoz ? `- Tom de voz: ${c.tomDeVoz}` : "- Tom de voz: não informado (use um tom próximo e profissional)",
     c.publico ? `- Público-alvo: ${c.publico}` : null,
+    c.persona ? `- Persona: ${c.persona}` : null,
     c.instagram ? `- Instagram: ${c.instagram}` : null,
     c.observacoes ? `- Observações: ${c.observacoes}` : null,
     "",

@@ -1,7 +1,7 @@
 // Compromissos: reuniões, gravações externas, visitas — o que mexe na sua rotina.
 // Aparecem no calendário separados dos posts e podem ir para a sua Google Agenda pessoal.
 import { el, formulario, confirmar, avisar, hojeISO } from "./ui.js";
-import { criar, atualizar, excluir, porId, opcoesClientes } from "./db.js";
+import { dados, criar, atualizar, excluir, porId, opcoesClientes } from "./db.js";
 import {
   sincronizar, removerDaAgenda, linkGoogleAgenda, agendaConectada, configEquipe, configAgenda
 } from "./agenda.js";
@@ -93,4 +93,22 @@ export function cartaoCompromisso(c) {
       el("strong", {}, c.titulo),
       el("small", {}, [c.tipo, cliente?.nome, c.local].filter(Boolean).join(" · "))),
     c.googleEventId ? el("span", { class: "etiqueta ok", title: "Na Google Agenda" }, "G ✓") : c.sincronizar && c.erroSync ? el("span", { class: "etiqueta alerta", title: c.erroSync }, "G !") : null);
+}
+
+/** Faixa de aviso quando há compromissos marcados para a Google Agenda que ainda não foram enviados. */
+export function avisoPendentes() {
+  const pendentes = dados.compromissos.filter((c) => c.sincronizar && !c.googleEventId);
+  if (!pendentes.length) return null;
+  if (!agendaConectada()) return el("p", { class: "faixa-aviso" }, `${pendentes.length} compromisso(s) esperando a Google Agenda. `,
+    el("a", { href: "#/config" }, "Conectar a agenda em Ajustes →"));
+  return el("p", { class: "faixa-aviso" }, `${pendentes.length} compromisso(s) ainda não foram para a Google Agenda. `,
+    el("button", { class: "mini", onClick: async (e) => {
+      e.currentTarget.disabled = true;
+      let ok = 0;
+      for (const c of pendentes) {
+        try { await sincronizar(c); ok++; }
+        catch (erro) { avisar(erro.message, "erro"); break; }
+      }
+      if (ok) avisar(`${ok} compromisso(s) enviado(s) para a Google Agenda.`);
+    } }, "Enviar agora"));
 }

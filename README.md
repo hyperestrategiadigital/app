@@ -13,10 +13,11 @@ Central de trabalho da Hyper: tarefas, clientes, calendário de conteúdo, tráf
 | Planejamento | Calendário do mês de um cliente (como a planilha de planejamento): digita "Formato \| Tema" no dia, arrasta entre dias, clica para editar. Também há modo tabela. Ao salvar, cada post vira (ou atualiza) uma tarefa e aparece na aba Conteúdo. Depois de salvar, oferece o PDF para o cliente aprovar |
 | Rotinas | Tarefas automáticas: produzir os posts da semana seguinte (com a lista ao vivo dos posts), planejar o mês seguinte, cobrar a mensalidade no vencimento e rotinas livres (Manutenção TP etc.) |
 | Criar | Escolhe cliente e post e gera a imagem com a OpenAI usando a marca do cliente. "Levar ao Canva" baixa a imagem, salva no post e copia um pedido de arte para o Claude (com o conector do Canva) montar o design e devolver o link. O link do Canva fica salvo no post |
-| Clientes | Ficha com serviços, contato, links, mensalidade, tom de voz e público, e abas de tarefas, conteúdo, **marca** (link da pasta do Drive com logos/fontes/referências, paleta, fontes, estilo de imagem, diagramação), tráfego e financeiro |
+| Clientes | Ficha com serviços, contato, links, mensalidade, tom de voz e público, e abas de tarefas, conteúdo, **marca** (pasta do Drive, cor principal + demais cores, fontes, tom de voz, persona, público, estilo de imagem, diagramação, com "Sugerir melhoria" pela OpenAI), **contas** (redes sociais, ID da página do Facebook, LinkedIn, contas de anúncio, com atalhos para o Meta Business Suite e gerenciadores), tráfego e financeiro |
 | Tráfego pago | Contas de anúncio e verba por cliente, alerta de manutenção atrasada (mais de 7 dias) e diário de manutenções |
 | Financeiro | Receitas e despesas do mês, mensalidades geradas a partir das fichas dos clientes e orçamentos |
-| Ajustes | Google Agenda (conexão com a conta pessoal), equipe (nomes e e-mails para convites), chave da OpenAI, importação da planilha e backup |
+| Relatórios | Por cliente ou geral, por mês ou período: posts publicados por formato, outras entregas, manutenções de tráfego e investimento, reuniões e financeiro. Exporta PDF |
+| Ajustes | Google Agenda (conexão com a conta pessoal), equipe (nomes e e-mails para convites), chave da OpenAI, importação de definições de marca (.json), importação da planilha e backup |
 
 ## Estrutura
 

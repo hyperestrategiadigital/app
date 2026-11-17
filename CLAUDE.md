@@ -19,6 +19,8 @@ Toda interface deste repositório segue `docs/identidade-visual.md`.
 - Arquivos da marca (logos, fontes, referências) ficam na pasta do Drive do cliente (`linkDrive`). Criativos dos posts ficam em base64 em `clientes/{id}/artes` (`arquivos.js`), não no Firebase Storage (plano Spark).
 - Rotinas (`recorrencias`) têm `modelo`: `livre`, `producao` (semana seguinte), `planejamento` (mês seguinte) ou `cobranca` (vencimento do cliente). A lógica fica em `recorrencias.js`.
 - Compromissos (`compromissos`, `agenda.js`, `compromissos.js`) são a única coisa que vai para a Google Agenda. A conexão usa um app Firebase secundário ("agenda") para permitir outra conta Google; o token dura ~1 h e não é salvo no banco. Posts nunca vão para a agenda.
+- Cor principal do cliente = `paleta[0]` (também gravada em `cor`); use `corCliente()` de `views/componentes.js`. Campos de cor usam `campoCor()` de `ui.js` (sempre mostram a cor, não só o código).
+- Tarefas têm `responsavel` (nomes da equipe em `config/equipe`). Tarefa do tipo "Reunião" vira compromisso.
 - Exportação para o cliente é só PDF. Arte final é feita no Canva (pedido para o Claude em `promptCanva`), não dentro do app.
 - A chave da OpenAI fica em `users/{uid}/config/openai`. Nunca coloque chaves no código: o repositório é público.
 

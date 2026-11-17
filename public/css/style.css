@@ -526,3 +526,29 @@ a.cartao-cliente:hover { transform: translateY(-2px); }
   .chip-conteudo { font-size: 10px; padding: 2px 3px; }
   .filtros select, .filtros input[type="search"] { flex: 1; min-width: 140px; max-width: none; }
 }
+.faixa-aviso { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--cor-destaque-clara); color: var(--hyper-preto); padding: 10px 16px; border-radius: var(--raio-pequeno); margin: 0 0 16px; font-weight: 600; }
+
+/* Cores visuais */
+.campo-cor { display: inline-flex; align-items: center; gap: 6px; background: var(--cor-fundo); padding: 4px; border-radius: var(--raio-pequeno); }
+.campo-cor input[type="color"] { width: 42px; height: 36px; padding: 2px; border-radius: 6px; cursor: pointer; }
+.campo-cor .hex { width: 96px; padding: 6px 8px; font-family: monospace; }
+.cores-marca { display: grid; grid-template-columns: minmax(220px, 300px) 1fr; gap: 24px; margin-top: 8px; }
+.cor-principal .campo-cor input[type="color"] { width: 64px; height: 52px; }
+.amostra-cor { display: inline-flex; align-items: center; gap: 6px; font-family: monospace; }
+.bolinha-cor { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--cor-borda); display: inline-block; }
+@media (max-width: 760px) { .cores-marca { grid-template-columns: 1fr; } }
+.avatar { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--hyper-roxo); color: var(--hyper-branco); font-size: 10px; font-weight: 700; }
+.linha-conta-cliente { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--cor-borda-suave); }
+.rotulo-conta { min-width: 110px; font-size: 12px; font-weight: 700; color: var(--cor-texto-suave); text-transform: uppercase; letter-spacing: 0.04em; }
+.atalhos-agendamento { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.aba-contas h3 { margin-top: 18px; }
+/* Relatórios */
+.barras { display: grid; gap: 8px; }
+.barra { display: grid; grid-template-columns: 150px 1fr 36px; align-items: center; gap: 10px; }
+.trilho { height: 12px; background: var(--cor-fundo); border-radius: 99px; overflow: hidden; }
+.preenchido { height: 100%; background: var(--hyper-roxo); border-radius: 99px; }
+.tabela-relatorio { width: 100%; border-collapse: collapse; }
+.tabela-relatorio th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cor-texto-suave); padding: 8px; border-bottom: 2px solid var(--cor-borda); }
+.tabela-relatorio td { padding: 10px 8px; border-bottom: 1px solid var(--cor-borda-suave); }
+.tabela-relatorio tbody tr { cursor: pointer; }
+.tabela-relatorio tbody tr:hover { background: var(--cor-primaria-clara); }

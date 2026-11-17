@@ -5,7 +5,7 @@ import { dados, porId, opcoesClientes, nomeCliente } from "../db.js";
 import { cabecalho, abas, seloCliente, abrirTarefa, corCliente } from "./componentes.js";
 import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost, exportarPDF, nomeMes } from "../exportacao.js";
-import { abrirCompromisso, rotuloCompromisso } from "../compromissos.js";
+import { abrirCompromisso, rotuloCompromisso, avisoPendentes } from "../compromissos.js";
 import { compromissosEntre } from "../agenda.js";
 import { abrirModal } from "../ui.js";
 
@@ -164,6 +164,7 @@ export function render({ params, estado, renderizar }) {
       el("button", { class: "secundario", onClick: () => acaoCliente(exportarPDF, "Exportar PDF") }, "⬇ PDF para o cliente"),
       el("button", { class: "secundario", onClick: () => abrirCompromisso({ clienteId: estado.cliente || "" }) }, "+ Compromisso"),
       el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "" }) }, "+ Novo post")),
+    verCompromissos ? avisoPendentes() : null,
     filtros, verPosts ? legenda : null, corpo,
     el("p", { class: "nota" }, "Posts são tarefas do tipo Conteúdo e nunca vão para a sua agenda pessoal. Compromissos (◷) são reuniões, gravações e visitas: esses podem ir para a Google Agenda. Para exportar ou planejar, filtre um cliente ou escolha na hora."));
 }

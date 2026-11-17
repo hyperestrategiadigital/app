@@ -7,8 +7,11 @@ export const MODELO_PADRAO = "gpt-image-1";
 export const configOpenAI = () => dados.config.find((c) => c.id === "openai") || {};
 export const temChave = () => !!configOpenAI().chave;
 
-export function salvarConfigOpenAI({ chave, modelo }) {
-  return salvarComId("config", "openai", { chave: chave.trim(), modelo: (modelo || MODELO_PADRAO).trim(), atualizadoEm: Date.now() });
+export function salvarConfigOpenAI({ chave, modelo, modeloTexto }) {
+  return salvarComId("config", "openai", {
+    chave: chave.trim(), modelo: (modelo || MODELO_PADRAO).trim(),
+    modeloTexto: (modeloTexto || configOpenAI().modeloTexto || "gpt-4.1-mini").trim(), atualizadoEm: Date.now()
+  });
 }
 
 /** Tamanho aceito pela API mais próximo da proporção do formato. */
@@ -59,4 +62,23 @@ export async function gerarImagem({ prompt, tamanho = "1024x1536", qualidade = "
     headers: { ...cabecalhos, "Content-Type": "application/json" },
     body: JSON.stringify({ model: modelo, prompt, size: tamanho, quality: qualidade, n: 1 })
   }));
+}
+
+export const MODELO_TEXTO_PADRAO = "gpt-4.1-mini";
+
+/** Pede uma resposta de texto (sugestões de melhoria da marca). */
+export async function gerarTexto({ sistema, pedido }) {
+  const { chave, modeloTexto = MODELO_TEXTO_PADRAO } = configOpenAI();
+  if (!chave) throw new Error("Cadastre sua chave da OpenAI em Ajustes.");
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: modeloTexto, messages: [{ role: "system", content: sistema }, { role: "user", content: pedido }], temperature: 0.7 })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    if (r.status === 401) throw new Error("Chave da OpenAI inválida. Confira em Ajustes.");
+    throw new Error(j?.error?.message || `Erro ${r.status}`);
+  }
+  return j.choices?.[0]?.message?.content?.trim() || "";
 }
