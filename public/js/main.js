@@ -10,7 +10,6 @@ import {
   addDoc,
   query,
   where,
-  orderBy,
   onSnapshot,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
@@ -54,15 +53,17 @@ onAuthStateChanged(auth, (usuario) => {
 
   const q = query(
     collection(db, "notas"),
-    where("uid", "==", usuario.uid),
-    orderBy("criadoEm", "desc")
+    where("uid", "==", usuario.uid)
   );
   pararDeOuvir = onSnapshot(q, (snap) => {
     const lista = $("lista-notas");
     lista.innerHTML = "";
-    snap.forEach((doc) => {
+    const notas = snap.docs
+      .map((d) => d.data())
+      .sort((a, b) => (b.criadoEm?.toMillis?.() ?? Date.now()) - (a.criadoEm?.toMillis?.() ?? Date.now()));
+    notas.forEach((nota) => {
       const li = document.createElement("li");
-      li.textContent = doc.data().texto;
+      li.textContent = nota.texto;
       lista.appendChild(li);
     });
   }, (erro) => mostrarErro("Erro ao carregar: " + erro.message));
