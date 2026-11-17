@@ -418,19 +418,9 @@ a.cartao-cliente:hover { transform: translateY(-2px); }
 .campo-marca { margin-top: 8px; }
 .campo-marca .com-acao { margin: 16px 0 6px; }
 .campo-marca h3 { margin: 0; }
-.grade-refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
-.ref { position: relative; margin: 0; aspect-ratio: 4 / 5; border-radius: var(--raio-pequeno); overflow: hidden; background: var(--cor-fundo); }
-.ref.logo { aspect-ratio: 3 / 2; background: repeating-conic-gradient(var(--cor-borda-suave) 0 25%, var(--cor-superficie) 0 50%) 0 0 / 16px 16px; }
-.ref img { width: 100%; height: 100%; object-fit: cover; }
-.ref.logo img { object-fit: contain; padding: 10px; }
-.ref button { position: absolute; top: 4px; right: 4px; background: var(--cor-superficie); }
-.lista-fontes { list-style: none; padding: 0; margin: 0; }
-.lista-fontes li { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--cor-borda-suave); }
-.amostra-fonte { font-size: 22px; }
 
 /* ---------------- Criar ---------------- */
 .criar-grade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-.criar-grade.texto { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
 .criar-grade .bloco h2:first-child { margin-top: 0; }
 .prompt-final { margin-top: 12px; }
 .prompt-final summary { cursor: pointer; color: var(--cor-primaria); font-weight: 600; }
@@ -440,17 +430,21 @@ a.cartao-cliente:hover { transform: translateY(-2px); }
 .miniatura:hover { background: none; border-color: var(--hyper-gelo); }
 .miniatura.ativa { border-color: var(--cor-destaque); }
 .miniatura img { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
-.previa-arte { display: block; width: 100%; max-height: 72vh; object-fit: contain; background: var(--cor-fundo); border-radius: var(--raio-pequeno); }
-.previa { position: sticky; top: 16px; }
-.amostras { display: flex; flex-wrap: wrap; gap: 6px; }
-.amostra { width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 2px solid var(--cor-borda); }
-.amostra:hover { transform: scale(1.1); }
-.amostra.ativa { outline: 3px solid var(--cor-destaque); outline-offset: 1px; }
-input[type="range"] { padding: 0; accent-color: var(--hyper-roxo); }
+.previa-imagem { display: block; width: 100%; max-height: 420px; object-fit: contain; background: var(--cor-fundo); border-radius: var(--raio-pequeno); margin-bottom: 12px; }
+.link-canva { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--cor-borda); }
+
+/* Criativos anexados no post */
+.criativos-post { margin-top: 16px; }
+.grade-criativos { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin: 8px 0; }
+.criativo { position: relative; margin: 0; }
+.criativo img { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: var(--raio-pequeno); background: var(--cor-fundo); }
+.criativo figcaption { font-size: 11px; color: var(--cor-texto-suave); margin-top: 2px; }
+.criativo button { position: absolute; top: 4px; right: 4px; background: var(--cor-superficie); }
+.acoes-criativos { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip-arte { font-size: 10px; }
 
 @media (max-width: 900px) {
-  .criar-grade, .criar-grade.texto { grid-template-columns: 1fr; }
-  .previa { position: static; }
+  .criar-grade { grid-template-columns: 1fr; }
   .colunas-hoje, .ficha { grid-template-columns: 1fr; }
   .quadro { grid-template-columns: 1fr; }
   .coluna { max-height: none; }

@@ -4,7 +4,7 @@ import { el, hojeISO, addDias, fmtData, vazio, formulario } from "../ui.js";
 import { dados, porId, opcoesClientes, nomeCliente } from "../db.js";
 import { cabecalho, abas, seloCliente, abrirTarefa, corCliente } from "./componentes.js";
 import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
-import { dataPost, exportarExcel, exportarPDF, nomeMes } from "../exportacao.js";
+import { dataPost, exportarPDF, nomeMes } from "../exportacao.js";
 
 const ICONE_FORMATO = {
   "Feed estático": "▣", "Carrossel": "▤", "Reels": "▶", "Story": "◫", "Sequência de stories": "◫",
@@ -39,6 +39,7 @@ function chip(t) {
   el("span", { class: "chip-linha" },
     el("span", { class: "chip-icone", "aria-hidden": "true" }, ICONE_FORMATO[t.formato] || "•"),
     t.hora ? el("small", {}, t.hora) : null,
+    t.qtdArtes ? el("span", { class: "chip-arte", title: "Tem criativo" }, "🖼 ") : null,
     t.titulo));
 }
 
@@ -117,8 +118,7 @@ export function render({ estado, renderizar }) {
     cabecalho("Calendário de conteúdo",
       contagem.length ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para criar um post",
       el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = `#/planejamento/${c}/${m}`), "Planejar mês") }, "☷ Planejar mês"),
-      el("button", { class: "secundario", onClick: () => acaoCliente(exportarExcel, "Exportar planilha") }, "⬇ Excel"),
-      el("button", { class: "secundario", onClick: () => acaoCliente(exportarPDF, "Exportar PDF") }, "⬇ PDF"),
+      el("button", { class: "secundario", onClick: () => acaoCliente(exportarPDF, "Exportar PDF") }, "⬇ PDF para o cliente"),
       el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "" }) }, "+ Novo post")),
     filtros, legenda, corpo,
     el("p", { class: "nota" }, "Cada post é uma tarefa do tipo Conteúdo: o que você muda aqui muda na lista de tarefas, e vice-versa. Para exportar ou planejar, filtre um cliente ou escolha na hora."));
