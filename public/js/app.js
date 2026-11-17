@@ -79,7 +79,16 @@ onAuthStateChanged(auth, async (usuario) => {
   }
   document.body.classList.add("logado", "carregando");
   $("usuario-nome").textContent = usuario.displayName || usuario.email;
-  await conectar(usuario.uid, (e) => avisar("Erro ao carregar dados: " + e.message, "erro"));
+  try {
+    await conectar(usuario.uid, (e) => avisar("Erro ao carregar dados: " + e.message, "erro"));
+  } catch (e) {
+    document.body.classList.remove("carregando");
+    $("conteudo").replaceChildren(el("div", { class: "tela" },
+      el("h1", {}, "Não consegui abrir seus dados"),
+      el("p", { class: "faixa-alerta" }, e.message),
+      el("button", { onClick: () => location.reload() }, "Tentar de novo")));
+    return;
+  }
   document.body.classList.remove("carregando");
   pararDeOuvir = aoMudar(renderizar);
   renderizar();

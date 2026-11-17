@@ -1,6 +1,6 @@
 // Ajustes: tarefas recorrentes, importação da planilha e backup.
 import { el, formulario, confirmar, avisar, abrirModal, hojeISO, addDias, vazio, normalizar } from "../ui.js";
-import { dados, criar, atualizar, excluir, gravarEmLote, opcoesClientes, nomeCliente, clientesAtivos } from "../db.js";
+import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes, nomeCliente, clientesAtivos } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { TIPOS_TAREFA, DIAS_SEMANA } from "../constantes.js";
 import { analisarPlanilha } from "../importacao.js";
@@ -90,13 +90,17 @@ function abrirImportacao() {
         const mapa = Object.fromEntries(dados.clientes.map((c) => [normalizar(c.nome), c.id]));
         const cores = ["#4E2CA3", "#592C85", "#16626A", "#606060", "#C98A00", "#2D6CDF", "#B4415A", "#2E8B57"];
         let i = dados.clientes.length;
+        const novosClientes = [];
         for (const nome of [...new Set(analise.tarefas.map((t) => t.cliente).filter(Boolean))]) {
           if (mapa[normalizar(nome)]) continue;
           const qtd = analise.tarefas.filter((t) => t.cliente === nome).length;
           const recente = analise.tarefas.some((t) => t.cliente === nome && t.prazo >= addDias(hojeISO(), -90));
-          const ref = await criar("clientes", { nome, cor: cores[i++ % cores.length], ativo: recente || qtd > 5, servicos: [] });
-          mapa[normalizar(nome)] = ref.id;
+          const id = novoId("clientes");
+          novosClientes.push({ id, nome, cor: cores[i++ % cores.length], ativo: recente || qtd > 5, servicos: [], criadoEm: Date.now() });
+          mapa[normalizar(nome)] = id;
         }
+        botaoImportar.textContent = `Criando ${novosClientes.length} clientes...`;
+        if (novosClientes.length) await gravarEmLote("clientes", novosClientes);
         // 2) Tarefas
         const itens = analise.tarefas.map(({ cliente, ...t }) => ({ ...t, clienteId: mapa[normalizar(cliente)] || "", criadoEm: Date.now() }));
         await gravarEmLote("tarefas", itens, (feitas, total) => { botaoImportar.textContent = `Importando ${feitas}/${total}...`; });
