@@ -17,6 +17,7 @@ Toda interface deste repositório segue `docs/identidade-visual.md`.
 - Formulários usam `formulario()` de `ui.js` (campos podem ter `mostrarSe(valores)`).
 - Post = tarefa com `tipo: "Conteúdo"` (`TIPO_CONTEUDO`). Não recrie uma coleção separada de conteúdos.
 - Arquivos da marca (logos, fontes, referências) ficam na pasta do Drive do cliente (`linkDrive`). Criativos dos posts ficam em base64 em `clientes/{id}/artes` (`arquivos.js`), não no Firebase Storage (plano Spark).
+- Rotinas (`recorrencias`) têm `modelo`: `livre`, `producao` (semana seguinte), `planejamento` (mês seguinte) ou `cobranca` (vencimento do cliente). A lógica fica em `recorrencias.js`.
 - Exportação para o cliente é só PDF. Arte final é feita no Canva (pedido para o Claude em `promptCanva`), não dentro do app.
 - A chave da OpenAI fica em `users/{uid}/config/openai`. Nunca coloque chaves no código: o repositório é público.
 

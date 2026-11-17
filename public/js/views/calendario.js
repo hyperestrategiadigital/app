@@ -43,7 +43,14 @@ function chip(t) {
     t.titulo));
 }
 
-export function render({ estado, renderizar }) {
+export function render({ params, estado, renderizar }) {
+  // Atalho #/calendario/<cliente>/<mês> (ex.: rotina "Produzir semana")
+  const chaveParams = params.join("/");
+  if (params.length && estado.params !== chaveParams) {
+    estado.params = chaveParams;
+    if (params[0]) estado.cliente = params[0];
+    if (/^\d{4}-\d{2}$/.test(params[1] || "")) estado.mes = params[1];
+  }
   estado.mes ??= hojeISO().slice(0, 7);
   estado.modo ??= "mes";
   const [ano, mes] = estado.mes.split("-").map(Number);

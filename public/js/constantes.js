@@ -10,7 +10,7 @@ export const rotuloStatus = (s) => STATUS_TAREFA.find(([v]) => v === s)?.[1] || 
 // "Conteúdo" é o único tipo que vira post no calendário
 export const TIPO_CONTEUDO = "Conteúdo";
 export const TIPOS_TAREFA = [
-  "Conteúdo", "Roteiro", "Vídeo", "Institucional", "Tráfego pago", "Planejamento",
+  "Conteúdo", "Produção", "Roteiro", "Vídeo", "Institucional", "Tráfego pago", "Planejamento",
   "Aprovação", "Reunião", "Comercial", "Financeiro", "Site / LP", "Organização", "Outro"
 ];
 export const ehConteudo = (t) => t?.tipo === TIPO_CONTEUDO;

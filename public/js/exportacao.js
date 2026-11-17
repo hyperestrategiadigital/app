@@ -8,6 +8,8 @@ export const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho"
 export const nomeMes = (mes) => { const [a, m] = mes.split("-").map(Number); return `${MESES[m - 1]} ${a}`; };
 
 export const dataPost = (t) => t.dataPublicacao || t.prazo || "";
+/** Títulos antigos da planilha já vêm como "Estático | Tema": não repete o formato na frente. */
+export const temPrefixo = (titulo = "") => /^[^|]{2,24}\|/.test(titulo);
 
 /** Posts (tarefas do tipo Conteúdo) de um cliente num mês "AAAA-MM", em ordem de publicação. */
 export function postsDoMes(clienteId, mes) {
@@ -21,6 +23,24 @@ const nomeArquivo = (cliente, mes, ext) =>
 
 /* ---------------- PDF visual (página de impressão) ---------------- */
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const DIAS_CAB = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
+function calendarioMes(posts, mes, artes) {
+  const [a, m] = mes.split("-").map(Number);
+  const primeiro = new Date(a, m - 1, 1);
+  const deslocamento = (primeiro.getDay() + 6) % 7;
+  const ultimo = new Date(a, m, 0).getDate();
+  const celulas = [];
+  for (let i = 0; i < deslocamento; i++) celulas.push(`<div class="dia fora"></div>`);
+  for (let d = 1; d <= ultimo; d++) {
+    const iso = `${mes}-${String(d).padStart(2, "0")}`;
+    const doDia = posts.filter((t) => dataPost(t) === iso);
+    celulas.push(`<div class="dia"><div class="num">${String(d).padStart(2, "0")}/${mes.slice(5)}</div>${doDia.map((t) => `
+      <div class="item">${artes[t.id] ? `<img src="${artes[t.id]}" alt="">` : ""}<span>${temPrefixo(t.titulo) ? esc(t.titulo) : `<b>${esc(t.formato || "Post")}</b> | ${esc(t.titulo)}`}</span></div>`).join("")}</div>`);
+  }
+  while (celulas.length % 7) celulas.push(`<div class="dia fora"></div>`);
+  return `<div class="grade">${DIAS_CAB.map((n) => `<div class="cab">${n}</div>`).join("")}${celulas.join("")}</div>`;
+}
 
 export async function exportarPDF(clienteId, mes) {
   const cliente = porId("clientes", clienteId);
@@ -62,6 +82,8 @@ export async function exportarPDF(clienteId, mes) {
 </head><body>
 <header class="topo"><img src="${base}img/logo-branco.png" alt="Hyper"><div><span class="tagline">Planejamento de conteúdo</span>
 <h1>${esc(cliente?.nome || "")}</h1><p>${esc(nomeMes(mes))} · ${posts.length} posts</p></div></header>
+<section class="calendario">${calendarioMes(posts, mes, artePorTarefa)}</section>
+<h2 class="titulo-detalhes">Detalhes dos posts</h2>
 <main>${cards}</main>
 <footer>Hyper · Tráfego pago — para aprovar, marque cada post e devolva este arquivo ou responda com os ajustes.</footer>
 <script>window.onload=()=>setTimeout(()=>window.print(),800)<\/script>

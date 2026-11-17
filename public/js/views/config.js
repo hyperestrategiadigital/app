@@ -2,61 +2,9 @@
 import { el, formulario, confirmar, avisar, abrirModal, hojeISO, addDias, vazio, normalizar } from "../ui.js";
 import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes, nomeCliente, clientesAtivos } from "../db.js";
 import { cabecalho } from "./componentes.js";
-import { TIPOS_TAREFA, DIAS_SEMANA } from "../constantes.js";
 import { analisarPlanilha } from "../importacao.js";
-import { gerarRecorrencias } from "../recorrencias.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO } from "../openai.js";
 
-const descreverFrequencia = (r) => {
-  const dia = DIAS_SEMANA.find(([v]) => v === String(r.diaSemana))?.[1]?.toLowerCase();
-  if (r.frequencia === "mensal") return `todo dia ${r.diaMes || 1}`;
-  if (r.frequencia === "quinzenal") return `a cada 2 semanas, ${dia}`;
-  return `toda ${dia}`;
-};
-
-export function abrirRecorrencia(r = {}) {
-  const editando = !!r.id;
-  return formulario(editando ? "Editar recorrência" : "Nova tarefa recorrente", [
-    { nome: "titulo", rotulo: "Tarefa", obrigatorio: true, dica: "Ex.: Manutenção TP" },
-    { nome: "clienteId", rotulo: "Cliente", tipo: "select", opcoes: opcoesClientes(), largura: "metade" },
-    { nome: "tipo", rotulo: "Tipo", tipo: "select", opcoes: TIPOS_TAREFA, padrao: "Tráfego pago", largura: "metade" },
-    { nome: "frequencia", rotulo: "Frequência", tipo: "select", opcoes: [["semanal", "Semanal"], ["quinzenal", "Quinzenal"], ["mensal", "Mensal"]], padrao: "semanal", largura: "metade" },
-    { nome: "diaSemana", rotulo: "Dia da semana (semanal/quinzenal)", tipo: "select", opcoes: DIAS_SEMANA, padrao: "5", largura: "metade" },
-    { nome: "diaMes", rotulo: "Dia do mês (mensal)", tipo: "number", padrao: 1, largura: "metade" },
-    { nome: "checklist", rotulo: "Checklist padrão", tipo: "checklist" },
-    { nome: "ativo", rotulo: "Ativa", tipo: "checkbox", padrao: true }
-  ], r, {
-    largo: true,
-    extras: editando ? [el("button", {
-      type: "button", class: "perigo-texto", onClick: async () => {
-        if (await confirmar("Excluir esta recorrência? As tarefas já criadas continuam.")) { await excluir("recorrencias", r.id); document.querySelector(".modal-fundo")?.remove(); }
-      }
-    }, "Excluir")] : [],
-    aoSalvar: async (v) => {
-      v.diaSemana = String(v.diaSemana);
-      if (editando) await atualizar("recorrencias", r.id, v);
-      else await criar("recorrencias", { ...v, inicio: hojeISO(), geradasAte: null });
-      setTimeout(() => gerarRecorrencias().catch(console.error), 500);
-      avisar("Recorrência salva. As tarefas dos próximos 7 dias são criadas automaticamente.");
-    }
-  });
-}
-
-async function criarSugestoes() {
-  const existentes = new Set(dados.recorrencias.map((r) => `${normalizar(r.titulo)}|${r.clienteId || ""}`));
-  const novas = [];
-  for (const c of clientesAtivos()) {
-    if ((c.servicos || []).some((s) => s.includes("Ads")) && !existentes.has(`manutencao tp|${c.id}`))
-      novas.push({ titulo: "Manutenção TP", clienteId: c.id, tipo: "Tráfego pago", frequencia: "semanal", diaSemana: "5" });
-  }
-  const hyper = dados.clientes.find((c) => normalizar(c.nome) === "hyper");
-  if (!existentes.has(`organizar semana|${hyper?.id || ""}`))
-    novas.push({ titulo: "Organizar Semana", clienteId: hyper?.id || "", tipo: "Organização", frequencia: "semanal", diaSemana: "1" });
-  if (!novas.length) { avisar("As recorrências sugeridas já existem."); return; }
-  for (const n of novas) await criar("recorrencias", { ...n, ativo: true, checklist: [], inicio: hojeISO(), geradasAte: null });
-  setTimeout(() => gerarRecorrencias().catch(console.error), 500);
-  avisar(`${novas.length} recorrência(s) criada(s).`);
-}
 
 function abrirImportacao() {
   const entrada = el("input", { type: "file", accept: ".csv,text/csv,text/plain" });
@@ -132,21 +80,11 @@ function baixarBackup() {
 }
 
 export function render() {
-  const recs = [...dados.recorrencias].sort((a, b) => nomeCliente(a.clienteId).localeCompare(nomeCliente(b.clienteId), "pt-BR"));
   return el("div", { class: "tela" },
-    cabecalho("Ajustes", "Recorrências, importação e backup"),
+    cabecalho("Ajustes", "Geração de imagem, importação e backup"),
 
-    el("section", { class: "bloco" },
-      el("div", { class: "com-acao" }, el("h2", {}, "Tarefas recorrentes"),
-        el("div", { class: "tela-acoes" },
-          el("button", { class: "secundario mini", onClick: criarSugestoes }, "Criar sugestões (Manutenção TP e Organizar Semana)"),
-          el("button", { class: "mini", onClick: () => abrirRecorrencia() }, "+ Recorrência"))),
-      el("p", { class: "subtitulo" }, "O app cria sozinho as tarefas dos próximos 7 dias. Manutenção TP é sugerida toda sexta para clientes com Meta Ads ou Google Ads na ficha."),
-      recs.length ? el("div", { class: "lista" }, recs.map((r) =>
-        el("div", { class: `linha-tabela ${r.ativo === false ? "feita" : ""}`, onClick: () => abrirRecorrencia(r) },
-          el("strong", {}, r.titulo), el("span", {}, nomeCliente(r.clienteId)),
-          el("span", { class: "etiqueta" }, descreverFrequencia(r)), r.ativo === false ? el("span", { class: "etiqueta" }, "pausada") : null)))
-        : vazio("Nenhuma recorrência ainda.")),
+    el("p", { class: "dica-cliente" }, "As tarefas recorrentes (Manutenção TP, produção da semana, planejamento do mês, cobranças) agora ficam no menu ",
+      el("a", { href: "#/rotinas" }, "Rotinas"), "."),
 
     blocoOpenAI(),
 
