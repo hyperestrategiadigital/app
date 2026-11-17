@@ -2,7 +2,8 @@
 import { el, hojeISO, addDias, fmtData, fmtDiaSemana, fmtMoeda, vazio } from "../ui.js";
 import { dados, nomeCliente } from "../db.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, seloCliente } from "./componentes.js";
-import { rotuloStatusConteudo } from "../constantes.js";
+import { rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
+import { dataPost } from "../exportacao.js";
 
 export function render() {
   const hoje = hojeISO();
@@ -14,9 +15,9 @@ export function render() {
   const semPrazo = abertas.filter((t) => !t.prazo);
   const concluidasHoje = dados.tarefas.filter((t) => t.status === "concluido" && t.concluidoEm === hoje).length;
 
-  const conteudos = dados.conteudos
-    .filter((c) => c.data >= hoje && c.data <= fimSemana && c.status !== "publicado")
-    .sort((a, b) => (a.data + (a.hora || "")).localeCompare(b.data + (b.hora || "")));
+  const conteudos = dados.tarefas
+    .filter((c) => c.tipo === TIPO_CONTEUDO && dataPost(c) >= hoje && dataPost(c) <= fimSemana && c.statusConteudo !== "publicado")
+    .sort((a, b) => (dataPost(a) + (a.hora || "")).localeCompare(dataPost(b) + (b.hora || "")));
 
   const mes = hoje.slice(0, 7);
   const aReceber = dados.financeiro.filter((f) => f.tipo === "receita" && f.status !== "pago" && f.vencimento?.startsWith(mes));
@@ -60,11 +61,11 @@ export function render() {
         el("h2", {}, "Conteúdos da semana"),
         conteudos.length ? conteudos.map((c) =>
           el("a", { class: "item-conteudo", href: "#/calendario" },
-            el("span", { class: "data-mini" }, fmtData(c.data, true)),
+            el("span", { class: "data-mini" }, fmtData(dataPost(c), true)),
             el("div", {},
               el("strong", {}, c.titulo),
               el("div", { class: "cartao-meta" }, seloCliente(c.clienteId), el("span", { class: "etiqueta" }, c.formato),
-                el("span", { class: `etiqueta st-${c.status}` }, rotuloStatusConteudo(c.status))))))
+                el("span", { class: `etiqueta st-${c.statusConteudo || "ideia"}` }, rotuloStatusConteudo(c.statusConteudo || "ideia"))))))
           : vazio("Nenhum conteúdo programado.", el("a", { href: "#/calendario", class: "link" }, "Abrir calendário →")),
 
         el("h2", {}, "A receber este mês"),

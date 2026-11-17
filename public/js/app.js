@@ -6,6 +6,7 @@ import {
 import { conectar, desconectar, aoMudar } from "./db.js";
 import { el, avisar } from "./ui.js";
 import { gerarRecorrencias } from "./recorrencias.js";
+import { migrarConteudos, completarPostsSemFormato } from "./migracoes.js";
 
 import * as hoje from "./views/hoje.js";
 import * as tarefas from "./views/tarefas.js";
@@ -14,11 +15,15 @@ import * as calendario from "./views/calendario.js";
 import * as financeiro from "./views/financeiro.js";
 import * as trafego from "./views/trafego.js";
 import * as config from "./views/config.js";
+import * as planejamento from "./views/planejamento.js";
+import * as criar from "./views/criar.js";
 
 const ROTAS = {
   hoje: { titulo: "Hoje", icone: "☀", view: hoje },
   tarefas: { titulo: "Tarefas", icone: "✓", view: tarefas },
   calendario: { titulo: "Conteúdo", icone: "▦", view: calendario },
+  planejamento: { titulo: "Planejamento", icone: "☷", view: planejamento },
+  criar: { titulo: "Criar", icone: "✦", view: criar },
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
   trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego },
   financeiro: { titulo: "Financeiro", icone: "$", view: financeiro },
@@ -93,6 +98,7 @@ onAuthStateChanged(auth, async (usuario) => {
   pararDeOuvir = aoMudar(renderizar);
   renderizar();
   gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
+  migrarConteudos().then(completarPostsSemFormato).catch((e) => console.error("Migração:", e));
 });
 
 /* Menu no celular */

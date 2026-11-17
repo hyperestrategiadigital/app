@@ -1,10 +1,13 @@
 // Clientes: lista com indicadores e ficha completa de cada cliente.
 import { el, formulario, confirmar, avisar, fmtMoeda, fmtData, linkExterno, vazio, hojeISO } from "../ui.js";
 import { dados, criar, atualizar, excluir, porId } from "../db.js";
-import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas } from "./componentes.js";
+import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas, corCliente } from "./componentes.js";
 import { SERVICOS, rotuloStatusConteudo } from "../constantes.js";
-import { abrirConteudo } from "./calendario.js";
+import { novoPost } from "./calendario.js";
+import { dataPost } from "../exportacao.js";
+import { TIPO_CONTEUDO } from "../constantes.js";
 import { abrirConta, abrirManutencao } from "./trafego.js";
+import { abaMarca } from "./marca.js";
 
 const CORES = ["#4E2CA3", "#592C85", "#16626A", "#606060", "#C98A00", "#2D6CDF", "#B4415A", "#2E8B57"];
 
@@ -67,7 +70,7 @@ export function render({ params, estado, renderizar }) {
       el("label", { class: "check-inline" }, el("input", { type: "checkbox", checked: estado.mostrarInativos, onChange: (e) => { estado.mostrarInativos = e.target.checked; renderizar(); } }), "Mostrar inativos"),
       el("button", { class: "destaque", onClick: () => abrirCliente() }, "+ Novo cliente")),
     lista.length ? el("div", { class: "grade-clientes" }, lista.map(({ c, abertas, atrasadas, total }) =>
-      el("a", { class: `cartao-cliente ${c.ativo === false ? "inativo" : ""}`, href: `#/clientes/${c.id}`, style: { "--selo": c.cor || "#4E2CA3" } },
+      el("a", { class: `cartao-cliente ${c.ativo === false ? "inativo" : ""}`, href: `#/clientes/${c.id}`, style: { "--selo": corCliente(c) } },
         el("h3", {}, c.nome),
         el("div", { class: "cartao-meta" }, (c.servicos || []).map((s) => el("span", { class: "etiqueta" }, s))),
         el("div", { class: "numeros-cliente" },
@@ -86,7 +89,7 @@ function ficha(id, estado, renderizar) {
   const ts = dados.tarefas.filter((t) => t.clienteId === id);
   const abertas = ts.filter((t) => t.status !== "concluido").sort((a, b) => (a.prazo || "9").localeCompare(b.prazo || "9"));
   const feitas = ts.filter((t) => t.status === "concluido").sort((a, b) => (b.concluidoEm || b.prazo || "").localeCompare(a.concluidoEm || a.prazo || ""));
-  const conts = dados.conteudos.filter((x) => x.clienteId === id).sort((a, b) => b.data.localeCompare(a.data));
+  const conts = ts.filter((x) => x.tipo === TIPO_CONTEUDO).sort((a, b) => dataPost(b).localeCompare(dataPost(a)));
   const contas = dados.contasAds.filter((x) => x.clienteId === id);
   const mans = dados.manutencoes.filter((x) => x.clienteId === id).sort((a, b) => b.data.localeCompare(a.data));
   const fins = dados.financeiro.filter((x) => x.clienteId === id).sort((a, b) => (b.vencimento || "").localeCompare(a.vencimento || ""));
@@ -96,6 +99,7 @@ function ficha(id, estado, renderizar) {
   const insta = c.instagram ? linkExterno(`https://instagram.com/${c.instagram.replace(/^@/, "")}`, c.instagram) : null;
 
   const conteudoAba = {
+    marca: () => abaMarca(c, renderizar),
     tarefas: () => [
       el("div", { class: "com-acao" }, el("h2", {}, `Abertas (${abertas.length})`),
         el("button", { onClick: () => abrirTarefa({ clienteId: id, prazo: hojeISO() }) }, "+ Tarefa")),
@@ -105,10 +109,12 @@ function ficha(id, estado, renderizar) {
       feitas.length > 50 ? el("p", { class: "subtitulo" }, `Mostrando as 50 mais recentes. Use a tela Tarefas para ver todas.`) : null],
     conteudo: () => [
       el("div", { class: "com-acao" }, el("h2", {}, `Conteúdos (${conts.length})`),
-        el("button", { onClick: () => abrirConteudo({ clienteId: id, data: hojeISO() }) }, "+ Conteúdo")),
-      conts.length ? conts.slice(0, 60).map((x) => el("div", { class: "linha-tabela", onClick: () => abrirConteudo(x) },
-        el("span", { class: "data-mini" }, fmtData(x.data, true)), el("strong", {}, x.titulo),
-        el("span", { class: "etiqueta" }, x.formato), el("span", { class: `etiqueta st-${x.status}` }, rotuloStatusConteudo(x.status))))
+        el("div", { class: "tela-acoes" },
+          el("a", { class: "botao-link secundario mini", href: `#/planejamento/${id}/${hojeISO().slice(0, 7)}` }, "☷ Planejar mês"),
+          el("button", { class: "mini", onClick: () => novoPost({ clienteId: id }) }, "+ Post"))),
+      conts.length ? conts.slice(0, 60).map((x) => el("div", { class: "linha-tabela", onClick: () => abrirTarefa(x) },
+        el("span", { class: "data-mini" }, fmtData(dataPost(x), true)), el("strong", {}, x.titulo),
+        el("span", { class: "etiqueta" }, x.formato || "Post"), el("span", { class: `etiqueta st-${x.statusConteudo || "ideia"}` }, rotuloStatusConteudo(x.statusConteudo || "ideia"))))
         : vazio("Nenhum conteúdo programado.")],
     trafego: () => [
       el("div", { class: "com-acao" }, el("h2", {}, "Contas de anúncio"),
@@ -131,7 +137,7 @@ function ficha(id, estado, renderizar) {
 
   return el("div", { class: "tela" },
     el("a", { href: "#/clientes", class: "voltar" }, "← Clientes"),
-    el("header", { class: "tela-topo ficha-topo", style: { "--selo": c.cor || "#4E2CA3" } },
+    el("header", { class: "tela-topo ficha-topo", style: { "--selo": corCliente(c) } },
       el("div", {},
         el("h1", {}, c.nome, c.ativo === false ? el("span", { class: "etiqueta" }, "Inativo") : null),
         el("div", { class: "cartao-meta" }, (c.servicos || []).map((s) => el("span", { class: "etiqueta" }, s)))),
@@ -145,6 +151,6 @@ function ficha(id, estado, renderizar) {
         info("Tom de voz", c.tomDeVoz), info("Público", c.publico), info("Observações", c.observacoes),
         !c.contato && !c.tomDeVoz && !c.linkDrive ? el("p", { class: "subtitulo" }, "Complete a ficha (contato, links, tom de voz) em Editar. O tom de voz é usado para gerar copy.") : null),
       el("section", { class: "bloco" },
-        abas([["tarefas", "Tarefas"], ["conteudo", "Conteúdo"], ["trafego", "Tráfego pago"], ["financeiro", "Financeiro"]], estado.aba, (a) => { estado.aba = a; renderizar(); }),
+        abas([["tarefas", "Tarefas"], ["conteudo", "Conteúdo"], ["marca", "Marca"], ["trafego", "Tráfego pago"], ["financeiro", "Financeiro"]], estado.aba, (a) => { estado.aba = a; renderizar(); }),
         conteudoAba[estado.aba]())));
 }

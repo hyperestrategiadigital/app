@@ -100,9 +100,15 @@ export function confirmar(msg) {
  */
 export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = [], rotuloSalvar = "Salvar", largo = false } = {}) {
   const entradas = {};
+  const condicionais = []; // [{ c, elemento, entrada }] com c.mostrarSe(valores)
   const grade = el("div", { class: "form-grade" });
   for (const c of campos) {
-    if (c.tipo === "secao") { grade.append(el("h3", { class: "form-secao" }, c.rotulo)); continue; }
+    if (c.tipo === "secao") {
+      const h = el("h3", { class: "form-secao" }, c.rotulo);
+      grade.append(h);
+      if (c.mostrarSe) condicionais.push({ c, elemento: h });
+      continue;
+    }
     const v = valores[c.nome] ?? c.padrao ?? "";
     let entrada;
     if (c.tipo === "textarea") {
@@ -130,21 +136,37 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
     entradas[c.nome] = { c, entrada };
     const id = `f-${c.nome}`;
     entrada.id = id;
-    grade.append(el("label", { class: `campo ${c.largura || ""} ${c.tipo === "checkbox" ? "campo-check" : ""}`, for: id },
-      c.tipo === "checkbox" ? [entrada, el("span", {}, c.rotulo)] : [el("span", {}, c.rotulo), entrada]));
+    const rotulo = el("label", { class: `campo ${c.largura || ""} ${c.tipo === "checkbox" ? "campo-check" : ""}`, for: id },
+      c.tipo === "checkbox" ? [entrada, el("span", {}, c.rotulo)] : [el("span", {}, c.rotulo), entrada]);
+    grade.append(rotulo);
+    if (c.mostrarSe) condicionais.push({ c, elemento: rotulo, entrada });
   }
+  const lerValores = () => {
+    const out = {};
+    for (const [nome, { c, entrada }] of Object.entries(entradas)) {
+      if (c.tipo === "checkbox") out[nome] = entrada.checked;
+      else if (c.tipo === "multi" || c.tipo === "checklist") out[nome] = entrada.valor();
+      else if (c.tipo === "number") out[nome] = entrada.value === "" ? null : Number(entrada.value);
+      else out[nome] = entrada.value.trim();
+    }
+    return out;
+  };
+  const atualizarVisiveis = () => {
+    const v = lerValores();
+    for (const { c, elemento, entrada } of condicionais) {
+      const mostrar = !!c.mostrarSe(v);
+      elemento.hidden = !mostrar;
+      if (entrada && c.obrigatorio && entrada.tagName !== "DIV") entrada.required = mostrar;
+    }
+  };
+  grade.addEventListener("change", atualizarVisiveis);
+  atualizarVisiveis();
   return new Promise((resolver) => {
     let fechar;
     const form = el("form", {
       onSubmit: async (e) => {
         e.preventDefault();
-        const out = {};
-        for (const [nome, { c, entrada }] of Object.entries(entradas)) {
-          if (c.tipo === "checkbox") out[nome] = entrada.checked;
-          else if (c.tipo === "multi" || c.tipo === "checklist") out[nome] = entrada.valor();
-          else if (c.tipo === "number") out[nome] = entrada.value === "" ? null : Number(entrada.value);
-          else out[nome] = entrada.value.trim();
-        }
+        const out = lerValores();
         const botao = form.querySelector("button[type=submit]");
         botao.disabled = true;
         try {
@@ -161,6 +183,7 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
       el("span", { class: "espaco" }),
       el("button", { type: "button", class: "secundario", onClick: () => { fechar(); resolver(null); } }, "Cancelar"),
       el("button", { type: "submit" }, rotuloSalvar)));
+    form.lerValores = lerValores;
     fechar = abrirModal(titulo, form, { largo });
   });
 }

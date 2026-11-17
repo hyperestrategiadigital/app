@@ -1,133 +1,88 @@
-// Calendário de conteúdo: visão do mês com os posts de cada cliente, status de produção,
-// agendamento (data e hora) e geração de prompt de copy com o contexto do cliente.
-import { el, formulario, confirmar, avisar, hojeISO, addDias, fmtData, vazio } from "../ui.js";
-import { dados, criar, atualizar, excluir, porId, opcoesClientes, nomeCliente } from "../db.js";
-import { cabecalho, abas, seloCliente } from "./componentes.js";
-import { FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo } from "../constantes.js";
+// Calendário de conteúdo: cada post é uma tarefa do tipo Conteúdo. Mostra o mês com a cor e o nome
+// do cliente em cada post, filtros, planejamento e exportação para aprovação do cliente.
+import { el, hojeISO, addDias, fmtData, vazio, formulario } from "../ui.js";
+import { dados, porId, opcoesClientes, nomeCliente } from "../db.js";
+import { cabecalho, abas, seloCliente, abrirTarefa, corCliente } from "./componentes.js";
+import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
+import { dataPost, exportarExcel, exportarPDF, nomeMes } from "../exportacao.js";
 
-const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const ICONE_FORMATO = {
+  "Feed estático": "▣", "Carrossel": "▤", "Reels": "▶", "Story": "◫", "Sequência de stories": "◫",
+  "Vídeo (YouTube)": "▶", "TikTok": "▶", "Anúncio estático": "$", "Anúncio em vídeo": "$", "WhatsApp": "✉", "Blog": "¶"
+};
 
-/** Monta o prompt de copy com tudo o que sabemos do cliente e da peça. */
-function montarPrompt(v) {
-  const c = porId("clientes", v.clienteId) || {};
-  const linhas = [
-    `Você é copywriter da Hyper, agência de tráfego pago e social media. Escreva a copy de um conteúdo para o cliente ${c.nome || "(sem cliente)"}.`,
-    "",
-    "## Sobre o cliente",
-    c.tomDeVoz ? `- Tom de voz: ${c.tomDeVoz}` : "- Tom de voz: não informado (use um tom próximo e profissional)",
-    c.publico ? `- Público-alvo: ${c.publico}` : null,
-    c.instagram ? `- Instagram: ${c.instagram}` : null,
-    c.observacoes ? `- Observações: ${c.observacoes}` : null,
-    "",
-    "## Sobre a peça",
-    `- Tema: ${v.titulo || "(sem tema)"}`,
-    `- Formato: ${v.formato || "-"} · Rede: ${v.rede || "-"}`,
-    v.data ? `- Publicação: ${fmtData(v.data)}${v.hora ? ` às ${v.hora}` : ""}` : null,
-    v.objetivo ? `- Objetivo: ${v.objetivo}` : null,
-    v.roteiro ? `- Briefing / roteiro:\n${v.roteiro}` : null,
-    "",
-    "## O que entregar",
-    v.formato === "Carrossel" ? "- Texto de cada lâmina (capa forte + 5 a 8 lâminas + lâmina final com CTA)" : null,
-    v.formato === "Reels" || v.formato === "Vídeo" ? "- Gancho dos 3 primeiros segundos e roteiro curto falado" : null,
-    v.formato === "WhatsApp" ? "- Mensagem curta para lista de transmissão, com CTA claro" : null,
-    "- Legenda pronta para publicar, com chamada para ação",
-    v.rede === "Instagram" || v.rede === "TikTok" ? "- 5 a 10 hashtags relevantes" : null,
-    "- 3 opções de primeira linha (gancho) para eu escolher",
-    "",
-    "Escreva em português do Brasil."
-  ];
-  return linhas.filter((l) => l !== null).join("\n");
+export { corCliente };
+
+/** Abre um novo post no calendário (tarefa do tipo Conteúdo). */
+export function novoPost({ data = hojeISO(), clienteId = "" } = {}) {
+  const prazo = addDias(data, -1) < hojeISO() ? hojeISO() : addDias(data, -1);
+  return abrirTarefa({ tipo: TIPO_CONTEUDO, dataPublicacao: data, prazo, clienteId, statusConteudo: "ideia" });
 }
 
-export function abrirConteudo(conteudo = {}) {
-  const editando = !!conteudo.id;
-  const lerForm = () => {
-    const v = {};
-    for (const n of ["titulo", "clienteId", "data", "hora", "formato", "rede", "objetivo", "roteiro"]) v[n] = document.getElementById(`f-${n}`)?.value || "";
-    return v;
-  };
-  const botaoPrompt = el("button", {
-    type: "button", class: "secundario",
-    onClick: async () => {
-      const prompt = montarPrompt(lerForm());
-      try { await navigator.clipboard.writeText(prompt); avisar("Prompt copiado! Cole no Claude para gerar a copy."); }
-      catch { avisar("Não consegui copiar. Selecione o texto manualmente.", "erro"); }
-      window.open("https://claude.ai/new", "_blank", "noopener");
-    }
-  }, "✨ Gerar copy com o Claude");
-
-  const campos = [
-    { nome: "titulo", rotulo: "Tema / título", obrigatorio: true, dica: "Ex.: Black Week — Plano anual" },
-    { nome: "clienteId", rotulo: "Cliente", tipo: "select", opcoes: opcoesClientes(), largura: "metade" },
-    { nome: "status", rotulo: "Status", tipo: "select", opcoes: STATUS_CONTEUDO, padrao: "ideia", largura: "metade" },
-    { nome: "data", rotulo: "Data de publicação", tipo: "date", obrigatorio: true, largura: "metade" },
-    { nome: "hora", rotulo: "Horário (agendamento)", tipo: "time", largura: "metade" },
-    { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: "Estático", largura: "metade" },
-    { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: REDES, padrao: "Instagram", largura: "metade" },
-    { nome: "objetivo", rotulo: "Objetivo", dica: "Ex.: vender plano anual, gerar leads, engajamento" },
-    { nome: "roteiro", rotulo: "Briefing / roteiro", tipo: "textarea", linhas: 4 },
-    { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 6, dica: "Cole aqui a copy aprovada" },
-    { nome: "linkCanva", rotulo: "Link do Canva", largura: "metade" },
-    { nome: "linkDrive", rotulo: "Link do Drive", largura: "metade" }
-  ];
-  if (!editando) campos.push({ nome: "criarTarefa", rotulo: "Criar tarefa de produção (prazo 2 dias antes)", tipo: "checkbox", padrao: true });
-
-  return formulario(editando ? "Editar conteúdo" : "Novo conteúdo", campos, conteudo, {
-    largo: true,
-    extras: [botaoPrompt, editando ? el("button", {
-      type: "button", class: "perigo-texto", onClick: async () => {
-        if (await confirmar(`Excluir o conteúdo "${conteudo.titulo}"?`)) {
-          await excluir("conteudos", conteudo.id);
-          document.querySelector(".modal-fundo")?.remove();
-        }
-      }
-    }, "Excluir") : null],
-    aoSalvar: async ({ criarTarefa, ...v }) => {
-      if (editando) await atualizar("conteudos", conteudo.id, v);
-      else {
-        await criar("conteudos", v);
-        if (criarTarefa) {
-          const prazo = addDias(v.data, -2) < hojeISO() ? hojeISO() : addDias(v.data, -2);
-          await criar("tarefas", { titulo: `${v.formato} | ${v.titulo} (${fmtData(v.data, true)})`, clienteId: v.clienteId, tipo: "Conteúdo", status: "a_fazer", prazo, checklist: [], linkCanva: v.linkCanva || "", linkDrive: v.linkDrive || "" });
-        }
-      }
-      avisar(editando ? "Conteúdo atualizado." : "Conteúdo criado.");
-    }
-  });
+/** Pergunta cliente e mês quando a ação precisa de um só cliente. */
+export async function escolherClienteEMes(titulo, { clienteId = "", mes = hojeISO().slice(0, 7), rotulo = "Continuar" } = {}) {
+  const r = await formulario(titulo, [
+    { nome: "clienteId", rotulo: "Cliente", tipo: "select", opcoes: opcoesClientes(false), obrigatorio: true, largura: "metade" },
+    { nome: "mes", rotulo: "Mês", tipo: "month", obrigatorio: true, largura: "metade" }
+  ], { clienteId, mes }, { rotuloSalvar: rotulo });
+  return r && r.clienteId ? r : null;
 }
 
-function chip(c) {
-  const cli = porId("clientes", c.clienteId);
+function chip(t) {
+  const cli = porId("clientes", t.clienteId);
   return el("button", {
-    class: `chip-conteudo st-${c.status}`, style: { "--selo": cli?.cor || "#606060" },
-    title: `${nomeCliente(c.clienteId)} · ${c.formato} · ${rotuloStatusConteudo(c.status)}`,
-    onClick: (e) => { e.stopPropagation(); abrirConteudo(c); }
-  }, c.hora ? el("small", {}, c.hora) : null, `${cli ? cli.nome.split(" ")[0] + ": " : ""}${c.titulo}`);
+    class: `chip-conteudo st-${t.statusConteudo || "ideia"}`, style: { "--selo": corCliente(cli) },
+    title: `${nomeCliente(t.clienteId)} · ${t.formato || "Post"} · ${t.titulo} · ${rotuloStatusConteudo(t.statusConteudo || "ideia")}`,
+    onClick: (e) => { e.stopPropagation(); abrirTarefa(t); }
+  },
+  el("span", { class: "chip-cliente" }, cli ? cli.nome : "Sem cliente"),
+  el("span", { class: "chip-linha" },
+    el("span", { class: "chip-icone", "aria-hidden": "true" }, ICONE_FORMATO[t.formato] || "•"),
+    t.hora ? el("small", {}, t.hora) : null,
+    t.titulo));
 }
 
 export function render({ estado, renderizar }) {
   estado.mes ??= hojeISO().slice(0, 7);
   estado.modo ??= "mes";
   const [ano, mes] = estado.mes.split("-").map(Number);
-  const filtrados = dados.conteudos.filter((c) =>
-    (!estado.cliente || c.clienteId === estado.cliente) && (!estado.status || c.status === estado.status));
+  const posts = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && dataPost(t));
+  const filtrados = posts.filter((t) =>
+    (!estado.cliente || t.clienteId === estado.cliente) &&
+    (!estado.status || (t.statusConteudo || "ideia") === estado.status));
 
   const mudarMes = (n) => { const d = new Date(ano, mes - 1 + n, 1); estado.mes = hojeISO(d).slice(0, 7); renderizar(); };
   const set = (k) => (e) => { estado[k] = e.target.value; renderizar(); };
 
-  const doMes = filtrados.filter((c) => c.data?.startsWith(estado.mes));
-  const contagem = STATUS_CONTEUDO.map(([s, r]) => [r, doMes.filter((c) => c.status === s).length]).filter(([, n]) => n);
+  const doMes = filtrados.filter((t) => dataPost(t).startsWith(estado.mes));
+  const contagem = STATUS_CONTEUDO.map(([s, r]) => [r, doMes.filter((t) => (t.statusConteudo || "ideia") === s).length]).filter(([, n]) => n);
+
+  // Legenda: clientes com posts no mês (clique filtra)
+  const doMesTodos = posts.filter((t) => dataPost(t).startsWith(estado.mes));
+  const clientesNoMes = [...new Set(doMesTodos.map((t) => t.clienteId))]
+    .map((id) => ({ id, c: porId("clientes", id), n: doMesTodos.filter((t) => t.clienteId === id).length }))
+    .sort((a, b) => b.n - a.n);
+  const legenda = clientesNoMes.length ? el("div", { class: "legenda-clientes" }, clientesNoMes.map(({ id, c, n }) =>
+    el("button", {
+      class: `legenda-item ${estado.cliente === id ? "ativo" : ""}`, style: { "--selo": corCliente(c) },
+      onClick: () => { estado.cliente = estado.cliente === id ? "" : id; renderizar(); }
+    }, el("span", { class: "bolinha" }), c?.nome || "Sem cliente", el("small", {}, n)))) : null;
+
+  const acaoCliente = async (fn, titulo) => {
+    const r = estado.cliente ? { clienteId: estado.cliente, mes: estado.mes } : await escolherClienteEMes(titulo, { mes: estado.mes });
+    if (r) fn(r.clienteId, r.mes);
+  };
 
   const filtros = el("div", { class: "filtros" },
     el("div", { class: "navegador-mes" },
       el("button", { class: "icone", "aria-label": "Mês anterior", onClick: () => mudarMes(-1) }, "‹"),
-      el("strong", {}, `${MESES[mes - 1]} ${ano}`),
+      el("strong", {}, nomeMes(estado.mes)),
       el("button", { class: "icone", "aria-label": "Próximo mês", onClick: () => mudarMes(1) }, "›"),
       el("button", { class: "secundario mini", onClick: () => { estado.mes = hojeISO().slice(0, 7); renderizar(); } }, "Hoje")),
     el("select", { onChange: set("cliente"), "aria-label": "Cliente" },
       opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (estado.cliente || "") }, v ? r : "Todos os clientes"))),
-    el("select", { onChange: set("status"), "aria-label": "Status" },
-      el("option", { value: "" }, "Todos os status"), STATUS_CONTEUDO.map(([v, r]) => el("option", { value: v, selected: v === estado.status }, r))),
+    el("select", { onChange: set("status"), "aria-label": "Etapa" },
+      el("option", { value: "" }, "Todas as etapas"), STATUS_CONTEUDO.map(([v, r]) => el("option", { value: v, selected: v === estado.status }, r))),
     abas([["mes", "Mês"], ["lista", "Lista"]], estado.modo, (m) => { estado.modo = m; renderizar(); }));
 
   let corpo;
@@ -140,29 +95,31 @@ export function render({ estado, renderizar }) {
     corpo = el("div", { class: "calendario" },
       ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"].map((d) => el("div", { class: "cal-cabeca" }, d)),
       dias.slice(0, semanas * 7).map((d) => {
-        const doDia = filtrados.filter((c) => c.data === d).sort((a, b) => (a.hora || "").localeCompare(b.hora || ""));
+        const doDia = filtrados.filter((t) => dataPost(t) === d).sort((a, b) => (a.hora || "").localeCompare(b.hora || ""));
         return el("div", {
           class: `cal-dia ${d.slice(0, 7) !== estado.mes ? "fora" : ""} ${d === hoje ? "hoje" : ""}`,
-          onClick: () => abrirConteudo({ data: d, clienteId: estado.cliente || "" })
+          onClick: () => novoPost({ data: d, clienteId: estado.cliente || "" }), title: "Clique para criar um post neste dia"
         }, el("span", { class: "cal-num" }, Number(d.slice(8))), doDia.map(chip));
       }));
   } else {
-    const ordenados = [...doMes].sort((a, b) => (a.data + (a.hora || "")).localeCompare(b.data + (b.hora || "")));
-    corpo = el("div", { class: "lista" }, ordenados.length ? ordenados.map((c) =>
-      el("div", { class: "linha-tabela", onClick: () => abrirConteudo(c) },
-        el("span", { class: "data-mini" }, `${fmtData(c.data, true)}${c.hora ? " " + c.hora : ""}`),
-        el("strong", {}, c.titulo), seloCliente(c.clienteId),
-        el("span", { class: "etiqueta" }, `${c.formato} · ${c.rede}`),
-        el("span", { class: `etiqueta st-${c.status}` }, rotuloStatusConteudo(c.status)),
-        c.copy ? el("span", { class: "etiqueta ok" }, "copy ✓") : el("span", { class: "etiqueta" }, "sem copy")))
-      : vazio("Nenhum conteúdo neste mês."));
+    const ordenados = [...doMes].sort((a, b) => (dataPost(a) + (a.hora || "")).localeCompare(dataPost(b) + (b.hora || "")));
+    corpo = el("div", { class: "lista" }, ordenados.length ? ordenados.map((t) =>
+      el("div", { class: "linha-tabela", onClick: () => abrirTarefa(t) },
+        el("span", { class: "data-mini" }, `${fmtData(dataPost(t), true)}${t.hora ? " " + t.hora : ""}`),
+        seloCliente(t.clienteId), el("strong", {}, t.titulo),
+        el("span", { class: "etiqueta" }, `${t.formato || "Post"} · ${t.rede || ""}`),
+        el("span", { class: `etiqueta st-${t.statusConteudo || "ideia"}` }, rotuloStatusConteudo(t.statusConteudo || "ideia")),
+        t.copy ? el("span", { class: "etiqueta ok" }, "copy ✓") : el("span", { class: "etiqueta" }, "sem copy")))
+      : vazio("Nenhum post neste mês."));
   }
 
   return el("div", { class: "tela" },
     cabecalho("Calendário de conteúdo",
-      contagem.length ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para programar um conteúdo",
-      el("button", { class: "destaque", onClick: () => abrirConteudo({ data: hojeISO(), clienteId: estado.cliente || "" }) }, "+ Novo conteúdo")),
-    filtros, corpo,
-    el("p", { class: "nota" }, "Agendamento: defina data e horário e mude o status para \"Agendado\". A publicação automática no Instagram/Facebook entra numa próxima etapa, com a integração da API da Meta."));
+      contagem.length ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para criar um post",
+      el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = `#/planejamento/${c}/${m}`), "Planejar mês") }, "☷ Planejar mês"),
+      el("button", { class: "secundario", onClick: () => acaoCliente(exportarExcel, "Exportar planilha") }, "⬇ Excel"),
+      el("button", { class: "secundario", onClick: () => acaoCliente(exportarPDF, "Exportar PDF") }, "⬇ PDF"),
+      el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "" }) }, "+ Novo post")),
+    filtros, legenda, corpo,
+    el("p", { class: "nota" }, "Cada post é uma tarefa do tipo Conteúdo: o que você muda aqui muda na lista de tarefas, e vice-versa. Para exportar ou planejar, filtre um cliente ou escolha na hora."));
 }
-
