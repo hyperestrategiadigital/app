@@ -17,6 +17,7 @@ import * as trafego from "./views/trafego.js";
 import * as config from "./views/config.js";
 import * as planejamento from "./views/planejamento.js";
 import * as criar from "./views/criar.js";
+import * as rotinas from "./views/rotinas.js";
 
 const ROTAS = {
   hoje: { titulo: "Hoje", icone: "☀", view: hoje },
@@ -25,6 +26,7 @@ const ROTAS = {
   planejamento: { titulo: "Planejamento", icone: "☷", view: planejamento },
   criar: { titulo: "Criar", icone: "✦", view: criar },
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
+  rotinas: { titulo: "Rotinas", icone: "↻", view: rotinas },
   trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego },
   financeiro: { titulo: "Financeiro", icone: "$", view: financeiro },
   config: { titulo: "Ajustes", icone: "⚙", view: config }

@@ -1,10 +1,10 @@
 // Planejamento do mês de um cliente: uma tabela onde cada linha é um post.
 // Ao salvar, cada linha vira (ou atualiza) uma tarefa do tipo Conteúdo — aparece na lista de tarefas e no calendário.
-import { el, hojeISO, addDias, dataDe, fmtDiaSemana, avisar, abrirModal, confirmar, formulario, vazio } from "../ui.js";
+import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal, confirmar, formulario, vazio } from "../ui.js";
 import { dados, porId, criar, atualizar, excluir, clientesAtivos } from "../db.js";
-import { cabecalho } from "./componentes.js";
-import { FORMATOS, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA } from "../constantes.js";
-import { postsDoMes, dataPost, exportarPDF, nomeMes } from "../exportacao.js";
+import { cabecalho, abas } from "./componentes.js";
+import { FORMATOS, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo } from "../constantes.js";
+import { postsDoMes, dataPost, exportarPDF, nomeMes, temPrefixo } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
 
 const CAMPOS = ["dataPublicacao", "hora", "formato", "rede", "titulo", "objetivo", "roteiro", "prazo", "statusConteudo"];
@@ -38,6 +38,7 @@ export function render({ params, estado, renderizar }) {
   const mes = /^\d{4}-\d{2}$/.test(mesParam || "") ? mesParam : hojeISO().slice(0, 7);
   const chave = `${clienteId}|${mes}`;
 
+  estado.modo ??= "calendario";
   // Rascunho em memória até salvar
   if (estado.chave !== chave) {
     estado.chave = chave;
@@ -165,6 +166,16 @@ export function render({ params, estado, renderizar }) {
         estado.alterado = true; renderizar();
       } }, "✕"))));
 
+  const tabela = el("div", { class: "bloco tabela-rolagem" },
+      el("table", { class: "tabela-plano" },
+        el("thead", {}, el("tr", {}, ["Publicação", "Hora", "Formato", "Rede", "Tema", "Objetivo", "Briefing", "Prazo produção", "Etapa", ""].map((h) => el("th", {}, h)))),
+        el("tbody", {}, linhas.length ? linhas : el("tr", {}, el("td", { colspan: 10, class: "vazio" }, "Nenhum post planejado. Adicione linhas ou use \"Preencher o mês\".")))),
+      el("div", { class: "acoes" },
+        el("button", { class: "secundario", onClick: adicionar }, "+ Adicionar post"),
+        el("button", { class: "secundario", onClick: preencher }, "Preencher o mês (dias fixos)"),
+        el("span", { class: "espaco" }),
+        estado.alterado ? el("button", { class: "link", onClick: () => { estado.chave = null; renderizar(); } }, "Descartar alterações") : null));
+
   const botaoSalvar = el("button", { class: "destaque", disabled: !estado.alterado, onClick: (e) => salvar(e.currentTarget) }, "Salvar planejamento");
 
   return el("div", { class: "tela tela-larga" },
@@ -183,16 +194,13 @@ export function render({ params, estado, renderizar }) {
     cliente.tomDeVoz || cliente.publico ? el("p", { class: "dica-cliente" },
       cliente.tomDeVoz ? [el("strong", {}, "Tom de voz: "), cliente.tomDeVoz, " "] : null,
       cliente.publico ? [el("strong", {}, " Público: "), cliente.publico] : null) : null,
-    el("div", { class: "bloco tabela-rolagem" },
-      el("table", { class: "tabela-plano" },
-        el("thead", {}, el("tr", {}, ["Publicação", "Hora", "Formato", "Rede", "Tema", "Objetivo", "Briefing", "Prazo produção", "Etapa", ""].map((h) => el("th", {}, h)))),
-        el("tbody", {}, linhas.length ? linhas : el("tr", {}, el("td", { colspan: 10, class: "vazio" }, "Nenhum post planejado. Adicione linhas ou use \"Preencher o mês\".")))),
-      el("div", { class: "acoes" },
-        el("button", { class: "secundario", onClick: adicionar }, "+ Adicionar post"),
-        el("button", { class: "secundario", onClick: preencher }, "Preencher o mês (dias fixos)"),
-        el("span", { class: "espaco" }),
-        estado.alterado ? el("button", { class: "link", onClick: () => { estado.chave = null; renderizar(); } }, "Descartar alterações") : null)),
-    el("p", { class: "nota" }, "Ao salvar, cada linha vira um post: entra na lista de tarefas (com o prazo de produção) e no calendário (na data de publicação). Mudanças aqui atualizam os posts existentes."));
+    el("div", { class: "filtros" },
+      abas([["calendario", "Calendário"], ["tabela", "Tabela"]], estado.modo, (m) => { estado.modo = m; renderizar(); }),
+      el("button", { class: "secundario mini", onClick: preencher }, "Preencher dias fixos"),
+      el("span", { class: "espaco" }),
+      estado.alterado ? el("button", { class: "link", onClick: () => { estado.chave = null; renderizar(); } }, "Descartar alterações") : null),
+    estado.modo === "calendario" ? calendarioPlano({ estado, mes, cliente, renderizar, marcar: () => { estado.alterado = true; renderizar(); } }) : tabela,
+    el("p", { class: "nota" }, "No calendário, digite no dia no formato \"Formato | Tema\" (ex.: Estático | Promo de Natal) e aperte Enter. Arraste para trocar o dia. Ao salvar, cada post entra na lista de tarefas (com o prazo de produção) e na aba Conteúdo."));
 }
 
 function telaEscolha() {
@@ -208,4 +216,106 @@ function telaEscolha() {
           el("span", {}, el("strong", {}, n), " posts este mês"),
           el("span", {}, el("strong", {}, prox), " no próximo")));
     })));
+}
+
+/* ---------------- Calendário de planejamento ---------------- */
+
+// "Estático | Tema" → { formato, titulo }. Prefixos do jeito que você já escreve na planilha.
+const PREFIXOS = [
+  [/^est[aá]tico/i, "Feed estático"], [/^feed/i, "Feed estático"], [/^carrossel/i, "Carrossel"],
+  [/^reels?/i, "Reels"], [/^v[ií]deo/i, "Reels"], [/^stor(y|ies)/i, "Story"], [/^whats/i, "WhatsApp"],
+  [/^tiktok/i, "TikTok"], [/^tr[aá]fego/i, "Anúncio estático"], [/^an[uú]ncio/i, "Anúncio estático"], [/^blog/i, "Blog"]
+];
+export function lerTextoRapido(texto, formatoPadrao = "Feed estático") {
+  return texto.split(";").map((parte) => parte.trim()).filter(Boolean).map((parte) => {
+    const [prefixo, ...resto] = parte.split("|");
+    if (resto.length) {
+      const achado = PREFIXOS.find(([re]) => re.test(prefixo.trim()));
+      if (achado) return { formato: achado[1], titulo: resto.join("|").trim() };
+    }
+    // Prefixo desconhecido (ex.: "Comercial | ..."): mantém o texto inteiro como tema, em Feed estático
+    return { formato: resto.length ? "Feed estático" : formatoPadrao, titulo: parte };
+  });
+}
+
+function editarLinha(l, estado, marcar) {
+  formulario("Post do planejamento", [
+    { nome: "titulo", rotulo: "Tema", obrigatorio: true },
+    { nome: "dataPublicacao", rotulo: "Publicação", tipo: "date", obrigatorio: true, largura: "metade" },
+    { nome: "hora", rotulo: "Horário", tipo: "time", largura: "metade" },
+    { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, largura: "metade" },
+    { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: REDES, largura: "metade" },
+    { nome: "objetivo", rotulo: "Objetivo" },
+    { nome: "roteiro", rotulo: "Briefing / ideia", tipo: "textarea", linhas: 3 },
+    { nome: "prazo", rotulo: "Prazo de produção", tipo: "date", largura: "metade" },
+    { nome: "statusConteudo", rotulo: "Etapa", tipo: "select", opcoes: STATUS_CONTEUDO, largura: "metade" }
+  ], l, {
+    rotuloSalvar: "Aplicar",
+    extras: [el("button", { type: "button", class: "perigo-texto", onClick: async () => {
+      if (l.id && !(await confirmar(`Remover "${l.titulo}"? O post será excluído quando você salvar o planejamento.`))) return;
+      if (l.id) estado.removidas.push(l.id);
+      estado.linhas = estado.linhas.filter((x) => x !== l);
+      document.querySelector(".modal-fundo")?.remove();
+      marcar();
+    } }, "Remover"), el("button", { type: "button", class: "secundario", onClick: () => {
+      estado.linhas.push({ ...l, chave: novaChave(), id: null });
+      document.querySelector(".modal-fundo")?.remove();
+      marcar();
+    } }, "Duplicar")],
+    aoSalvar: (v) => { Object.assign(l, v); marcar(); }
+  });
+}
+
+function calendarioPlano({ estado, mes, cliente, renderizar, marcar }) {
+  const [a, m] = mes.split("-").map(Number);
+  const primeiro = new Date(a, m - 1, 1);
+  const inicio = addDias(hojeISO(primeiro), -((primeiro.getDay() + 6) % 7));
+  const dias = Array.from({ length: 42 }, (_, i) => addDias(inicio, i));
+  const semanas = dias[35].slice(0, 7) === mes ? 6 : 5;
+  const hoje = hojeISO();
+
+  const celula = (d) => {
+    const doMes = d.startsWith(mes);
+    const doDia = estado.linhas.filter((l) => l.dataPublicacao === d).sort((x, y) => (x.hora || "").localeCompare(y.hora || ""));
+    const entrada = doMes ? el("input", {
+      class: "plano-rapido", id: `rapido-${d}`, placeholder: doDia.length ? "+" : "Formato | Tema",
+      "aria-label": `Novo post em ${fmtData(d)}`,
+      onKeydown: (e) => {
+        if (e.key !== "Enter" || !e.target.value.trim()) return;
+        e.preventDefault();
+        const base = doDia[doDia.length - 1] || estado.linhas[estado.linhas.length - 1];
+        for (const item of lerTextoRapido(e.target.value, base?.formato)) estado.linhas.push({ ...linhaNova(d, base), ...item });
+        estado.alterado = true;
+        renderizar();
+        setTimeout(() => document.getElementById(`rapido-${d}`)?.focus(), 20);
+      }
+    }) : null;
+    return el("div", {
+      class: `plano-dia ${doMes ? "" : "fora"} ${d === hoje ? "hoje" : ""}`,
+      onDragover: doMes ? (e) => { e.preventDefault(); e.currentTarget.classList.add("alvo"); } : undefined,
+      onDragleave: (e) => e.currentTarget.classList.remove("alvo"),
+      onDrop: doMes ? (e) => {
+        e.preventDefault();
+        const l = estado.linhas.find((x) => x.chave === e.dataTransfer.getData("text/plain"));
+        if (l && l.dataPublicacao !== d) { l.dataPublicacao = d; marcar(); }
+      } : undefined
+    },
+    el("div", { class: "plano-data" }, el("strong", {}, Number(d.slice(8))), el("span", {}, `/${d.slice(5, 7)}`)),
+    doDia.map((l) => {
+      const chip = el("button", {
+        class: `plano-post st-${l.statusConteudo || "ideia"} ${l.id ? "" : "novo"}`, draggable: "true",
+        title: `${l.formato} · ${rotuloStatusConteudo(l.statusConteudo || "ideia")}${l.objetivo ? " · " + l.objetivo : ""}`,
+        onClick: () => editarLinha(l, estado, marcar)
+      }, temPrefixo(l.titulo) ? l.titulo : [el("strong", {}, l.formato), ` | ${l.titulo || "(sem tema)"}`], l.hora ? el("small", {}, ` ${l.hora}`) : null);
+      chip.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", l.chave));
+      return chip;
+    }),
+    entrada);
+  };
+
+  return el("div", { class: "bloco plano-calendario", style: { "--selo": cliente.paleta?.[0] || cliente.cor || "#4E2CA3" } },
+    el("div", { class: "plano-grade" },
+      ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"].map((n) => el("div", { class: "plano-cabeca" }, n)),
+      dias.slice(0, semanas * 7).map(celula)),
+    el("div", { class: "legenda-etapas" }, STATUS_CONTEUDO.map(([v, r]) => el("span", { class: `etiqueta st-${v}` }, r))));
 }

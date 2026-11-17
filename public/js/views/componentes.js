@@ -1,6 +1,6 @@
 // Peças reutilizadas entre telas: cartão e formulário de tarefa, selo de cliente.
-import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, linkExterno } from "../ui.js";
-import { criar, atualizar, excluir, nomeCliente, opcoesClientes, porId } from "../db.js";
+import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno } from "../ui.js";
+import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId } from "../db.js";
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo } from "../constantes.js";
 import { promptCopy } from "../prompts.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
@@ -75,10 +75,30 @@ export function abrirTarefa(tarefa = {}) {
   const form = ultimoForm();
   // Criativos anexados ao post (imagens guardadas no banco)
   if (form) form.querySelector(".acoes").before(secaoCriativos(tarefa));
+  // Rotina "Produzir semana": mostra ao vivo os posts da semana seguinte do cliente
+  if (form && tarefa.semanaInicio) form.querySelector(".acoes").before(secaoSemana(tarefa));
+  if (form && tarefa.atalho) form.querySelector(".acoes").prepend(el("a", { class: "botao-link secundario mini", href: tarefa.atalho, onClick: () => document.querySelector(".modal-fundo")?.remove() },
+    tarefa.rotina === "planejamento" ? "☷ Abrir planejamento" : tarefa.rotina === "cobranca" ? "$ Abrir financeiro" : "▦ Abrir calendário"));
   const alternar = () => form?.querySelectorAll(".so-conteudo").forEach((b) => (b.hidden = !conteudo(form.lerValores())));
   form?.addEventListener("change", alternar);
   alternar();
   return promessa;
+}
+
+function secaoSemana(tarefa) {
+  const fim = addDias(tarefa.semanaInicio, 6);
+  const posts = dados.tarefas
+    .filter((t) => t.tipo === TIPO_CONTEUDO && (!tarefa.clienteId || t.clienteId === tarefa.clienteId))
+    .map((t) => ({ t, d: t.dataPublicacao || t.prazo || "" }))
+    .filter(({ d }) => d >= tarefa.semanaInicio && d <= fim)
+    .sort((a, b) => a.d.localeCompare(b.d));
+  return el("div", { class: "semana-producao" },
+    el("h3", { class: "form-secao" }, `Posts de ${fmtData(tarefa.semanaInicio, true)} a ${fmtData(fim, true)} (${posts.length})`),
+    posts.length ? posts.map(({ t, d }) => el("button", { type: "button", class: "linha-tabela", onClick: () => { document.querySelector(".modal-fundo")?.remove(); abrirTarefa(t); } },
+      el("span", { class: "data-mini" }, fmtData(d, true)), el("strong", {}, `${t.formato || "Post"} | ${t.titulo}`),
+      el("span", { class: `etiqueta st-${t.statusConteudo || "ideia"}` }, rotuloStatusConteudo(t.statusConteudo || "ideia")),
+      t.qtdArtes ? el("span", { class: "progresso-mini" }, `🖼 ${t.qtdArtes}`) : null))
+      : el("p", { class: "subtitulo" }, "Nenhum post planejado para essa semana. Planeje o mês do cliente primeiro."));
 }
 
 function secaoCriativos(tarefa) {
@@ -161,6 +181,7 @@ export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
         ehConteudo(t) && t.qtdArtes ? el("span", { class: "progresso-mini", title: "Criativos anexados" }, `🖼 ${t.qtdArtes}`) : null,
         ehConteudo(t) && t.copy ? el("span", { class: "progresso-mini", title: "Copy salva" }, "✎ copy") : null,
         linkExterno(t.linkCanva, "Canva"), linkExterno(t.linkDrive, "Drive"),
+        t.atalho ? el("a", { class: "link-externo", href: t.atalho, onClick: (e) => e.stopPropagation() }, t.rotina === "planejamento" ? "Planejar →" : t.rotina === "cobranca" ? "Financeiro →" : "Ver posts →") : null,
         el("span", { class: `prazo ${classePrazo}` }, t.status === "concluido" && t.concluidoEm ? `feita ${fmtPrazoRelativo(t.concluidoEm)}` : fmtPrazoRelativo(t.prazo)))));
 }
 
