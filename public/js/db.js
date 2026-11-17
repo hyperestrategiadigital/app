@@ -1,9 +1,15 @@
 // Camada de dados: todas as coleções ficam em users/{uid}/..., carregadas em memória e
 // mantidas atualizadas em tempo real. As telas leem de `dados` e escrevem pelas funções abaixo.
-import { db } from "./firebase.js";
+import { app } from "./firebase.js";
 import {
-  collection, doc, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc, writeBatch
+  getFirestore, collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+
+// O console do Firebase pode criar o banco com o id "(default)" ou com o nome "default".
+// Testamos os dois e guardamos o que funcionou.
+const BANCOS = ["(default)", "default"];
+let db = null;
+const abrirBanco = (id) => (id === "(default)" ? getFirestore(app) : getFirestore(app, id));
 
 export const COLECOES = [
   "clientes", "tarefas", "recorrencias", "conteudos",
@@ -29,9 +35,58 @@ function notificar() {
 
 const ref = (col) => collection(db, "users", uidAtual, col);
 
+/** Descobre qual banco existe lendo a coleção de clientes do usuário. */
+async function escolherBanco(uid) {
+  let salvo = null;
+  try { salvo = localStorage.getItem("hyper-banco"); } catch {}
+  const ordem = salvo && BANCOS.includes(salvo) ? [salvo, ...BANCOS.filter((b) => b !== salvo)] : BANCOS;
+  let ultimoErro = null;
+  for (const id of ordem) {
+    const candidato = abrirBanco(id);
+    const resultado = await new Promise((ok) => {
+      const tempo = setTimeout(() => { parar(); ok({ erro: { code: "timeout", message: "O banco não respondeu em 15 segundos." } }); }, 15000);
+      const parar = onSnapshot(collection(candidato, "users", uid, "clientes"),
+        () => { clearTimeout(tempo); parar(); ok({}); },
+        (erro) => { clearTimeout(tempo); ok({ erro }); });
+    });
+    if (!resultado.erro) {
+      try { localStorage.setItem("hyper-banco", id); } catch {}
+      return candidato;
+    }
+    console.warn(`Banco ${id}:`, resultado.erro.code, resultado.erro.message);
+    ultimoErro = resultado.erro;
+    // Sem permissão = o banco existe, mas as regras estão erradas: não adianta tentar o outro
+    if (resultado.erro.code === "permission-denied") break;
+  }
+  throw traduzirErro(ultimoErro);
+}
+
+export function traduzirErro(erro) {
+  const codigo = erro?.code || "";
+  let msg = erro?.message || String(erro);
+  if (codigo === "permission-denied")
+    msg = "Sem permissão no banco de dados. Cole as regras novas em Firestore → Segurança e clique em Publicar.";
+  else if (codigo === "not-found" || /does not exist|not found/i.test(msg))
+    msg = "Banco de dados não encontrado. Confira se o Firestore foi criado no console do Firebase.";
+  else if (codigo === "timeout" || codigo === "unavailable")
+    msg = "O banco de dados não respondeu. Confira sua internet e recarregue a página.";
+  const e = new Error(msg);
+  e.code = codigo;
+  return e;
+}
+
+/** Garante que uma gravação termina ou dá erro em até 30 segundos (nunca fica carregando para sempre). */
+function comPrazo(promessa, segundos = 30) {
+  return Promise.race([
+    promessa.catch((e) => { throw traduzirErro(e); }),
+    new Promise((_, falha) => setTimeout(() => falha(traduzirErro({ code: "timeout" })), segundos * 1000))
+  ]);
+}
+
 /** Começa a ouvir todas as coleções do usuário. Resolve quando tudo carregou uma vez. */
-export function conectar(uid, aoErro) {
+export async function conectar(uid, aoErro) {
   desconectar();
+  db = await escolherBanco(uid);
   uidAtual = uid;
   return Promise.all(COLECOES.map((col) => new Promise((pronto) => {
     let primeira = true;
@@ -39,7 +94,7 @@ export function conectar(uid, aoErro) {
       dados[col] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       if (primeira) { primeira = false; pronto(); }
       notificar();
-    }, (erro) => { aoErro?.(erro); if (primeira) { primeira = false; pronto(); } }));
+    }, (erro) => { aoErro?.(traduzirErro(erro)); if (primeira) { primeira = false; pronto(); } }));
   })));
 }
 
@@ -50,10 +105,16 @@ export function desconectar() {
   COLECOES.forEach((c) => (dados[c] = []));
 }
 
-export const criar = (col, valores) => addDoc(ref(col), { ...valores, criadoEm: Date.now() });
-export const salvarComId = (col, id, valores) => setDoc(doc(ref(col), id), valores, { merge: true });
-export const atualizar = (col, id, valores) => updateDoc(doc(ref(col), id), { ...valores, atualizadoEm: Date.now() });
-export const excluir = (col, id) => deleteDoc(doc(ref(col), id));
+/** Cria um documento. O id é gerado na hora, então ele já pode ser usado antes do servidor confirmar. */
+export async function criar(col, valores) {
+  const novo = doc(ref(col));
+  await comPrazo(setDoc(novo, { ...valores, criadoEm: Date.now() }));
+  return novo;
+}
+export const novoId = (col) => doc(ref(col)).id;
+export const salvarComId = (col, id, valores) => comPrazo(setDoc(doc(ref(col), id), valores, { merge: true }));
+export const atualizar = (col, id, valores) => comPrazo(updateDoc(doc(ref(col), id), { ...valores, atualizadoEm: Date.now() }));
+export const excluir = (col, id) => comPrazo(deleteDoc(doc(ref(col), id)));
 
 /** Grava muitos documentos em lotes de 400 (limite do Firestore é 500 por lote). */
 export async function gravarEmLote(col, itens, aoProgredir) {
@@ -63,7 +124,7 @@ export async function gravarEmLote(col, itens, aoProgredir) {
       const { id, ...valores } = item;
       lote.set(id ? doc(ref(col), id) : doc(ref(col)), valores);
     }
-    await lote.commit();
+    await comPrazo(lote.commit(), 60);
     aoProgredir?.(Math.min(i + 400, itens.length), itens.length);
   }
 }
