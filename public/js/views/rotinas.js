@@ -1,7 +1,7 @@
 // Rotinas: lembretes que viram tarefas sozinhos na agenda, seguindo o ritmo da Hyper
 // (produzir a semana seguinte, planejar o mês seguinte, cobrar no vencimento).
 import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtDiaSemana, vazio, normalizar } from "../ui.js";
-import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, clientesAtivos } from "../db.js";
+import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, clientesAtivos, contrato } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { TIPOS_TAREFA, DIAS_SEMANA } from "../constantes.js";
 import { gerarRecorrencias, descreverRotina, proximaData } from "../recorrencias.js";
@@ -38,7 +38,7 @@ async function novaRotinaModelo(modelo) {
   const clientes = clientesAtivos();
   const jaTem = new Set(dados.recorrencias.filter((r) => r.modelo === modelo).map((r) => r.clienteId));
   const sugeridos = clientes.filter((c) => !jaTem.has(c.id) && (
-    modelo === "cobranca" ? c.mensalidade > 0 : modelo === "producao" || modelo === "planejamento" ? temServico(c, "Social") || !(c.servicos || []).length : true));
+    modelo === "cobranca" ? contrato(c.id).mensalidade > 0 : modelo === "producao" || modelo === "planejamento" ? temServico(c, "Social") || !(c.servicos || []).length : true));
   const campos = [
     { nome: "clientes", rotulo: "Clientes", tipo: "multi", opcoes: clientes.map((c) => c.nome) },
     ...(modelo === "producao" ? [{ nome: "diaSemana", rotulo: "Dia da semana para produzir", tipo: "select", opcoes: DIAS_SEMANA, padrao: "1", largura: "metade" }] : []),
@@ -49,7 +49,7 @@ async function novaRotinaModelo(modelo) {
   if (!r) return;
   const escolhidos = clientes.filter((c) => r.clientes.includes(c.nome));
   if (!escolhidos.length) { avisar("Escolha pelo menos um cliente.", "erro"); return; }
-  const semVencimento = modelo === "cobranca" ? escolhidos.filter((c) => !c.diaVencimento) : [];
+  const semVencimento = modelo === "cobranca" ? escolhidos.filter((c) => !contrato(c.id).diaVencimento) : [];
   for (const c of escolhidos) {
     await criar("recorrencias", {
       modelo, clienteId: c.id, ativo: true, inicio: hojeISO(), geradasAte: null, checklist: [],

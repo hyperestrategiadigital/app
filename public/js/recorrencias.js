@@ -3,8 +3,8 @@
 // - producao:     toda semana, produzir os posts da SEMANA SEGUINTE do cliente
 // - planejamento: todo mês, planejar o MÊS SEGUINTE do cliente
 // - cobranca:     todo mês, cobrar a mensalidade no vencimento do cliente (ou X dias antes)
-import { dados, gravarEmLote, atualizar, porId } from "./db.js";
-import { hojeISO, addDias, dataDe, normalizar, fmtData, fmtMoeda } from "./ui.js";
+import { dados, gravarEmLote, atualizar, porId, contrato } from "./db.js";
+import { hojeISO, addDias, dataDe, normalizar, fmtData } from "./ui.js";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const mesSeguinte = (iso) => { const d = dataDe(iso); return hojeISO(new Date(d.getFullYear(), d.getMonth() + 1, 1)).slice(0, 7); };
@@ -16,7 +16,7 @@ function diaDoMes(r, iso) {
   const d = dataDe(iso);
   const ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   if (r.modelo === "cobranca") {
-    const venc = Number(porId("clientes", r.clienteId)?.diaVencimento) || 10;
+    const venc = Number(contrato(r.clienteId).diaVencimento) || 10;
     return Math.max(1, Math.min(venc, ultimo) - (Number(r.antecedencia) || 0));
   }
   return Math.min(Number(r.diaMes) || 1, ultimo);
@@ -55,7 +55,8 @@ export function ocorrencia(r, d) {
   }
   if (r.modelo === "cobranca") {
     const mes = d.slice(0, 7);
-    return { ...base, tipo: "Financeiro", titulo: `Cobrar mensalidade ${MESES[Number(mes.slice(5)) - 1]}${nome ? ` — ${nome}` : ""}${cliente?.mensalidade ? ` (${fmtMoeda(cliente.mensalidade)})` : ""}`,
+    // Sem valor no título: tarefas são vistas pela equipe; o valor fica no Financeiro
+    return { ...base, tipo: "Financeiro", titulo: `Cobrar mensalidade ${MESES[Number(mes.slice(5)) - 1]}${nome ? ` — ${nome}` : ""}`,
       atalho: "#/financeiro" };
   }
   return { ...base, tipo: r.tipo || "Outro", titulo: r.titulo };
@@ -94,7 +95,7 @@ export function descreverRotina(r) {
   const dias = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
   const dia = dias[Number(r.diaSemana)] || "";
   if (r.modelo === "cobranca") {
-    const venc = porId("clientes", r.clienteId)?.diaVencimento;
+    const venc = contrato(r.clienteId).diaVencimento;
     const ant = Number(r.antecedencia) || 0;
     return `todo mês, ${ant ? `${ant} dia(s) antes do vencimento` : "no vencimento"}${venc ? ` (dia ${venc})` : " (sem dia de vencimento na ficha)"}`;
   }

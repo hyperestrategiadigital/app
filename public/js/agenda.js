@@ -72,7 +72,15 @@ export const emailsParticipantes = (c) => {
   return [...new Set([...daEquipe, ...extras].map((e) => e.trim().toLowerCase()))];
 };
 
-export const configEquipe = () => dados.config.find((c) => c.id === "equipe")?.pessoas || [];
+/** Equipe = pessoas com conta no espaço (membros) + pessoas sem conta cadastradas em Ajustes. */
+export const configEquipe = () => {
+  const lista = [
+    ...dados.membros.filter((m) => m.status !== "pendente").map((m) => ({ nome: m.nome || m.email, email: m.email || "" })),
+    ...(dados.config.find((c) => c.id === "equipe")?.pessoas || [])
+  ];
+  const vistos = new Set();
+  return lista.filter((p) => { const k = (p.email || p.nome).toLowerCase(); if (vistos.has(k)) return false; vistos.add(k); return true; });
+};
 
 const RRULE = { semanal: "RRULE:FREQ=WEEKLY", quinzenal: "RRULE:FREQ=WEEKLY;INTERVAL=2", mensal: "RRULE:FREQ=MONTHLY" };
 

@@ -38,9 +38,13 @@ firestore.rules         cada usuário só acessa users/{seu uid}/...
 
 Não precisa de build: o SDK do Firebase vem do CDN.
 
+## Usuários e permissões
+
+Cada pessoa entra com o próprio Google e pede acesso; o administrador libera em **Usuários**. Áreas: **Conteúdo** (posts, planejamento, criar, marca), **Tráfego pago** (contas, verbas, manutenções) e **Financeiro** (mensalidades, cobranças, orçamentos e valores). Sem áreas = acesso básico (Hoje, Tarefas, compromissos, lista de clientes). As regras do Firestore (`firestore.rules`) protegem os dados sensíveis.
+
 ## Dados no Firestore
 
-Tudo fica em `users/{uid}/<coleção>`: `clientes`, `tarefas`, `recorrencias`, `financeiro`, `orcamentos`, `contasAds`, `manutencoes`, `config` (docs `openai`, `agenda` com o e-mail da Google Agenda conectada, `equipe` com `pessoas: [{nome, email}]`), `compromissos`. Datas são texto `AAAA-MM-DD`.
+Tudo fica no espaço compartilhado `espacos/hyper/<coleção>` (antes era `users/{uid}`, que ficou como backup): `membros`, `contratos` (mensalidade e vencimento, só financeiro), `pessoal/{uid}` (coisas de cada usuário) e `clientes`, `tarefas`, `recorrencias`, `financeiro`, `orcamentos`, `contasAds`, `manutencoes`, `config` (docs `openai`, `agenda` com o e-mail da Google Agenda conectada, `equipe` com `pessoas: [{nome, email}]`), `compromissos`. Datas são texto `AAAA-MM-DD`.
 
 - Posts são tarefas com `tipo: "Conteúdo"` e os campos `formato`, `rede`, `dataPublicacao`, `hora`, `statusConteudo`, `objetivo`, `roteiro`, `copy`. A antiga coleção `conteudos` é migrada automaticamente.
 - Arquivos da marca ficam na pasta do Drive do cliente (`linkDrive`), não no app.

@@ -6,6 +6,7 @@ import { analisarPlanilha } from "../importacao.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
 import { configAgenda, conectarAgenda, desconectarAgenda, configEquipe, sincronizar } from "../agenda.js";
 import { salvarComId } from "../db.js";
+import { ehAdmin } from "../permissoes.js";
 
 
 function abrirImportacao() {
@@ -83,26 +84,23 @@ function baixarBackup() {
 
 export function render() {
   return el("div", { class: "tela" },
-    cabecalho("Ajustes", "Geração de imagem, importação e backup"),
-
-    el("p", { class: "dica-cliente" }, "As tarefas recorrentes (Manutenção TP, produção da semana, planejamento do mês, cobranças) agora ficam no menu ",
-      el("a", { href: "#/rotinas" }, "Rotinas"), "."),
+    cabecalho("Ajustes", ehAdmin() ? "Agenda, equipe, OpenAI, importação e backup" : "Sua Google Agenda"),
 
     blocoAgenda(),
-    blocoEquipe(),
-    blocoOpenAI(),
+    ehAdmin() ? blocoEquipe() : null,
+    ehAdmin() ? blocoOpenAI() : null,
 
-    blocoImportarMarcas(),
+    ehAdmin() ? blocoImportarMarcas() : null,
 
-    el("section", { class: "bloco" },
+    ehAdmin() ? el("section", { class: "bloco" },
       el("h2", {}, "Importar planilha"),
       el("p", {}, "Traga o histórico da planilha Fluxo de Trabalho: clientes, tarefas e entregas."),
-      el("button", { onClick: abrirImportacao }, "Importar CSV da planilha")),
+      el("button", { onClick: abrirImportacao }, "Importar CSV da planilha")) : null,
 
-    el("section", { class: "bloco" },
+    ehAdmin() ? el("section", { class: "bloco" },
       el("h2", {}, "Backup"),
-      el("p", {}, `${dados.tarefas.length} tarefas · ${dados.clientes.length} clientes · ${dados.conteudos.length} conteúdos · ${dados.financeiro.length} lançamentos`),
-      el("button", { class: "secundario", onClick: baixarBackup }, "Baixar backup (.json)")));
+      el("p", {}, `${dados.tarefas.length} tarefas · ${dados.clientes.length} clientes · ${dados.compromissos.length} compromissos · ${dados.financeiro.length} lançamentos`),
+      el("button", { class: "secundario", onClick: baixarBackup }, "Baixar backup (.json)")) : null);
 }
 
 function blocoOpenAI() {
@@ -167,8 +165,7 @@ function blocoAgenda() {
 }
 
 function blocoEquipe() {
-  const pessoas = configEquipe().map((p) => ({ ...p }));
-  if (!pessoas.length) pessoas.push({ nome: "Matheus", email: configAgenda().email || "" });
+  const pessoas = (dados.config.find((c) => c.id === "equipe")?.pessoas || []).map((p) => ({ ...p }));
   const lista = el("div", { class: "lista-equipe" });
   const desenhar = () => lista.replaceChildren(...pessoas.map((p, i) => el("div", { class: "pessoa" },
     (() => { const n = el("input", { type: "text", value: p.nome, placeholder: "Nome", "aria-label": "Nome" }); n.addEventListener("input", () => (p.nome = n.value)); return n; })(),
@@ -176,8 +173,8 @@ function blocoEquipe() {
     el("button", { class: "icone", "aria-label": "Remover", onClick: () => { pessoas.splice(i, 1); desenhar(); } }, "✕"))));
   desenhar();
   return el("section", { class: "bloco" },
-    el("h2", {}, "Equipe"),
-    el("p", { class: "subtitulo" }, "Quem pode participar dos compromissos. Ao marcar alguém numa reunião, a pessoa recebe o convite na agenda dela pelo e-mail daqui."),
+    el("h2", {}, "Equipe sem conta no app"),
+    el("p", { class: "subtitulo" }, "Quem tem conta no app já entra na equipe sozinho (menu Usuários). Aqui ficam pessoas sem conta que participam de reuniões ou recebem tarefas — o convite da agenda vai pelo e-mail daqui."),
     lista,
     el("div", { class: "acoes" },
       el("button", { class: "secundario mini", onClick: () => { pessoas.push({ nome: "", email: "" }); desenhar(); } }, "+ Pessoa"),
