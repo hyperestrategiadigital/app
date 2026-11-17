@@ -35,3 +35,4 @@ footer { padding: 16px 32px 28px; color: var(--hyper-cinza); font-size: 10px; }
   main { padding: 14px 0; }
   footer { padding: 8px 0; }
 }
+.link a { color: var(--hyper-roxo); font-weight: 600; }

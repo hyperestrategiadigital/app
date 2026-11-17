@@ -8,10 +8,10 @@ Central de trabalho da Hyper: tarefas, clientes, calendário de conteúdo, tráf
 |---|---|
 | Hoje | Atrasadas, tarefas do dia e da semana, conteúdos programados e valores a receber |
 | Tarefas | Quadro A fazer / Em andamento / Concluído (arrastar e soltar) ou lista, com busca e filtros por cliente e tipo. Cada tarefa tem checklist de entregas e links do Canva e do Drive. O atraso é calculado pelo prazo |
-| Conteúdo | Calendário do mês. Cada post é uma tarefa do tipo **Conteúdo** (formato, rede, data/hora de publicação, etapa ideia → publicado, copy). Cor e nome do cliente em cada post, legenda clicável, exportação Excel/PDF por cliente e mês |
-| Planejamento | Tabela do mês de um cliente: cada linha vira (ou atualiza) um post/tarefa ao salvar. "Preencher o mês" cria linhas em dias fixos. Depois de salvar, oferece exportar para aprovação |
-| Criar | Escolhe cliente e post, gera a imagem com a OpenAI usando a marca do cliente (paleta, estilo, referências), aplica título/apoio/CTA/logo num editor e salva a arte no post, baixa PNG ou leva ao Canva |
-| Clientes | Ficha com serviços, contato, links, mensalidade, tom de voz e público, e abas de tarefas, conteúdo, **marca** (paleta, logo, fontes, criativos de referência, estilo de imagem), tráfego e financeiro |
+| Conteúdo | Calendário do mês. Cada post é uma tarefa do tipo **Conteúdo** (formato, rede, data/hora de publicação, etapa ideia → publicado, copy). Cor e nome do cliente em cada post, legenda clicável, exportação em PDF por cliente e mês para aprovação |
+| Planejamento | Tabela do mês de um cliente: cada linha vira (ou atualiza) um post/tarefa ao salvar. "Preencher o mês" cria linhas em dias fixos. Depois de salvar, oferece o PDF para o cliente aprovar |
+| Criar | Escolhe cliente e post e gera a imagem com a OpenAI usando a marca do cliente. "Levar ao Canva" baixa a imagem, salva no post e copia um pedido de arte para o Claude (com o conector do Canva) montar o design e devolver o link. O link do Canva fica salvo no post |
+| Clientes | Ficha com serviços, contato, links, mensalidade, tom de voz e público, e abas de tarefas, conteúdo, **marca** (link da pasta do Drive com logos/fontes/referências, paleta, fontes, estilo de imagem, diagramação), tráfego e financeiro |
 | Tráfego pago | Contas de anúncio e verba por cliente, alerta de manutenção atrasada (mais de 7 dias) e diário de manutenções |
 | Financeiro | Receitas e despesas do mês, mensalidades geradas a partir das fichas dos clientes e orçamentos |
 | Ajustes | Tarefas recorrentes (ex.: Manutenção TP toda sexta), importação da planilha e backup |
@@ -40,7 +40,8 @@ Não precisa de build: o SDK do Firebase vem do CDN.
 Tudo fica em `users/{uid}/<coleção>`: `clientes`, `tarefas`, `recorrencias`, `financeiro`, `orcamentos`, `contasAds`, `manutencoes`, `config` (doc `openai` com a chave da API). Datas são texto `AAAA-MM-DD`.
 
 - Posts são tarefas com `tipo: "Conteúdo"` e os campos `formato`, `rede`, `dataPublicacao`, `hora`, `statusConteudo`, `objetivo`, `roteiro`, `copy`. A antiga coleção `conteudos` é migrada automaticamente.
-- Arquivos pesados ficam em subcoleções lidas sob demanda: `clientes/{id}/arquivos` (logo, fontes, referências, em base64, até ~700 KB cada) e `clientes/{id}/artes` (artes finais ligadas a uma tarefa).
+- Arquivos da marca ficam na pasta do Drive do cliente (`linkDrive`), não no app.
+- Criativos anexados aos posts ficam em `clientes/{id}/artes` (base64 comprimido, `tarefaId`, `origem: gerada|final`), lidos sob demanda. A tarefa guarda `qtdArtes`. O PDF usa o criativo final quando existe.
 - O banco pode ter id `(default)` ou `default`; o app descobre sozinho.
 
 ## Publicação

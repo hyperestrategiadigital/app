@@ -4,7 +4,7 @@ import { el, hojeISO, addDias, dataDe, fmtDiaSemana, avisar, abrirModal, confirm
 import { dados, porId, criar, atualizar, excluir, clientesAtivos } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { FORMATOS, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA } from "../constantes.js";
-import { postsDoMes, dataPost, exportarExcel, exportarPDF, nomeMes } from "../exportacao.js";
+import { postsDoMes, dataPost, exportarPDF, nomeMes } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
 
 const CAMPOS = ["dataPublicacao", "hora", "formato", "rede", "titulo", "objetivo", "roteiro", "prazo", "statusConteudo"];
@@ -118,8 +118,7 @@ export function render({ params, estado, renderizar }) {
         el("p", {}, `${criados} post(s) criado(s), ${atualizados} atualizado(s), ${removidos} removido(s). Tudo já está na sua lista de tarefas e no calendário.`),
         el("p", { class: "subtitulo" }, `Quer mandar o planejamento de ${nomeMes(mes)} para ${cliente.nome} aprovar?`),
         el("div", { class: "acoes" },
-          el("button", { class: "secundario", onClick: () => exportarExcel(clienteId, mes) }, "⬇ Planilha Excel"),
-          el("button", { class: "secundario", onClick: () => exportarPDF(clienteId, mes) }, "⬇ PDF para aprovação"),
+          el("button", { class: "destaque", onClick: () => exportarPDF(clienteId, mes) }, "⬇ PDF para o cliente aprovar"),
           el("span", { class: "espaco" }),
           el("button", { onClick: () => fechar() }, "Fechar"))));
     } catch (e) {
@@ -179,8 +178,7 @@ export function render({ params, estado, renderizar }) {
           el("button", { class: "icone", "aria-label": "Próximo mês", onClick: () => irMes(1) }, "›"),
           el("span", { class: "subtitulo" }, `${estado.linhas.length} post(s)${estado.alterado ? " · alterações não salvas" : ""}`))),
       el("div", { class: "tela-acoes" },
-        el("button", { class: "secundario", onClick: () => exportarExcel(clienteId, mes), disabled: estado.alterado, title: estado.alterado ? "Salve antes de exportar" : "" }, "⬇ Excel"),
-        el("button", { class: "secundario", onClick: () => exportarPDF(clienteId, mes), disabled: estado.alterado, title: estado.alterado ? "Salve antes de exportar" : "" }, "⬇ PDF"),
+        el("button", { class: "secundario", onClick: () => exportarPDF(clienteId, mes), disabled: estado.alterado, title: estado.alterado ? "Salve antes de exportar" : "" }, "⬇ PDF para o cliente"),
         botaoSalvar)),
     cliente.tomDeVoz || cliente.publico ? el("p", { class: "dica-cliente" },
       cliente.tomDeVoz ? [el("strong", {}, "Tom de voz: "), cliente.tomDeVoz, " "] : null,

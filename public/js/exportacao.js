@@ -1,7 +1,7 @@
-// Exportação do conteúdo do mês de um cliente: planilha Excel e PDF visual para aprovação.
+// Exportação do conteúdo do mês de um cliente: PDF visual para o cliente aprovar.
 import { dados, porId, listarSub } from "./db.js";
-import { el, fmtData, fmtDiaSemana, avisar } from "./ui.js";
-import { TIPO_CONTEUDO, rotuloStatusConteudo } from "./constantes.js";
+import { fmtData, fmtDiaSemana, avisar } from "./ui.js";
+import { TIPO_CONTEUDO } from "./constantes.js";
 import { caminhoArtes } from "./arquivos.js";
 
 export const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -19,41 +19,6 @@ export function postsDoMes(clienteId, mes) {
 const nomeArquivo = (cliente, mes, ext) =>
   `Conteudo ${cliente?.nome || "Hyper"} ${nomeMes(mes)}.${ext}`.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w .-]/g, "");
 
-function baixar(blob, nome) {
-  const a = el("a", { href: URL.createObjectURL(blob), download: nome });
-  document.body.append(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-}
-
-/* ---------------- Excel ---------------- */
-export async function exportarExcel(clienteId, mes) {
-  const cliente = porId("clientes", clienteId);
-  const posts = postsDoMes(clienteId, mes);
-  if (!posts.length) { avisar("Nenhum post desse cliente neste mês.", "erro"); return; }
-  const cabecalho = ["Data", "Dia", "Horário", "Formato", "Rede", "Tema", "Objetivo", "Briefing", "Legenda / copy", "Etapa", "Link da arte", "Aprovado? (sim/não)", "Comentários do cliente"];
-  const linhas = posts.map((t) => [
-    fmtData(dataPost(t)), fmtDiaSemana(dataPost(t)), t.hora || "", t.formato || "", t.rede || "", t.titulo || "",
-    t.objetivo || "", t.roteiro || "", t.copy || "", rotuloStatusConteudo(t.statusConteudo || "ideia"), t.linkCanva || t.linkDrive || "", "", ""
-  ]);
-  const titulo = [`Conteúdo ${cliente?.nome || ""} — ${nomeMes(mes)}`];
-  try {
-    const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs");
-    const ws = XLSX.utils.aoa_to_sheet([titulo, [], cabecalho, ...linhas]);
-    ws["!cols"] = [10, 6, 8, 16, 12, 34, 24, 40, 60, 12, 30, 16, 36].map((wch) => ({ wch }));
-    ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, nomeMes(mes).slice(0, 31));
-    const bytes = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    baixar(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), nomeArquivo(cliente, mes, "xlsx"));
-  } catch (e) {
-    // Sem acesso à biblioteca do Excel: entrega CSV, que também abre no Excel e no Google Sheets
-    console.warn("XLSX indisponível, exportando CSV:", e);
-    const csv = [cabecalho, ...linhas].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\r\n");
-    baixar(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), nomeArquivo(cliente, mes, "csv"));
-  }
-  avisar("Planilha baixada.");
-}
-
 /* ---------------- PDF visual (página de impressão) ---------------- */
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -68,7 +33,9 @@ export async function exportarPDF(clienteId, mes) {
   let artes = [];
   try { artes = await listarSub(caminhoArtes(clienteId)); } catch (e) { console.warn("Sem artes:", e); }
   const artePorTarefa = {};
-  artes.sort((a, b) => (b.criadoEm || 0) - (a.criadoEm || 0)).forEach((a) => { artePorTarefa[a.tarefaId] ??= a.dados; });
+  // Criativo final (anexado depois do Canva) tem preferência sobre a imagem gerada
+  artes.sort((a, b) => (a.origem === "final" ? 0 : 1) - (b.origem === "final" ? 0 : 1) || (b.criadoEm || 0) - (a.criadoEm || 0))
+    .forEach((a) => { artePorTarefa[a.tarefaId] ??= a.dados; });
 
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
   const cards = posts.map((t) => `
@@ -80,6 +47,7 @@ export async function exportarPDF(clienteId, mes) {
         <div class="tags"><span>${esc(t.formato || "")}</span><span>${esc(t.rede || "")}</span></div>
         ${t.objetivo ? `<p><b>Objetivo:</b> ${esc(t.objetivo)}</p>` : ""}
         ${t.copy ? `<p class="copy">${esc(t.copy)}</p>` : t.roteiro ? `<p class="copy">${esc(t.roteiro)}</p>` : ""}
+        ${t.linkCanva ? `<p class="link"><a href="${esc(t.linkCanva)}">Ver arte no Canva</a></p>` : ""}
         <div class="aprovacao">☐ Aprovado &nbsp;&nbsp; ☐ Ajustar: ________________________</div>
       </div>
     </article>`).join("");

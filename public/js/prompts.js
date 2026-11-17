@@ -52,3 +52,34 @@ export function promptImagem({ cliente = {}, descricao, formato, espacoTexto = "
   ];
   return partes.filter(Boolean).join(" ");
 }
+
+/** Pedido para o Claude (com o conector do Canva) montar a arte com a imagem gerada e devolver o link de edição. */
+export function promptCanva({ post = {}, cliente = {}, formato, tamanho, texto = {} }) {
+  const paleta = (cliente.paleta || []).filter(Boolean);
+  const linhas = [
+    `Crie no Canva uma arte para o cliente ${cliente.nome || "(sem cliente)"} usando a imagem que anexei nesta mensagem como fundo.`,
+    "",
+    "## Peça",
+    `- Formato: ${formato || post.formato || "Feed estático"} (${tamanho ? `${tamanho[0]}×${tamanho[1]} px` : "1080×1350 px"})`,
+    post.titulo ? `- Tema do post: ${post.titulo}` : null,
+    post.dataPublicacao ? `- Publicação: ${fmtData(post.dataPublicacao)}${post.hora ? ` às ${post.hora}` : ""}` : null,
+    post.objetivo ? `- Objetivo: ${post.objetivo}` : null,
+    "",
+    "## Texto da arte (sugestão, pode ajustar o tamanho e a quebra)",
+    texto.titulo ? `- Título: ${texto.titulo}` : "- Título: crie um título curto a partir do tema",
+    texto.apoio ? `- Linha de apoio: ${texto.apoio}` : null,
+    texto.cta ? `- Botão/CTA: ${texto.cta}` : null,
+    texto.observacoes ? `- Observações de layout: ${texto.observacoes}` : null,
+    "",
+    "## Marca",
+    cliente.linkDrive ? `- Pasta da marca no Drive (logos, fontes, referências): ${cliente.linkDrive} — use o logo dessa pasta.` : "- Sem pasta do Drive cadastrada: não use logo.",
+    paleta.length ? `- Paleta: ${paleta.join(", ")}` : null,
+    cliente.fontes ? `- Fontes: ${cliente.fontes}` : null,
+    cliente.identidadeVisual ? `- Diagramação: ${cliente.identidadeVisual}` : null,
+    cliente.tomDeVoz ? `- Tom de voz: ${cliente.tomDeVoz}` : null,
+    "",
+    post.copy ? `## Copy/legenda do post (referência)\n${post.copy}\n` : null,
+    "Deixe a arte editável (textos como camadas de texto, não imagem). No final, me mande o link de edição do design no Canva para eu finalizar."
+  ];
+  return linhas.filter((l) => l !== null).join("\n");
+}

@@ -3,6 +3,7 @@ import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, 
 import { criar, atualizar, excluir, nomeCliente, opcoesClientes, porId } from "../db.js";
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo } from "../constantes.js";
 import { promptCopy } from "../prompts.js";
+import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
 
 export const atrasada = (t) => t.status !== "concluido" && t.prazo && t.prazo < hojeISO();
 
@@ -40,7 +41,7 @@ export function abrirTarefa(tarefa = {}) {
     { nome: "status", rotulo: "Status", tipo: "select", opcoes: STATUS_TAREFA, padrao: "a_fazer", largura: "metade" },
     { nome: "prazo", rotulo: "Prazo de entrega", tipo: "date", padrao: hojeISO(), largura: "metade" },
     { nome: "checklist", rotulo: "Checklist", tipo: "checklist" },
-    { nome: "linkCanva", rotulo: "Link do Canva", dica: "https://www.canva.com/design/...", largura: "metade" },
+    { nome: "linkCanva", rotulo: "Link do Canva (criativo)", dica: "https://www.canva.com/design/...", largura: "metade" },
     { nome: "linkDrive", rotulo: "Link do Drive", dica: "https://drive.google.com/...", largura: "metade" },
     { nome: "notas", rotulo: "Observações", tipo: "textarea", linhas: 2 }
   ];
@@ -55,7 +56,6 @@ export function abrirTarefa(tarefa = {}) {
         window.open("https://claude.ai/new", "_blank", "noopener");
       }
     }, "✨ Copy com o Claude"),
-    editando ? el("a", { class: "botao-link mini so-conteudo", href: `#/criar/${tarefa.id}`, onClick: () => document.querySelector(".modal-fundo")?.remove() }, "🎨 Criar arte") : null,
     editando ? el("button", {
       type: "button", class: "perigo-texto",
       onClick: async () => {
@@ -73,10 +73,45 @@ export function abrirTarefa(tarefa = {}) {
   });
   // Botões de conteúdo só aparecem quando o tipo é Conteúdo
   const form = ultimoForm();
+  // Criativos anexados ao post (imagens guardadas no banco)
+  if (form) form.querySelector(".acoes").before(secaoCriativos(tarefa));
   const alternar = () => form?.querySelectorAll(".so-conteudo").forEach((b) => (b.hidden = !conteudo(form.lerValores())));
   form?.addEventListener("change", alternar);
   alternar();
   return promessa;
+}
+
+function secaoCriativos(tarefa) {
+  const caixa = el("div", { class: "criativos-post so-conteudo" }, el("h3", { class: "form-secao" }, "Criativos"));
+  if (!tarefa.id) { caixa.append(el("p", { class: "subtitulo" }, "Salve o post para anexar criativos.")); return caixa; }
+  const lista = el("div", { class: "grade-criativos" }, el("p", { class: "subtitulo" }, "Carregando..."));
+  const entrada = el("input", { type: "file", accept: "image/*", multiple: true, hidden: true });
+  const carregar = async () => {
+    try {
+      const artes = await listarArtesTarefa(tarefa.clienteId, tarefa.id);
+      lista.replaceChildren(...(artes.length ? artes.map((a) => el("figure", { class: "criativo" },
+        el("a", { href: a.dados, download: `${tarefa.titulo}.jpg`, title: "Baixar" }, el("img", { src: a.dados, alt: a.nome || "Criativo" })),
+        el("figcaption", {}, a.origem === "gerada" ? "Imagem gerada" : "Criativo final"),
+        el("button", { type: "button", class: "icone", "aria-label": "Remover criativo", onClick: async () => {
+          if (await confirmar("Remover este criativo do post?")) { await excluirArte(tarefa.clienteId, tarefa.id, a.id); carregar(); }
+        } }, "✕")))
+        : [el("p", { class: "subtitulo" }, "Nenhum criativo anexado. Depois de finalizar no Canva, baixe e anexe aqui.")]));
+    } catch (e) { lista.replaceChildren(el("p", { class: "erro" }, "Não consegui carregar: " + e.message)); }
+  };
+  entrada.addEventListener("change", async () => {
+    for (const f of entrada.files) {
+      try { await salvarArte(tarefa.clienteId, tarefa.id, await comprimirImagem(f), { origem: "final", nome: f.name }); }
+      catch (e) { avisar(e.message, "erro"); }
+    }
+    entrada.value = "";
+    avisar("Criativo anexado.");
+    carregar();
+  });
+  carregar();
+  caixa.append(lista, el("div", { class: "acoes-criativos" },
+    el("label", { class: "botao-link secundario mini" }, "📎 Anexar criativo final", entrada),
+    el("a", { class: "botao-link secundario mini", href: `#/criar/${tarefa.id}`, onClick: () => document.querySelector(".modal-fundo")?.remove() }, "🎨 Gerar imagem no Criar")));
+  return caixa;
 }
 
 /** Grava uma tarefa (ou post) mantendo status de tarefa e etapa do post coerentes. */
@@ -123,6 +158,8 @@ export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
         ehConteudo(t) && t.statusConteudo ? el("span", { class: `etiqueta st-${t.statusConteudo}` }, rotuloStatusConteudo(t.statusConteudo)) : null,
         t.status === "andamento" ? el("span", { class: "etiqueta andamento" }, "Em andamento") : null,
         total ? el("span", { class: "progresso-mini" }, `☑ ${feitos}/${total}`) : null,
+        ehConteudo(t) && t.qtdArtes ? el("span", { class: "progresso-mini", title: "Criativos anexados" }, `🖼 ${t.qtdArtes}`) : null,
+        ehConteudo(t) && t.copy ? el("span", { class: "progresso-mini", title: "Copy salva" }, "✎ copy") : null,
         linkExterno(t.linkCanva, "Canva"), linkExterno(t.linkDrive, "Drive"),
         el("span", { class: `prazo ${classePrazo}` }, t.status === "concluido" && t.concluidoEm ? `feita ${fmtPrazoRelativo(t.concluidoEm)}` : fmtPrazoRelativo(t.prazo)))));
 }

@@ -1,30 +1,39 @@
-// Arquivos guardados dentro do Firestore (sem Firebase Storage): imagens comprimidas e fontes pequenas.
-// Cada arquivo é um documento com o conteúdo em base64 (limite do Firestore: 1 MB por documento).
-import { listarSub, salvarSub, excluirSub } from "./db.js";
+// Criativos (imagens) anexados aos posts, guardados dentro do Firestore (sem Firebase Storage).
+// Cada imagem é um documento em users/{uid}/clientes/{clienteId}/artes, comprimida para caber no limite de 1 MB.
+// Os arquivos da marca (logos, fontes, referências) ficam na pasta do Drive do cliente, não aqui.
+import { listarSub, salvarSub, excluirSub, atualizar, porId } from "./db.js";
 
 export const LIMITE_BYTES = 700 * 1024; // ~930 KB depois do base64
 
-export const caminhoArquivos = (clienteId) => ["clientes", clienteId, "arquivos"];
-export const caminhoArtes = (clienteId) => ["clientes", clienteId, "artes"];
+export const caminhoArtes = (clienteId) => ["clientes", clienteId || "sem-cliente", "artes"];
 
-const cache = new Map(); // clienteId -> Promise<lista de arquivos>
-
-export function listarArquivos(clienteId, { recarregar = false } = {}) {
-  if (recarregar || !cache.has(clienteId)) cache.set(clienteId, listarSub(caminhoArquivos(clienteId)).catch((e) => { cache.delete(clienteId); throw e; }));
+const cache = new Map(); // clienteId -> Promise<lista de artes>
+export function listarArtesCliente(clienteId, { recarregar = false } = {}) {
+  if (recarregar || !cache.has(clienteId)) {
+    cache.set(clienteId, listarSub(caminhoArtes(clienteId)).catch((e) => { cache.delete(clienteId); throw e; }));
+  }
   return cache.get(clienteId);
 }
-
-export async function salvarArquivo(clienteId, valores) {
-  const tamanho = Math.round((valores.dados.length * 3) / 4);
-  if (tamanho > LIMITE_BYTES) throw new Error(`Arquivo grande demais (${Math.round(tamanho / 1024)} KB). O limite é ${LIMITE_BYTES / 1024} KB.`);
-  const id = await salvarSub(caminhoArquivos(clienteId), valores);
-  cache.delete(clienteId);
-  return id;
+export async function listarArtesTarefa(clienteId, tarefaId) {
+  return (await listarArtesCliente(clienteId)).filter((a) => a.tarefaId === tarefaId).sort((a, b) => (b.criadoEm || 0) - (a.criadoEm || 0));
 }
 
-export async function excluirArquivo(clienteId, id) {
-  await excluirSub(caminhoArquivos(clienteId), id);
+async function contarArtes(clienteId, tarefaId) {
+  const n = (await listarArtesTarefa(clienteId, tarefaId)).length;
+  if (porId("tarefas", tarefaId)) await atualizar("tarefas", tarefaId, { qtdArtes: n });
+}
+
+/** origem: "gerada" (OpenAI) ou "final" (criativo pronto, ex.: exportado do Canva) */
+export async function salvarArte(clienteId, tarefaId, dados, { origem = "final", nome = "" } = {}) {
+  await salvarSub(caminhoArtes(clienteId), { tarefaId, dados, origem, nome });
   cache.delete(clienteId);
+  await contarArtes(clienteId, tarefaId);
+}
+
+export async function excluirArte(clienteId, tarefaId, id) {
+  await excluirSub(caminhoArtes(clienteId), id);
+  cache.delete(clienteId);
+  await contarArtes(clienteId, tarefaId);
 }
 
 export const lerComoDataURL = (arquivo) => new Promise((ok, erro) => {
@@ -41,8 +50,8 @@ export const carregarImagem = (src) => new Promise((ok, erro) => {
   img.src = src;
 });
 
-/** Reduz a imagem para caber no banco. PNG mantém transparência (logos); o resto vira JPEG. */
-export async function comprimirImagem(origem, { maxLado = 1600, qualidade = 0.82, manterPNG = false } = {}) {
+/** Reduz a imagem (JPEG) até caber no banco. */
+export async function comprimirImagem(origem, { maxLado = 1600, qualidade = 0.85 } = {}) {
   const src = typeof origem === "string" ? origem : await lerComoDataURL(origem);
   const img = await carregarImagem(src);
   let lado = maxLado;
@@ -52,30 +61,13 @@ export async function comprimirImagem(origem, { maxLado = 1600, qualidade = 0.82
     c.width = Math.round(img.naturalWidth * escala);
     c.height = Math.round(img.naturalHeight * escala);
     const ctx = c.getContext("2d");
-    if (!manterPNG) { ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, c.width, c.height); }
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, c.width, c.height);
     ctx.drawImage(img, 0, 0, c.width, c.height);
-    const url = manterPNG ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", qualidade);
+    const url = c.toDataURL("image/jpeg", qualidade);
     if ((url.length * 3) / 4 <= LIMITE_BYTES) return url;
-    lado = Math.round(lado * 0.75);
-    qualidade = Math.max(0.6, qualidade - 0.06);
+    lado = Math.round(lado * 0.8);
+    qualidade = Math.max(0.6, qualidade - 0.05);
   }
   throw new Error("Não consegui reduzir a imagem o suficiente.");
-}
-
-/** Registra as fontes do cliente no navegador para usar no editor. Retorna os nomes de família. */
-const fontesCarregadas = new Set();
-export async function carregarFontesCliente(clienteId) {
-  const arquivos = await listarArquivos(clienteId);
-  const familias = [];
-  for (const f of arquivos.filter((a) => a.tipo === "fonte")) {
-    const familia = `cliente-${f.id}`;
-    familias.push({ familia, nome: f.nome });
-    if (fontesCarregadas.has(familia)) continue;
-    try {
-      const face = new FontFace(familia, `url(${f.dados})`);
-      document.fonts.add(await face.load());
-      fontesCarregadas.add(familia);
-    } catch (e) { console.warn("Fonte não carregou:", f.nome, e); }
-  }
-  return familias;
 }

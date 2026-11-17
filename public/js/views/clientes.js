@@ -23,7 +23,7 @@ export function abrirCliente(cliente = {}) {
     { nome: "email", rotulo: "E-mail", tipo: "email", largura: "metade" },
     { nome: "instagram", rotulo: "Instagram", dica: "@perfil", largura: "metade" },
     { tipo: "secao", rotulo: "Links" },
-    { nome: "linkDrive", rotulo: "Pasta no Drive", largura: "metade" },
+    { nome: "linkDrive", rotulo: "Pasta da marca no Drive", dica: "Logos, fontes, referências", largura: "metade" },
     { nome: "linkCanva", rotulo: "Pasta/Brand kit no Canva", largura: "metade" },
     { tipo: "secao", rotulo: "Contrato" },
     { nome: "mensalidade", rotulo: "Mensalidade (R$)", tipo: "number", largura: "metade" },
@@ -99,7 +99,7 @@ function ficha(id, estado, renderizar) {
   const insta = c.instagram ? linkExterno(`https://instagram.com/${c.instagram.replace(/^@/, "")}`, c.instagram) : null;
 
   const conteudoAba = {
-    marca: () => abaMarca(c, renderizar),
+    marca: () => abaMarca(c),
     tarefas: () => [
       el("div", { class: "com-acao" }, el("h2", {}, `Abertas (${abertas.length})`),
         el("button", { onClick: () => abrirTarefa({ clienteId: id, prazo: hojeISO() }) }, "+ Tarefa")),

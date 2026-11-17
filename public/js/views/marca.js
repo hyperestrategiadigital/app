@@ -1,10 +1,7 @@
-// Aba "Marca" da ficha do cliente: paleta, logo, fontes, criativos de referência e estilo de imagem.
-// Tudo isso alimenta o menu Criar (prompt de imagem e editor de texto).
-import { el, avisar, confirmar } from "../ui.js";
+// Aba "Marca" da ficha do cliente: pasta do Drive (logos, fontes, referências), paleta, fontes,
+// estilo de imagem e diagramação. Alimenta o menu Criar (prompt de imagem e pedido de arte no Canva).
+import { el, avisar, linkExterno } from "../ui.js";
 import { atualizar } from "../db.js";
-import {
-  listarArquivos, salvarArquivo, excluirArquivo, comprimirImagem, lerComoDataURL, carregarFontesCliente, LIMITE_BYTES
-} from "../arquivos.js";
 
 const hexValido = (h) => /^#[0-9a-f]{6}$/i.test(h || "");
 
@@ -47,74 +44,30 @@ function campoTexto(c, campo, rotulo, dica, linhas = 4) {
   return el("div", { class: "campo-marca" }, el("div", { class: "com-acao" }, el("h3", {}, rotulo), botao), area);
 }
 
-async function enviarArquivos(c, arquivos, tipo) {
-  for (const f of arquivos) {
-    try {
-      let dados;
-      if (tipo === "fonte") {
-        if (f.size > LIMITE_BYTES) throw new Error(`${f.name} tem ${Math.round(f.size / 1024)} KB. O limite é ${LIMITE_BYTES / 1024} KB (prefira .woff2).`);
-        dados = await lerComoDataURL(f);
-      } else {
-        dados = await comprimirImagem(f, { maxLado: tipo === "logo" ? 800 : 1400, manterPNG: tipo === "logo" });
-      }
-      await salvarArquivo(c.id, { tipo, nome: f.name.replace(/\.[^.]+$/, ""), mime: f.type, dados });
-    } catch (e) { avisar(e.message, "erro"); }
-  }
+function campoDrive(c) {
+  const chave = `${c.id}|linkDrive`;
+  const entrada = el("input", { id: "marca-linkDrive", type: "url", placeholder: "https://drive.google.com/drive/folders/..." });
+  entrada.value = rascunhos.has(chave) ? rascunhos.get(chave) : (c.linkDrive || "");
+  const botao = el("button", { class: "mini", hidden: !rascunhos.has(chave), onClick: async () => {
+    rascunhos.delete(chave);
+    await atualizar("clientes", c.id, { linkDrive: entrada.value.trim() });
+    avisar("Link salvo.");
+  } }, "Salvar");
+  entrada.addEventListener("input", () => { rascunhos.set(chave, entrada.value); botao.hidden = false; });
+  return el("div", { class: "campo-marca" },
+    el("div", { class: "com-acao" }, el("h3", {}, "Pasta da marca no Drive"), el("div", { class: "tela-acoes" }, botao, linkExterno(c.linkDrive, "Abrir pasta ↗"))),
+    el("p", { class: "subtitulo" }, "Logos, fontes, manual e criativos de referência ficam nesta pasta. O link vai junto no pedido de arte do Canva, para o Claude usar os arquivos da marca."),
+    entrada);
 }
 
-function areaArquivos(c, aoMudar) {
-  const caixa = el("div", { class: "arquivos-marca" }, el("p", { class: "subtitulo" }, "Carregando arquivos..."));
-  const botaoUpload = (rotulo, tipo, accept, multiplo) => {
-    const entrada = el("input", { type: "file", accept, multiple: multiplo, hidden: true });
-    entrada.addEventListener("change", async () => {
-      if (!entrada.files.length) return;
-      avisar("Enviando...");
-      await enviarArquivos(c, [...entrada.files], tipo);
-      entrada.value = "";
-      aoMudar();
-    });
-    return el("label", { class: "botao-link secundario mini" }, rotulo, entrada);
-  };
-  const remover = (a) => async () => {
-    if (await confirmar(`Remover "${a.nome}"?`)) { await excluirArquivo(c.id, a.id); aoMudar(); }
-  };
-
-  listarArquivos(c.id).then(async (lista) => {
-    const logos = lista.filter((a) => a.tipo === "logo");
-    const fontes = lista.filter((a) => a.tipo === "fonte");
-    const refs = lista.filter((a) => a.tipo === "referencia");
-    const familias = await carregarFontesCliente(c.id);
-    caixa.replaceChildren(
-      el("div", { class: "com-acao" }, el("h3", {}, "Logo"), botaoUpload("+ Logo (PNG)", "logo", "image/png,image/svg+xml,image/webp", false)),
-      logos.length ? el("div", { class: "grade-refs" }, logos.map((a) =>
-        el("figure", { class: "ref logo" }, el("img", { src: a.dados, alt: a.nome }), el("button", { class: "icone", "aria-label": "Remover", onClick: remover(a) }, "✕"))))
-        : el("p", { class: "subtitulo" }, "Nenhum logo. Ele pode ser aplicado sobre as artes no menu Criar."),
-
-      el("div", { class: "com-acao" }, el("h3", {}, "Fontes"), botaoUpload("+ Fonte (.ttf, .otf, .woff2)", "fonte", ".ttf,.otf,.woff,.woff2", true)),
-      fontes.length ? el("ul", { class: "lista-fontes" }, fontes.map((a) => {
-        const fam = familias.find((x) => x.familia === `cliente-${a.id}`);
-        return el("li", {}, el("span", { class: "amostra-fonte", style: { "font-family": fam ? `"${fam.familia}"` : "inherit" } }, `${a.nome} — Aa Bb 123`),
-          el("button", { class: "icone", "aria-label": "Remover", onClick: remover(a) }, "✕"));
-      })) : el("p", { class: "subtitulo" }, "Nenhuma fonte. Suba as fontes da marca para usar no editor de texto."),
-
-      el("div", { class: "com-acao" }, el("h3", {}, "Criativos de referência"), botaoUpload("+ Imagens", "referencia", "image/*", true)),
-      refs.length ? el("div", { class: "grade-refs" }, refs.map((a) =>
-        el("figure", { class: "ref" }, el("img", { src: a.dados, alt: a.nome, loading: "lazy" }), el("button", { class: "icone", "aria-label": "Remover", onClick: remover(a) }, "✕"))))
-        : el("p", { class: "subtitulo" }, "Suba criativos que a marca já usa e que você gosta. Eles podem guiar a geração de imagem."));
-  }).catch((e) => caixa.replaceChildren(el("p", { class: "erro" }, "Não consegui carregar os arquivos: " + e.message)));
-  return caixa;
-}
-
-export function abaMarca(c, renderizar) {
-  const arquivos = el("div");
-  const recarregar = () => { listarArquivos(c.id, { recarregar: true }).finally(() => arquivos.replaceChildren(areaArquivos(c, recarregar))); };
-  arquivos.append(areaArquivos(c, recarregar));
+export function abaMarca(c) {
   return el("div", { class: "aba-marca" },
+    campoDrive(c),
     el("h3", {}, "Paleta de cores"), editorPaleta(c),
+    campoTexto(c, "fontes", "Fontes", "Ex.: Títulos em Playfair Display Bold; textos em Montserrat. (Os arquivos ficam na pasta do Drive.)", 2),
     campoTexto(c, "estiloVisual", "Estilo de imagem",
       "Que tipo de imagem a marca usa? Ex.: fotos reais de pessoas treinando, luz natural, cores vibrantes, close nos rostos, ambientes de academia moderna. Evitar: banco de imagem genérico, ilustração 3D.", 5),
     campoTexto(c, "identidadeVisual", "Identidade visual (diagramação)",
       "Ex.: títulos grandes em caixa alta, muito respiro, elementos geométricos, logo sempre no canto inferior.", 3),
-    el("p", { class: "subtitulo" }, "Tom de voz, público e observações ficam em Editar (no topo da ficha)."),
-    arquivos);
+    el("p", { class: "subtitulo" }, "Tom de voz, público e observações ficam em Editar (no topo da ficha)."));
 }
