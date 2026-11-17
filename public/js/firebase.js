@@ -4,7 +4,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyA2zjfPUnIglM1SUWTeSh7QQlJyeucNbmA",
   authDomain: "hyper-9e023.firebaseapp.com",
   projectId: "hyper-9e023",
