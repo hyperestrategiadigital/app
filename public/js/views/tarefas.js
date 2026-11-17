@@ -2,6 +2,7 @@
 import { el, hojeISO, addDias, normalizar, vazio } from "../ui.js";
 import { dados, atualizar, opcoesClientes } from "../db.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas, opcoesResponsaveis } from "./componentes.js";
+import { eu, ehAdmin, tarefaVisivel } from "../permissoes.js";
 import { STATUS_TAREFA, TIPOS_TAREFA } from "../constantes.js";
 
 export function render({ estado, renderizar }) {
@@ -9,8 +10,9 @@ export function render({ estado, renderizar }) {
   estado.periodoConcluidas ??= "30";
   const f = estado;
 
+  if (f.responsavel === undefined) f.responsavel = ehAdmin() ? "" : eu.nome; // quem não é admin começa vendo as próprias
   const busca = normalizar(f.busca);
-  const filtradas = dados.tarefas.filter((t) =>
+  const filtradas = dados.tarefas.filter((t) => tarefaVisivel(t) &&
     (!f.cliente || t.clienteId === f.cliente) &&
     (!f.tipo || t.tipo === f.tipo) &&
     (!f.responsavel || (t.responsavel || "") === f.responsavel) &&

@@ -8,6 +8,7 @@ import { dataPost, exportarPDF, nomeMes } from "../exportacao.js";
 import { abrirCompromisso, rotuloCompromisso, avisoPendentes } from "../compromissos.js";
 import { compromissosEntre } from "../agenda.js";
 import { abrirModal } from "../ui.js";
+import { pode } from "../permissoes.js";
 
 const ICONE_FORMATO = {
   "Feed estático": "▣", "Carrossel": "▤", "Reels": "▶", "Story": "◫", "Sequência de stories": "◫",
@@ -70,7 +71,8 @@ export function render({ params, estado, renderizar }) {
   }
   estado.mes ??= hojeISO().slice(0, 7);
   estado.modo ??= "mes";
-  estado.camada ??= "tudo";
+  estado.camada ??= pode("conteudo") ? "tudo" : "compromissos";
+  if (!pode("conteudo")) estado.camada = "compromissos"; // sem acesso a conteúdo: só compromissos
   const verPosts = estado.camada !== "compromissos";
   const verCompromissos = estado.camada !== "conteudo";
   const [ano, mes] = estado.mes.split("-").map(Number);
@@ -109,9 +111,9 @@ export function render({ params, estado, renderizar }) {
       el("button", { class: "secundario mini", onClick: () => { estado.mes = hojeISO().slice(0, 7); renderizar(); } }, "Hoje")),
     el("select", { onChange: set("cliente"), "aria-label": "Cliente" },
       opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (estado.cliente || "") }, v ? r : "Todos os clientes"))),
-    el("select", { onChange: set("status"), "aria-label": "Etapa" },
+    !pode("conteudo") ? null : el("select", { onChange: set("status"), "aria-label": "Etapa" },
       el("option", { value: "" }, "Todas as etapas"), STATUS_CONTEUDO.map(([v, r]) => el("option", { value: v, selected: v === estado.status }, r))),
-    abas([["tudo", "Tudo"], ["conteudo", "Conteúdo"], ["compromissos", "Compromissos"]], estado.camada, (m) => { estado.camada = m; renderizar(); }),
+    pode("conteudo") ? abas([["tudo", "Tudo"], ["conteudo", "Conteúdo"], ["compromissos", "Compromissos"]], estado.camada, (m) => { estado.camada = m; renderizar(); }) : null,
     abas([["mes", "Mês"], ["lista", "Lista"]], estado.modo, (m) => { estado.modo = m; renderizar(); }));
 
   const [ini, fimP] = [`${estado.mes}-01`, addDias(`${estado.mes}-01`, 41)];
@@ -159,11 +161,11 @@ export function render({ params, estado, renderizar }) {
 
   return el("div", { class: "tela" },
     cabecalho("Calendário",
-      contagem.length ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para criar um post",
-      el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = `#/planejamento/${c}/${m}`), "Planejar mês") }, "☷ Planejar mês"),
-      el("button", { class: "secundario", onClick: () => acaoCliente(exportarPDF, "Exportar PDF") }, "⬇ PDF para o cliente"),
+      !pode("conteudo") ? "Seus compromissos e reuniões" : contagem.length ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para criar um post",
+      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = `#/planejamento/${c}/${m}`), "Planejar mês") }, "☷ Planejar mês") : null,
+      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente(exportarPDF, "Exportar PDF") }, "⬇ PDF para o cliente") : null,
       el("button", { class: "secundario", onClick: () => abrirCompromisso({ clienteId: estado.cliente || "" }) }, "+ Compromisso"),
-      el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "" }) }, "+ Novo post")),
+      pode("conteudo") ? el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "" }) }, "+ Novo post") : null),
     verCompromissos ? avisoPendentes() : null,
     filtros, verPosts ? legenda : null, corpo,
     el("p", { class: "nota" }, "Posts são tarefas do tipo Conteúdo e nunca vão para a sua agenda pessoal. Compromissos (◷) são reuniões, gravações e visitas: esses podem ir para a Google Agenda. Para exportar ou planejar, filtre um cliente ou escolha na hora."));

@@ -4,20 +4,22 @@ import { dados, nomeCliente } from "../db.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, seloCliente } from "./componentes.js";
 import { rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
+import { pode, tarefaVisivel } from "../permissoes.js";
 import { compromissosEntre } from "../agenda.js";
 import { abrirCompromisso, cartaoCompromisso, avisoPendentes } from "../compromissos.js";
 
 export function render() {
   const hoje = hojeISO();
   const fimSemana = addDias(hoje, 7);
-  const abertas = dados.tarefas.filter((t) => t.status !== "concluido");
+  const visiveis = dados.tarefas.filter(tarefaVisivel);
+  const abertas = visiveis.filter((t) => t.status !== "concluido");
   const atrasadas = abertas.filter(atrasada).sort((a, b) => a.prazo.localeCompare(b.prazo));
   const deHoje = abertas.filter((t) => t.prazo === hoje);
   const semana = abertas.filter((t) => t.prazo > hoje && t.prazo <= fimSemana).sort((a, b) => a.prazo.localeCompare(b.prazo));
   const semPrazo = abertas.filter((t) => !t.prazo);
-  const concluidasHoje = dados.tarefas.filter((t) => t.status === "concluido" && t.concluidoEm === hoje).length;
+  const concluidasHoje = visiveis.filter((t) => t.status === "concluido" && t.concluidoEm === hoje).length;
 
-  const conteudos = dados.tarefas
+  const conteudos = (pode("conteudo") ? visiveis : [])
     .filter((c) => c.tipo === TIPO_CONTEUDO && dataPost(c) >= hoje && dataPost(c) <= fimSemana && c.statusConteudo !== "publicado")
     .sort((a, b) => (dataPost(a) + (a.hora || "")).localeCompare(dataPost(b) + (b.hora || "")));
 
@@ -68,7 +70,7 @@ export function render() {
           data !== hoje ? el("div", { class: "dia-compromisso" }, `${fmtDiaSemana(data)} · ${fmtData(data, true)}`) : el("div", { class: "dia-compromisso hoje" }, "Hoje"),
           cartaoCompromisso(c))) : vazio("Nenhum compromisso nos próximos 7 dias."),
 
-        el("h2", {}, "Conteúdos da semana"),
+        pode("conteudo") ? el("h2", {}, "Conteúdos da semana") : null,
         conteudos.length ? conteudos.map((c) =>
           el("a", { class: "item-conteudo", href: "#/calendario" },
             el("span", { class: "data-mini" }, fmtData(dataPost(c), true)),
@@ -76,10 +78,10 @@ export function render() {
               el("strong", {}, c.titulo),
               el("div", { class: "cartao-meta" }, seloCliente(c.clienteId), el("span", { class: "etiqueta" }, c.formato),
                 el("span", { class: `etiqueta st-${c.statusConteudo || "ideia"}` }, rotuloStatusConteudo(c.statusConteudo || "ideia"))))))
-          : vazio("Nenhum conteúdo programado.", el("a", { href: "#/calendario", class: "link" }, "Abrir calendário →")),
+          : pode("conteudo") ? vazio("Nenhum conteúdo programado.", el("a", { href: "#/calendario", class: "link" }, "Abrir calendário →")) : null,
 
-        el("h2", {}, "A receber este mês"),
-        aReceber.length ? [
+        pode("financeiro") ? el("h2", {}, "A receber este mês") : null,
+        !pode("financeiro") ? null : aReceber.length ? [
           el("p", { class: "numero-grande" }, fmtMoeda(aReceber.reduce((s, f) => s + (f.valor || 0), 0))),
           aReceber.slice(0, 6).map((f) => el("div", { class: "linha-fin" },
             el("span", {}, f.clienteId ? nomeCliente(f.clienteId) : f.descricao),

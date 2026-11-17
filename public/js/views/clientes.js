@@ -1,6 +1,7 @@
 // Clientes: lista com indicadores e ficha completa de cada cliente.
 import { el, formulario, confirmar, avisar, fmtMoeda, fmtData, linkExterno, vazio, hojeISO } from "../ui.js";
-import { dados, criar, atualizar, excluir, porId } from "../db.js";
+import { dados, criar, atualizar, excluir, porId, contrato, salvarComId } from "../db.js";
+import { pode, ehAdmin, tarefaVisivel } from "../permissoes.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas, corCliente } from "./componentes.js";
 import { SERVICOS, rotuloStatusConteudo } from "../constantes.js";
 import { novoPost } from "./calendario.js";
@@ -10,11 +11,13 @@ import { abrirConta, abrirManutencao } from "./trafego.js";
 import { abaMarca } from "./marca.js";
 import { abaContas } from "./contas.js";
 
+const podeEditar = () => ehAdmin() || pode("conteudo") || pode("trafego");
 const CORES = ["#4E2CA3", "#592C85", "#16626A", "#606060", "#C98A00", "#2D6CDF", "#B4415A", "#2E8B57"];
 
 export function abrirCliente(cliente = {}) {
   const editando = !!cliente.id;
-  const valores = { ...cliente, cor: cliente.paleta?.[0] || cliente.cor };
+  const valores = { ...cliente, ...contrato(cliente.id), id: cliente.id, cor: cliente.paleta?.[0] || cliente.cor };
+  const fin = pode("financeiro");
   return formulario(editando ? `Editar ${cliente.nome}` : "Novo cliente", [
     { nome: "nome", rotulo: "Nome do cliente", obrigatorio: true, largura: "metade" },
     { nome: "cor", rotulo: "Cor principal da marca", tipo: "cor", padrao: CORES[dados.clientes.length % CORES.length], largura: "metade" },
@@ -27,9 +30,10 @@ export function abrirCliente(cliente = {}) {
     { tipo: "secao", rotulo: "Links" },
     { nome: "linkDrive", rotulo: "Pasta da marca no Drive", dica: "Logos, fontes, referências", largura: "metade" },
     { nome: "linkCanva", rotulo: "Pasta/Brand kit no Canva", largura: "metade" },
-    { tipo: "secao", rotulo: "Contrato" },
-    { nome: "mensalidade", rotulo: "Mensalidade (R$)", tipo: "number", largura: "metade" },
-    { nome: "diaVencimento", rotulo: "Dia de vencimento", tipo: "number", dica: "10", largura: "metade" },
+    ...(fin ? [
+      { tipo: "secao", rotulo: "Contrato (só quem tem acesso ao financeiro vê)" },
+      { nome: "mensalidade", rotulo: "Mensalidade (R$)", tipo: "number", largura: "metade" },
+      { nome: "diaVencimento", rotulo: "Dia de vencimento", tipo: "number", dica: "10", largura: "metade" }] : []),
     { tipo: "secao", rotulo: "Para criar copy" },
     { nome: "tomDeVoz", rotulo: "Tom de voz da marca", tipo: "textarea", linhas: 2, dica: "Ex.: próximo, bem-humorado, sem gírias, usa emojis com moderação" },
     { nome: "publico", rotulo: "Público-alvo", tipo: "textarea", linhas: 2, dica: "Ex.: mulheres 25-45, região de Sorocaba, classe B" },
@@ -50,8 +54,13 @@ export function abrirCliente(cliente = {}) {
     aoSalvar: async (v) => {
       // A cor principal é sempre a primeira da paleta
       v.paleta = [v.cor, ...(cliente.paleta || []).slice(1)];
+      // Valores do contrato ficam em "contratos" (protegidos), nunca na ficha
+      const dadosContrato = fin ? { mensalidade: v.mensalidade, diaVencimento: v.diaVencimento } : null;
+      delete v.mensalidade; delete v.diaVencimento;
+      let id = cliente.id;
       if (editando) await atualizar("clientes", cliente.id, v);
-      else await criar("clientes", v);
+      else id = (await criar("clientes", v)).id;
+      if (dadosContrato) await salvarComId("contratos", id, { clienteId: id, ...dadosContrato });
       avisar(editando ? "Cliente atualizado." : "Cliente criado.");
     }
   });
@@ -68,12 +77,12 @@ export function render({ params, estado, renderizar }) {
       return { c, abertas: ts.filter((t) => t.status !== "concluido").length, atrasadas: ts.filter(atrasada).length, total: ts.length };
     })
     .sort((a, b) => b.abertas - a.abertas || a.c.nome.localeCompare(b.c.nome, "pt-BR"));
-  const receitaMensal = dados.clientes.filter((c) => c.ativo !== false).reduce((s, c) => s + (c.mensalidade || 0), 0);
+  const receitaMensal = dados.clientes.filter((c) => c.ativo !== false).reduce((s, c) => s + (Number(contrato(c.id).mensalidade) || 0), 0);
 
   return el("div", { class: "tela" },
-    cabecalho("Clientes", `${dados.clientes.filter((c) => c.ativo !== false).length} ativos · ${fmtMoeda(receitaMensal)}/mês em mensalidades`,
+    cabecalho("Clientes", `${dados.clientes.filter((c) => c.ativo !== false).length} ativos${pode("financeiro") ? ` · ${fmtMoeda(receitaMensal)}/mês em mensalidades` : ""}`,
       el("label", { class: "check-inline" }, el("input", { type: "checkbox", checked: estado.mostrarInativos, onChange: (e) => { estado.mostrarInativos = e.target.checked; renderizar(); } }), "Mostrar inativos"),
-      el("button", { class: "destaque", onClick: () => abrirCliente() }, "+ Novo cliente")),
+      podeEditar() ? el("button", { class: "destaque", onClick: () => abrirCliente() }, "+ Novo cliente") : null),
     lista.length ? el("div", { class: "grade-clientes" }, lista.map(({ c, abertas, atrasadas, total }) =>
       el("a", { class: `cartao-cliente ${c.ativo === false ? "inativo" : ""}`, href: `#/clientes/${c.id}`, style: { "--selo": corCliente(c) } },
         el("h3", {}, c.nome),
@@ -82,7 +91,7 @@ export function render({ params, estado, renderizar }) {
           el("span", {}, el("strong", {}, abertas), " abertas"),
           atrasadas ? el("span", { class: "alerta" }, el("strong", {}, atrasadas), " atrasadas") : null,
           el("span", {}, el("strong", {}, total), " no total")),
-        c.mensalidade ? el("div", { class: "mensalidade" }, `${fmtMoeda(c.mensalidade)}/mês`) : null)))
+        contrato(c.id).mensalidade ? el("div", { class: "mensalidade" }, `${fmtMoeda(contrato(c.id).mensalidade)}/mês`) : null)))
       : vazio("Nenhum cliente ainda. Cadastre os clientes ou importe sua planilha em Ajustes.",
         el("a", { href: "#/config", class: "link" }, "Importar planilha →")));
 }
@@ -90,8 +99,13 @@ export function render({ params, estado, renderizar }) {
 function ficha(id, estado, renderizar) {
   const c = porId("clientes", id);
   if (!c) return el("div", { class: "tela" }, vazio("Cliente não encontrado.", el("a", { href: "#/clientes", class: "link" }, "← Voltar")));
-  estado.aba ??= "tarefas";
-  const ts = dados.tarefas.filter((t) => t.clienteId === id);
+  const abasPermitidas = [["tarefas", "Tarefas"],
+    ...(pode("conteudo") ? [["conteudo", "Conteúdo"], ["marca", "Marca"]] : []),
+    ...(pode("conteudo") || pode("trafego") ? [["contas", "Contas"]] : []),
+    ...(pode("trafego") ? [["trafego", "Tráfego pago"]] : []),
+    ...(pode("financeiro") ? [["financeiro", "Financeiro"]] : [])];
+  if (!abasPermitidas.some(([v]) => v === estado.aba)) estado.aba = "tarefas";
+  const ts = dados.tarefas.filter((t) => t.clienteId === id && tarefaVisivel(t));
   const abertas = ts.filter((t) => t.status !== "concluido").sort((a, b) => (a.prazo || "9").localeCompare(b.prazo || "9"));
   const feitas = ts.filter((t) => t.status === "concluido").sort((a, b) => (b.concluidoEm || b.prazo || "").localeCompare(a.concluidoEm || a.prazo || ""));
   const conts = ts.filter((x) => x.tipo === TIPO_CONTEUDO).sort((a, b) => dataPost(b).localeCompare(dataPost(a)));
@@ -147,16 +161,16 @@ function ficha(id, estado, renderizar) {
       el("div", {},
         el("h1", {}, c.nome, c.ativo === false ? el("span", { class: "etiqueta" }, "Inativo") : null),
         el("div", { class: "cartao-meta" }, (c.servicos || []).map((s) => el("span", { class: "etiqueta" }, s)))),
-      el("div", { class: "tela-acoes" }, el("button", { class: "secundario", onClick: () => abrirCliente(c) }, "Editar"))),
+      el("div", { class: "tela-acoes" }, podeEditar() ? el("button", { class: "secundario", onClick: () => abrirCliente(c) }, "Editar") : null)),
     el("div", { class: "ficha" },
       el("aside", { class: "bloco lateral" },
         info("Contato", c.contato), c.whatsapp ? el("div", { class: "info" }, el("span", {}, "WhatsApp"), zap) : null,
         info("E-mail", c.email), c.instagram ? el("div", { class: "info" }, el("span", {}, "Instagram"), insta) : null,
         el("div", { class: "links-cliente" }, linkExterno(c.linkDrive, "📁 Drive"), linkExterno(c.linkCanva, "🎨 Canva")),
-        info("Mensalidade", c.mensalidade ? `${fmtMoeda(c.mensalidade)} · dia ${c.diaVencimento || "—"}` : null),
+        info("Mensalidade", contrato(c.id).mensalidade ? `${fmtMoeda(contrato(c.id).mensalidade)} · dia ${contrato(c.id).diaVencimento || "—"}` : null),
         info("Tom de voz", c.tomDeVoz), info("Persona", c.persona), info("Público", c.publico), info("Observações", c.observacoes),
         !c.contato && !c.tomDeVoz && !c.linkDrive ? el("p", { class: "subtitulo" }, "Complete a ficha (contato, links, tom de voz) em Editar. O tom de voz é usado para gerar copy.") : null),
       el("section", { class: "bloco" },
-        abas([["tarefas", "Tarefas"], ["conteudo", "Conteúdo"], ["marca", "Marca"], ["contas", "Contas"], ["trafego", "Tráfego pago"], ["financeiro", "Financeiro"]], estado.aba, (a) => { estado.aba = a; renderizar(); }),
+        abas(abasPermitidas, estado.aba, (a) => { estado.aba = a; renderizar(); }),
         conteudoAba[estado.aba]())));
 }

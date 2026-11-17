@@ -1,6 +1,6 @@
 // Financeiro: receitas e despesas do mês, mensalidades automáticas e orçamentos.
 import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, vazio } from "../ui.js";
-import { dados, criar, atualizar, excluir, salvarComId, nomeCliente, opcoesClientes, clientesAtivos } from "../db.js";
+import { dados, criar, atualizar, excluir, salvarComId, nomeCliente, opcoesClientes, clientesAtivos, contrato } from "../db.js";
 import { cabecalho, abas, seloCliente } from "./componentes.js";
 import { CATEGORIAS_FIN, STATUS_ORCAMENTO } from "../constantes.js";
 
@@ -56,7 +56,7 @@ export function abrirOrcamento(o = {}) {
 async function gerarMensalidades(mes) {
   const [a, m] = mes.split("-").map(Number);
   const ultimoDia = new Date(a, m, 0).getDate();
-  const comMensalidade = clientesAtivos().filter((c) => c.mensalidade > 0);
+  const comMensalidade = clientesAtivos().map((c) => ({ ...c, ...contrato(c.id), id: c.id })).filter((c) => c.mensalidade > 0);
   if (!comMensalidade.length) { avisar("Nenhum cliente tem mensalidade cadastrada. Preencha na ficha do cliente.", "erro"); return; }
   let novas = 0;
   for (const c of comMensalidade) {
