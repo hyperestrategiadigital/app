@@ -13,7 +13,7 @@ const abrirBanco = (id) => (id === "(default)" ? getFirestore(app) : getFirestor
 
 export const COLECOES = [
   "clientes", "tarefas", "recorrencias", "conteudos",
-  "financeiro", "orcamentos", "contasAds", "manutencoes", "config"
+  "financeiro", "orcamentos", "contasAds", "manutencoes", "config", "compromissos"
 ];
 
 /** Dados em memória: dados.clientes = [{ id, ...campos }] */

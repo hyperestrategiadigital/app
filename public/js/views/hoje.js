@@ -4,6 +4,8 @@ import { dados, nomeCliente } from "../db.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, seloCliente } from "./componentes.js";
 import { rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
+import { compromissosEntre } from "../agenda.js";
+import { abrirCompromisso, cartaoCompromisso } from "../compromissos.js";
 
 export function render() {
   const hoje = hojeISO();
@@ -19,6 +21,7 @@ export function render() {
     .filter((c) => c.tipo === TIPO_CONTEUDO && dataPost(c) >= hoje && dataPost(c) <= fimSemana && c.statusConteudo !== "publicado")
     .sort((a, b) => (dataPost(a) + (a.hora || "")).localeCompare(dataPost(b) + (b.hora || "")));
 
+  const compromissos = compromissosEntre(hoje, fimSemana);
   const mes = hoje.slice(0, 7);
   const aReceber = dados.financeiro.filter((f) => f.tipo === "receita" && f.status !== "pago" && f.vencimento?.startsWith(mes));
   const vencidas = dados.financeiro.filter((f) => f.tipo === "receita" && f.status !== "pago" && f.vencimento && f.vencimento < hoje);
@@ -41,7 +44,7 @@ export function render() {
 
     el("div", { class: "resumo" },
       cartaoNumero("Atrasadas", atrasadas.length, atrasadas.length ? "alerta" : ""),
-      cartaoNumero("Para hoje", deHoje.length),
+      cartaoNumero("Para hoje", deHoje.length + compromissos.filter((x) => x.data === hoje).length),
       cartaoNumero("Próximos 7 dias", semana.length),
       cartaoNumero("Concluídas hoje", concluidasHoje, "ok")),
 
@@ -58,6 +61,12 @@ export function render() {
         semPrazo.length ? [el("h2", {}, `Sem prazo (${semPrazo.length})`), semPrazo.map((t) => cartaoTarefa(t))] : null),
 
       el("aside", { class: "bloco lateral" },
+        el("div", { class: "com-acao" }, el("h2", {}, "Compromissos"),
+          el("button", { class: "secundario mini", onClick: () => abrirCompromisso({ data: hoje }) }, "+ Compromisso")),
+        compromissos.length ? compromissos.map(({ c, data }) => el("div", {},
+          data !== hoje ? el("div", { class: "dia-compromisso" }, `${fmtDiaSemana(data)} · ${fmtData(data, true)}`) : el("div", { class: "dia-compromisso hoje" }, "Hoje"),
+          cartaoCompromisso(c))) : vazio("Nenhum compromisso nos próximos 7 dias."),
+
         el("h2", {}, "Conteúdos da semana"),
         conteudos.length ? conteudos.map((c) =>
           el("a", { class: "item-conteudo", href: "#/calendario" },

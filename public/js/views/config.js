@@ -4,6 +4,8 @@ import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes,
 import { cabecalho } from "./componentes.js";
 import { analisarPlanilha } from "../importacao.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO } from "../openai.js";
+import { configAgenda, conectarAgenda, desconectarAgenda, configEquipe, sincronizar } from "../agenda.js";
+import { salvarComId } from "../db.js";
 
 
 function abrirImportacao() {
@@ -86,6 +88,8 @@ export function render() {
     el("p", { class: "dica-cliente" }, "As tarefas recorrentes (Manutenção TP, produção da semana, planejamento do mês, cobranças) agora ficam no menu ",
       el("a", { href: "#/rotinas" }, "Rotinas"), "."),
 
+    blocoAgenda(),
+    blocoEquipe(),
     blocoOpenAI(),
 
     el("section", { class: "bloco" },
@@ -124,4 +128,58 @@ function blocoOpenAI() {
       cfg.chave ? el("button", { class: "perigo-texto", onClick: async () => {
         if (await confirmar("Remover a chave da OpenAI?")) { await salvarConfigOpenAI({ chave: "", modelo: modelo.value }); avisar("Chave removida."); }
       } }, "Remover chave") : null));
+}
+
+function blocoAgenda() {
+  const cfg = configAgenda();
+  const pendentes = dados.compromissos.filter((c) => c.sincronizar && !c.googleEventId);
+  const conectar = async (botao) => {
+    botao.disabled = true;
+    try { const email = await conectarAgenda(); avisar(`Google Agenda conectada: ${email}`); }
+    catch (e) { avisar("Não conectou: " + (e.code === "auth/popup-closed-by-user" ? "janela fechada." : e.message), "erro"); botao.disabled = false; }
+  };
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Google Agenda (compromissos)"),
+    el("p", {}, cfg.email
+      ? ["✓ Conectada à agenda de ", el("strong", {}, cfg.email), ". Compromissos marcados com \"Enviar para a Google Agenda\" vão para lá — posts de conteúdo nunca vão."]
+      : "Conecte a sua conta Google pessoal (a do iPhone) para os compromissos aparecerem na sua agenda. Posts de conteúdo nunca vão para lá."),
+    el("details", { class: "prompt-final" }, el("summary", {}, "Primeira vez? Ative a API do Google Agenda (1 minuto)"),
+      el("ol", { class: "passos" },
+        el("li", {}, "Abra ", el("a", { href: "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=hyper-9e023", target: "_blank", rel: "noopener" }, "a página da Google Calendar API do projeto hyper-9e023"), " e clique em Ativar."),
+        el("li", {}, "Volte aqui e clique em Conectar. Escolha a conta pessoal."),
+        el("li", {}, "Se aparecer \"O Google não verificou este app\", clique em Avançado → Acessar hyper-9e023. É o seu próprio app."))),
+    el("div", { class: "acoes" },
+      cfg.email
+        ? [el("button", { class: "secundario", onClick: (e) => conectar(e.currentTarget) }, "Trocar de conta"),
+          el("button", { class: "perigo-texto", onClick: async () => { await desconectarAgenda(); avisar("Agenda desconectada."); } }, "Desconectar")]
+        : el("button", { onClick: (e) => conectar(e.currentTarget) }, "Conectar Google Agenda"),
+      cfg.email && pendentes.length ? el("button", { class: "destaque", onClick: async (e) => {
+        e.currentTarget.disabled = true;
+        let ok = 0;
+        for (const c of pendentes) { try { await sincronizar(c); ok++; } catch (erro) { avisar(erro.message, "erro"); break; } }
+        if (ok) avisar(`${ok} compromisso(s) enviado(s) para a agenda.`);
+      } }, `Enviar ${pendentes.length} pendente(s)`) : null),
+    el("p", { class: "subtitulo" }, "O Google libera o acesso por cerca de 1 hora. Depois disso, ao salvar um compromisso, o app pede para conectar de novo."));
+}
+
+function blocoEquipe() {
+  const pessoas = configEquipe().map((p) => ({ ...p }));
+  if (!pessoas.length) pessoas.push({ nome: "Matheus", email: configAgenda().email || "" });
+  const lista = el("div", { class: "lista-equipe" });
+  const desenhar = () => lista.replaceChildren(...pessoas.map((p, i) => el("div", { class: "pessoa" },
+    (() => { const n = el("input", { type: "text", value: p.nome, placeholder: "Nome", "aria-label": "Nome" }); n.addEventListener("input", () => (p.nome = n.value)); return n; })(),
+    (() => { const e = el("input", { type: "email", value: p.email, placeholder: "email@gmail.com", "aria-label": "E-mail" }); e.addEventListener("input", () => (p.email = e.value)); return e; })(),
+    el("button", { class: "icone", "aria-label": "Remover", onClick: () => { pessoas.splice(i, 1); desenhar(); } }, "✕"))));
+  desenhar();
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Equipe"),
+    el("p", { class: "subtitulo" }, "Quem pode participar dos compromissos. Ao marcar alguém numa reunião, a pessoa recebe o convite na agenda dela pelo e-mail daqui."),
+    lista,
+    el("div", { class: "acoes" },
+      el("button", { class: "secundario mini", onClick: () => { pessoas.push({ nome: "", email: "" }); desenhar(); } }, "+ Pessoa"),
+      el("button", { onClick: async () => {
+        const validas = pessoas.map((p) => ({ nome: p.nome.trim(), email: p.email.trim() })).filter((p) => p.nome);
+        await salvarComId("config", "equipe", { pessoas: validas });
+        avisar("Equipe salva.");
+      } }, "Salvar equipe")));
 }

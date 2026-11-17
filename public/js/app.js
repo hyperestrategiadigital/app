@@ -22,7 +22,7 @@ import * as rotinas from "./views/rotinas.js";
 const ROTAS = {
   hoje: { titulo: "Hoje", icone: "☀", view: hoje },
   tarefas: { titulo: "Tarefas", icone: "✓", view: tarefas },
-  calendario: { titulo: "Conteúdo", icone: "▦", view: calendario },
+  calendario: { titulo: "Calendário", icone: "▦", view: calendario },
   planejamento: { titulo: "Planejamento", icone: "☷", view: planejamento },
   criar: { titulo: "Criar", icone: "✦", view: criar },
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
