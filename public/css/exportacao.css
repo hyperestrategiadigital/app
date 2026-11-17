@@ -1,0 +1,37 @@
+/* Página de exportação (PDF de aprovação). Usa a paleta da Hyper; --cor-cliente vem da marca do cliente. */
+:root {
+  --hyper-roxo: #4E2CA3;
+  --hyper-petroleo: #16626A;
+  --hyper-cinza: #606060;
+  --hyper-amarelo: #FFC130;
+  --hyper-gelo: #C9D5E3;
+  --hyper-branco: #FFFFFF;
+  --cor-fundo: #F3F5F9;
+  --cor-cliente: var(--hyper-roxo);
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Montserrat", system-ui, sans-serif; color: #1A1A1A; background: var(--hyper-branco); font-size: 12px; }
+.topo { display: flex; align-items: center; gap: 28px; background: var(--hyper-roxo); color: var(--hyper-branco); padding: 24px 32px; }
+.topo img { height: 40px; }
+.topo h1 { font: italic 800 34px "Barlow Condensed", sans-serif; margin: 2px 0; }
+.topo p { margin: 0; color: var(--hyper-gelo); text-transform: capitalize; }
+.tagline { font-weight: 300; letter-spacing: 0.3em; text-transform: uppercase; font-size: 10px; color: var(--hyper-gelo); }
+main { padding: 20px 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.post { display: flex; gap: 14px; border: 1px solid var(--hyper-gelo); border-left: 5px solid var(--cor-cliente); border-radius: 10px; padding: 12px; break-inside: avoid; page-break-inside: avoid; }
+.arte { width: 120px; flex-shrink: 0; aspect-ratio: 4 / 5; background: var(--cor-fundo); border-radius: 6px; overflow: hidden; display: grid; place-items: center; color: var(--hyper-cinza); font-weight: 600; text-align: center; padding: 4px; }
+.arte img { width: 100%; height: 100%; object-fit: cover; }
+.info { min-width: 0; flex: 1; }
+.data { color: var(--hyper-roxo); font-weight: 700; text-transform: capitalize; }
+h3 { font: italic 800 19px "Barlow Condensed", sans-serif; margin: 4px 0 6px; }
+.tags span { display: inline-block; background: var(--cor-fundo); border-radius: 99px; padding: 2px 8px; margin-right: 4px; font-size: 10px; font-weight: 600; color: var(--hyper-cinza); }
+p { margin: 6px 0; }
+.copy { white-space: pre-wrap; color: #333; max-height: 160px; overflow: hidden; }
+.aprovacao { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--hyper-gelo); color: var(--hyper-cinza); }
+footer { padding: 16px 32px 28px; color: var(--hyper-cinza); font-size: 10px; }
+@media print {
+  @page { size: A4; margin: 10mm; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .topo { border-radius: 8px; }
+  main { padding: 14px 0; }
+  footer { padding: 8px 0; }
+}

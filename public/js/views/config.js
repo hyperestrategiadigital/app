@@ -5,6 +5,7 @@ import { cabecalho } from "./componentes.js";
 import { TIPOS_TAREFA, DIAS_SEMANA } from "../constantes.js";
 import { analisarPlanilha } from "../importacao.js";
 import { gerarRecorrencias } from "../recorrencias.js";
+import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO } from "../openai.js";
 
 const descreverFrequencia = (r) => {
   const dia = DIAS_SEMANA.find(([v]) => v === String(r.diaSemana))?.[1]?.toLowerCase();
@@ -147,6 +148,8 @@ export function render() {
           el("span", { class: "etiqueta" }, descreverFrequencia(r)), r.ativo === false ? el("span", { class: "etiqueta" }, "pausada") : null)))
         : vazio("Nenhuma recorrência ainda.")),
 
+    blocoOpenAI(),
+
     el("section", { class: "bloco" },
       el("h2", {}, "Importar planilha"),
       el("p", {}, "Traga o histórico da planilha Fluxo de Trabalho: clientes, tarefas e entregas."),
@@ -156,4 +159,31 @@ export function render() {
       el("h2", {}, "Backup"),
       el("p", {}, `${dados.tarefas.length} tarefas · ${dados.clientes.length} clientes · ${dados.conteudos.length} conteúdos · ${dados.financeiro.length} lançamentos`),
       el("button", { class: "secundario", onClick: baixarBackup }, "Baixar backup (.json)")));
+}
+
+function blocoOpenAI() {
+  const cfg = configOpenAI();
+  const chave = el("input", { id: "openai-chave", type: "password", placeholder: cfg.chave ? "•••••••• (já cadastrada — cole outra para trocar)" : "sk-...", autocomplete: "off" });
+  const modelo = el("input", { id: "openai-modelo", type: "text", value: cfg.modelo || MODELO_PADRAO });
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Geração de imagem (OpenAI)"),
+    el("p", {}, cfg.chave ? `✓ Chave cadastrada (termina em ${cfg.chave.slice(-4)}).` : "Cole a chave da API da OpenAI para gerar imagens no menu Criar."),
+    el("ol", { class: "passos" },
+      el("li", {}, "Acesse platform.openai.com → API keys → Create new secret key."),
+      el("li", {}, "Adicione saldo em Billing (cada imagem custa alguns centavos de dólar)."),
+      el("li", {}, "Cole a chave aqui e salve.")),
+    el("div", { class: "form-grade" },
+      el("label", { class: "campo metade", for: "openai-chave" }, el("span", {}, "Chave da API"), chave),
+      el("label", { class: "campo metade", for: "openai-modelo" }, el("span", {}, "Modelo de imagem"), modelo)),
+    el("p", { class: "subtitulo" }, "A chave fica guardada só na sua conta, protegida pelas regras do banco. Não compartilhe prints desta tela com a chave aparecendo."),
+    el("div", { class: "acoes" },
+      el("button", { onClick: async () => {
+        const nova = chave.value.trim() || cfg.chave;
+        if (!nova) { avisar("Cole a chave.", "erro"); return; }
+        await salvarConfigOpenAI({ chave: nova, modelo: modelo.value });
+        avisar("Configuração da OpenAI salva.");
+      } }, "Salvar"),
+      cfg.chave ? el("button", { class: "perigo-texto", onClick: async () => {
+        if (await confirmar("Remover a chave da OpenAI?")) { await salvarConfigOpenAI({ chave: "", modelo: modelo.value }); avisar("Chave removida."); }
+      } }, "Remover chave") : null));
 }

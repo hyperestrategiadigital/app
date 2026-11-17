@@ -7,14 +7,26 @@ export const STATUS_TAREFA = [
 ];
 export const rotuloStatus = (s) => STATUS_TAREFA.find(([v]) => v === s)?.[1] || s;
 
+// "Conteúdo" é o único tipo que vira post no calendário
+export const TIPO_CONTEUDO = "Conteúdo";
 export const TIPOS_TAREFA = [
-  "Conteúdo", "Vídeo", "Roteiro", "Tráfego pago", "Planejamento",
+  "Conteúdo", "Roteiro", "Vídeo", "Institucional", "Tráfego pago", "Planejamento",
   "Aprovação", "Reunião", "Comercial", "Financeiro", "Site / LP", "Organização", "Outro"
 ];
+export const ehConteudo = (t) => t?.tipo === TIPO_CONTEUDO;
 
 export const SERVICOS = ["Social media", "Meta Ads", "Google Ads", "Vídeo", "Site / LP", "Consultoria"];
 
-export const FORMATOS = ["Estático", "Carrossel", "Reels", "Story", "Vídeo", "WhatsApp", "Anúncio", "Blog", "Outro"];
+export const FORMATOS = [
+  "Feed estático", "Carrossel", "Reels", "Story", "Sequência de stories", "Vídeo (YouTube)",
+  "TikTok", "Anúncio estático", "Anúncio em vídeo", "WhatsApp", "Blog", "Outro"
+];
+// Proporção da arte por formato (largura x altura) usada no menu Criar
+export const PROPORCAO_FORMATO = {
+  "Feed estático": [1080, 1350], "Carrossel": [1080, 1350], "Anúncio estático": [1080, 1350],
+  "Story": [1080, 1920], "Sequência de stories": [1080, 1920], "Reels": [1080, 1920], "TikTok": [1080, 1920], "Anúncio em vídeo": [1080, 1920],
+  "Vídeo (YouTube)": [1920, 1080], "Blog": [1600, 900], "WhatsApp": [1080, 1080], "Outro": [1080, 1080]
+};
 export const REDES = ["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn", "WhatsApp", "Site"];
 
 export const STATUS_CONTEUDO = [

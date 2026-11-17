@@ -2,6 +2,7 @@
 // Corrige nomes de clientes digitados de jeitos diferentes, separa entregas por ";" em checklist
 // e usa ids fixos para que importar de novo não duplique nada.
 import { normalizar } from "./ui.js";
+import { deduzirPost } from "./migracoes.js";
 
 const STATUS = { "aguardando": "a_fazer", "em andamento": "andamento", "concluido": "concluido", "atrasado": "a_fazer" };
 
@@ -110,7 +111,8 @@ export function analisarPlanilha(texto) {
       responsavel: b.responsavel,
       checklist: varias ? partes.map((p) => ({ texto: p, feito: b.status === "concluido" })) : [],
       concluidoEm: b.status === "concluido" ? b.prazo : null,
-      notas: "", linkCanva: "", linkDrive: "", origem: "planilha"
+      notas: "", linkCanva: "", linkDrive: "", origem: "planilha",
+      ...(inferirTipo(b.texto) === "Conteúdo" ? { ...deduzirPost(partes[0] || b.texto, b.prazo), statusConteudo: b.status === "concluido" ? "publicado" : "ideia" } : {})
     };
   });
 

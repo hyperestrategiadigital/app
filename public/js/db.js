@@ -2,7 +2,7 @@
 // mantidas atualizadas em tempo real. As telas leem de `dados` e escrevem pelas funções abaixo.
 import { app } from "./firebase.js";
 import {
-  getFirestore, collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch
+  getFirestore, collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch, getDocs
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
 // O console do Firebase pode criar o banco com o id "(default)" ou com o nome "default".
@@ -13,7 +13,7 @@ const abrirBanco = (id) => (id === "(default)" ? getFirestore(app) : getFirestor
 
 export const COLECOES = [
   "clientes", "tarefas", "recorrencias", "conteudos",
-  "financeiro", "orcamentos", "contasAds", "manutencoes"
+  "financeiro", "orcamentos", "contasAds", "manutencoes", "config"
 ];
 
 /** Dados em memória: dados.clientes = [{ id, ...campos }] */
@@ -128,6 +128,20 @@ export async function gravarEmLote(col, itens, aoProgredir) {
     aoProgredir?.(Math.min(i + 400, itens.length), itens.length);
   }
 }
+
+/* ---------------- Subcoleções sob demanda (arquivos pesados, não ficam em memória) ---------------- */
+// caminho: ex. ["clientes", clienteId, "arquivos"]
+const refSub = (caminho) => collection(db, "users", uidAtual, ...caminho);
+export async function listarSub(caminho) {
+  const snap = await comPrazo(getDocs(refSub(caminho)), 60);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+export async function salvarSub(caminho, valores, id) {
+  const r = id ? doc(refSub(caminho), id) : doc(refSub(caminho));
+  await comPrazo(setDoc(r, { ...valores, criadoEm: Date.now() }, { merge: true }), 60);
+  return r.id;
+}
+export const excluirSub = (caminho, id) => comPrazo(deleteDoc(doc(refSub(caminho), id)));
 
 /* ---------------- Consultas de conveniência ---------------- */
 export const porId = (col, id) => dados[col].find((x) => x.id === id);

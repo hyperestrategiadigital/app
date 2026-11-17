@@ -1,7 +1,7 @@
 // Tráfego pago: contas de anúncio por cliente, verba e diário de manutenções.
 import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, diasAte, linkExterno, vazio } from "../ui.js";
 import { dados, criar, atualizar, excluir, opcoesClientes, clientesAtivos } from "../db.js";
-import { cabecalho, seloCliente } from "./componentes.js";
+import { cabecalho, seloCliente, corCliente } from "./componentes.js";
 import { PLATAFORMAS } from "../constantes.js";
 
 const linkGerenciador = (conta) => {
@@ -79,7 +79,7 @@ export function render() {
       const u = ultima(c.id);
       const dias = u ? -diasAte(u.data) : null;
       const suas = contas.filter((x) => x.clienteId === c.id);
-      return el("div", { class: "cartao-cliente", style: { "--selo": c.cor || "#4E2CA3" } },
+      return el("div", { class: "cartao-cliente", style: { "--selo": corCliente(c) } },
         el("h3", {}, el("a", { href: `#/clientes/${c.id}` }, c.nome)),
         suas.length ? suas.map((x) => el("div", { class: "linha-conta" },
           el("button", { class: "link", onClick: () => abrirConta(x) }, x.plataforma),
