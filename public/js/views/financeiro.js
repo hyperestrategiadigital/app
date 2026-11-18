@@ -62,8 +62,46 @@ async function gerarMensalidades(mes) {
   avisar(novas ? `${novas} mensalidade(s) criada(s).` : "As mensalidades deste mês já estavam criadas.");
 }
 
+// Mensalidades do mês atual em diante entram sozinhas ao abrir o Financeiro (uma vez por mês e por sessão).
+const tentados = new Set();
+function mensalidadesAutomaticas(mes) {
+  if (mes < hojeISO().slice(0, 7) || tentados.has(mes)) return;
+  tentados.add(mes);
+  Promise.all(clientesAtivos().filter((c) => Number(contrato(c.id).mensalidade) > 0).map((c) => garantirMensalidade(c.id, mes)))
+    .catch((e) => console.warn("Mensalidades:", e.message));
+}
+
+/** Contratos: quanto cada cliente paga por mês e como está a mensalidade do mês escolhido. */
+function abaContratos(estado) {
+  const hoje = hojeISO();
+  const clientes = clientesAtivos().map((c) => ({ c, k: contrato(c.id) })).sort((a, b) => (Number(b.k.mensalidade) || 0) - (Number(a.k.mensalidade) || 0) || a.c.nome.localeCompare(b.c.nome, "pt-BR"));
+  const com = clientes.filter(({ k }) => Number(k.mensalidade) > 0);
+  const sem = clientes.filter(({ k }) => !(Number(k.mensalidade) > 0));
+  const total = com.reduce((s, { k }) => s + Number(k.mensalidade), 0);
+  const lanc = (c) => dados.financeiro.find((f) => f.id === `mens-${c.id}-${estado.mes}`);
+  const recebido = com.filter(({ c }) => lanc(c)?.status === "pago").reduce((s, { k }) => s + Number(k.mensalidade), 0);
+  return [
+    el("div", { class: "resumo" },
+      numero("Receita mensal dos contratos", fmtMoeda(total), "ok"),
+      numero("Clientes com contrato", String(com.length)),
+      numero(`Recebido em ${MESES[Number(estado.mes.slice(5)) - 1]}`, fmtMoeda(recebido)),
+      numero("Falta receber", fmtMoeda(total - recebido), total - recebido > 0 ? "alerta" : "")),
+    com.length ? el("div", { class: "lista" }, com.map(({ c, k }) => {
+      const f = lanc(c);
+      const situacao = f?.status === "pago" ? ["ok", "Pago"] : f && f.vencimento < hoje ? ["alerta", "Vencido"] : f ? ["", "Pendente"] : ["", "—"];
+      return el("a", { class: "linha-tabela", href: `#/clientes/${c.id}` },
+        seloCliente(c.id), el("strong", {}, c.nome),
+        el("span", { class: "subtitulo" }, `vence todo dia ${k.diaVencimento || 10}`),
+        el("span", { class: "valor receita" }, fmtMoeda(Number(k.mensalidade)) + "/mês"),
+        el("span", { class: `etiqueta ${situacao[0]}` }, situacao[1]));
+    })) : vazio("Nenhum cliente com mensalidade. Preencha no Editar de cada cliente."),
+    sem.length ? el("p", { class: "subtitulo" }, `Sem valor de contrato (${sem.length}): `, ...sem.flatMap(({ c }, i) => [i ? ", " : "", el("a", { href: `#/clientes/${c.id}` }, c.nome)])) : null
+  ];
+}
+
 export function render({ estado, renderizar }) {
   estado.mes ??= hojeISO().slice(0, 7);
+  mensalidadesAutomaticas(estado.mes);
   estado.aba ??= "lancamentos";
   const [ano, mes] = estado.mes.split("-").map(Number);
   const mudarMes = (n) => { const d = new Date(ano, mes - 1 + n, 1); estado.mes = hojeISO(d).slice(0, 7); renderizar(); };
@@ -91,7 +129,7 @@ export function render({ estado, renderizar }) {
       f.status === "pago" ? "Pago" : f.vencimento < hoje ? "Vencido" : "Pendente"));
 
   const orcs = [...dados.orcamentos].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
-  const corpo = estado.aba === "lancamentos" ? [
+  const corpo = estado.aba === "contratos" ? abaContratos(estado) : estado.aba === "lancamentos" ? [
     el("div", { class: "resumo" },
       numero("Receitas previstas", fmtMoeda(soma(receitas))),
       numero("Recebido", fmtMoeda(recebido), "ok"),
@@ -100,7 +138,8 @@ export function render({ estado, renderizar }) {
     vencidasGerais.length ? el("p", { class: "faixa-alerta" },
       `${vencidasGerais.length} recebimento(s) vencido(s) no total: ${fmtMoeda(soma(vencidasGerais))} — ${[...new Set(vencidasGerais.map((f) => nomeCliente(f.clienteId)))].join(", ")}`) : null,
     el("div", { class: "com-acao" }, el("h2", {}, `Receitas (${receitas.length})`),
-      el("button", { class: "secundario mini", onClick: () => gerarMensalidades(estado.mes) }, "Gerar mensalidades do mês")),
+      estado.mes < hojeISO().slice(0, 7) ? el("button", { class: "secundario mini", onClick: () => gerarMensalidades(estado.mes) }, "Gerar mensalidades deste mês") : null),
+    el("p", { class: "subtitulo" }, "As mensalidades dos contratos entram sozinhas todo mês. Marque ✓ quando o cliente pagar (ou conclua a tarefa de cobrança)."),
     receitas.length ? el("div", { class: "lista" }, receitas.map(linha)) : vazio("Nenhuma receita neste mês."),
     el("h2", {}, `Despesas (${despesas.length})`),
     despesas.length ? el("div", { class: "lista" }, despesas.map(linha)) : vazio("Nenhuma despesa neste mês.")
@@ -120,13 +159,13 @@ export function render({ estado, renderizar }) {
 
   return el("div", { class: "tela" },
     cabecalho("Financeiro", null,
-      estado.aba === "lancamentos" ? [
+      estado.aba !== "orcamentos" ? [
         el("button", { class: "secundario", onClick: () => abrirLancamento({ tipo: "despesa", vencimento: estado.mes === hoje.slice(0, 7) ? hoje : `${estado.mes}-01` }) }, "+ Despesa"),
         el("button", { class: "destaque", onClick: () => abrirLancamento({ tipo: "receita", vencimento: estado.mes === hoje.slice(0, 7) ? hoje : `${estado.mes}-01` }) }, "+ Receita")
       ] : el("button", { class: "destaque", onClick: () => abrirOrcamento() }, "+ Orçamento")),
     el("div", { class: "filtros" },
-      abas([["lancamentos", "Receitas e despesas"], ["orcamentos", "Orçamentos"]], estado.aba, (a) => { estado.aba = a; renderizar(); }),
-      estado.aba === "lancamentos" ? el("div", { class: "navegador-mes" },
+      abas([["lancamentos", "Receitas e despesas"], ["contratos", "Contratos"], ["orcamentos", "Orçamentos"]], estado.aba, (a) => { estado.aba = a; renderizar(); }),
+      estado.aba !== "orcamentos" ? el("div", { class: "navegador-mes" },
         el("button", { class: "icone", "aria-label": "Mês anterior", onClick: () => mudarMes(-1) }, "‹"),
         el("strong", {}, `${MESES[mes - 1]} ${ano}`),
         el("button", { class: "icone", "aria-label": "Próximo mês", onClick: () => mudarMes(1) }, "›")) : null),

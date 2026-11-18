@@ -34,8 +34,9 @@ import * as creators from "./views/creators.js";
 // `grupo: "admin"`: fica dentro de "Administração" no menu. `menu: false`: tela sem item no menu.
 const ROTAS = {
   hoje: { titulo: "Hoje", icone: "☀", view: hoje },
-  tarefas: { titulo: "Tarefas", icone: "✓", view: tarefas },
-  calendario: { titulo: "Calendário", icone: "▦", view: calendario },
+  // Tarefas e Calendário são uma tela só (visões Calendário, Quadro, Lista e Carga da equipe), com os mesmos filtros
+  tarefas: { titulo: "Tarefas", icone: "✓", view: tarefas, estado: "calendario", menu: false },
+  calendario: { titulo: "Tarefas", icone: "✓", view: calendario, inclui: ["tarefas"] },
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
   creators: { titulo: "Creators", icone: "★", view: creators, area: "conteudo", selo: "em breve" },
   trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego, area: "trafego" },
@@ -72,7 +73,7 @@ export function irPara(caminho) { location.hash = "#/" + caminho; }
 let adminAberto = null; // grupo "Administração" aberto/fechado (lembra a escolha)
 function montarMenu() {
   const { nome } = rotaAtual();
-  const item = ([chave, r]) => el("a", { href: `#/${chave}`, class: chave === nome ? "ativo" : "" },
+  const item = ([chave, r]) => el("a", { href: `#/${chave === "calendario" ? ultimaVisao() : chave}`, class: chave === nome || r.inclui?.includes(nome) ? "ativo" : "" },
     el("span", { class: "menu-icone", "aria-hidden": "true" }, r.icone), r.titulo, r.selo ? el("small", { class: "menu-selo" }, r.selo) : null);
   const visiveis = Object.entries(ROTAS).filter(([, r]) => liberada(r) && r.menu !== false);
   const principais = visiveis.filter(([, r]) => r.grupo !== "admin" || !ehAdmin()).map(item);
@@ -88,13 +89,16 @@ function montarMenu() {
   $("menu").replaceChildren(busca, ...principais, grupo);
 }
 
-/** Celular: atalhos fixos embaixo (Hoje, Tarefas, + Nova, Calendário, Clientes). */
+/** Volta para a última visão usada de Tarefas (calendário, quadro…). */
+const ultimaVisao = () => { const v = estadoTela.calendario?.visao; return v && v !== "calendario" ? "tarefas" : "calendario"; };
+
+/** Celular: atalhos fixos embaixo (Hoje, Tarefas, + Nova, Clientes). */
 function montarNavMovel(nome) {
-  const item = (rota, icone, titulo) => el("a", { href: `#/${rota}`, class: rota === nome ? "ativo" : "" }, el("span", { "aria-hidden": "true" }, icone), titulo);
+  const item = (rota, icone, titulo, ativo = rota === nome) => el("a", { href: `#/${rota}`, class: ativo ? "ativo" : "" }, el("span", { "aria-hidden": "true" }, icone), titulo);
   $("nav-movel").replaceChildren(
-    item("hoje", "☀", "Hoje"), item("tarefas", "✓", "Tarefas"),
+    item("hoje", "☀", "Hoje"), item(ultimaVisao(), "✓", "Tarefas", ["tarefas", "calendario"].includes(nome)),
     el("button", { class: "nav-novo", onClick: () => abrirTarefa({ prazo: hojeISO() }) }, el("span", { "aria-hidden": "true" }, "+"), "Nova"),
-    item("calendario", "▦", "Calendário"), item("clientes", "◉", "Clientes"));
+    item("clientes", "◉", "Clientes"));
 }
 
 function renderizar() {
@@ -107,8 +111,9 @@ function renderizar() {
   const rolagem = area.scrollTop;
   const foco = document.activeElement?.id && area.contains(document.activeElement) ? document.activeElement : null;
   const cursor = foco?.selectionStart;
-  estadoTela[nome] ??= {};
-  area.replaceChildren(faixaPendente(), r.view.render({ params, estado: estadoTela[nome], renderizar }));
+  const chaveEstado = r.estado || nome;
+  estadoTela[chaveEstado] ??= {};
+  area.replaceChildren(faixaPendente(), r.view.render({ params, estado: estadoTela[chaveEstado], renderizar }));
   area.scrollTop = rolagem;
   if (foco) {
     const novo = document.getElementById(foco.id);

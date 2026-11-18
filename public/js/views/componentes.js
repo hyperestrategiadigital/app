@@ -10,13 +10,12 @@ import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES
 import { promptCopy } from "../prompts.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
 import { abrirCompromisso } from "../compromissos.js";
-import { configEquipe } from "../agenda.js";
+import { configEquipe, responsaveis, responsavelPadrao } from "../agenda.js";
 import { linkAgendadorMeta, linkLinkedinAdmin } from "./contas.js";
 
 /** Nomes da equipe (Ajustes → Equipe) + quem já aparece nas tarefas. */
 export function opcoesResponsaveis(atual = "") {
-  const nomes = configEquipe().map((p) => p.nome).filter(Boolean);
-  if (!nomes.length) nomes.push("Matheus");
+  const nomes = responsaveis();
   if (atual && !nomes.includes(atual)) nomes.push(atual);
   return nomes;
 }
@@ -86,7 +85,7 @@ export function abrirTarefa(tarefa = {}) {
     { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 4, dica: "Cole aqui a copy aprovada", mostrarSe: conteudo },
 
     { tipo: "secao", rotulo: "Tarefa" },
-    { nome: "responsavel", rotulo: "Responsável", tipo: "select", opcoes: opcoesResponsaveis(tarefa.responsavel), padrao: opcoesResponsaveis()[0], largura: "metade" },
+    { nome: "responsavel", rotulo: "Responsável", tipo: "select", opcoes: opcoesResponsaveis(tarefa.responsavel), padrao: responsavelPadrao(), largura: "metade" },
     { nome: "status", rotulo: "Status", tipo: "select", opcoes: STATUS_TAREFA, padrao: "a_fazer", largura: "metade", mostrarSe: (v) => !conteudo(v) },
     { nome: "prazo", rotulo: "Prazo de entrega", tipo: "date", padrao: hojeISO(), largura: "metade" },
     { nome: "checklist", rotulo: "Checklist", tipo: "checklist" },
@@ -357,6 +356,24 @@ export function cabecalho(titulo, subtitulo, ...acoes) {
   return el("header", { class: "tela-topo" },
     el("div", {}, el("h1", {}, titulo), subtitulo ? el("p", { class: "subtitulo" }, subtitulo) : null),
     el("div", { class: "tela-acoes" }, acoes));
+}
+
+/** Tarefas e calendário são uma tela só com quatro visões (o estado/filtros é o mesmo nas duas rotas). */
+export function visoesTarefas(estado, renderizar) {
+  const noCalendario = location.hash.startsWith("#/calendario");
+  const atual = noCalendario ? "calendario" : estado.visao && estado.visao !== "calendario" ? estado.visao : "quadro";
+  return el("div", { class: "visoes-tarefas" }, abas([["calendario", "▦ Calendário"], ["quadro", "▥ Quadro"], ["lista", "☰ Lista"], ["equipe", "☺ Carga da equipe"]], atual, (v) => {
+    estado.visao = v;
+    if (v === "equipe") estado.responsavel = "";
+    const destino = v === "calendario" ? "#/calendario" : "#/tarefas";
+    if (location.hash.split("/").slice(0, 2).join("/") === destino) renderizar(); else location.hash = destino;
+  }));
+}
+/** Filtro de responsável compartilhado por calendário e tarefas. */
+export function seletorResponsavel(estado, renderizar) {
+  return el("select", { onChange: (e) => { estado.responsavel = e.target.value; renderizar(); }, "aria-label": "Responsável" },
+    el("option", { value: "" }, "Todos os responsáveis"),
+    [...new Set([...opcoesResponsaveis(), ...dados.tarefas.map((t) => t.responsavel).filter(Boolean)])].map((r) => el("option", { value: r, selected: r === estado.responsavel }, r)));
 }
 
 export function abas(itens, ativo, aoTrocar) {

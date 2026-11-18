@@ -4,6 +4,7 @@
 // Assim ninguém precisa conectar nada nem ativar API no Google Cloud: cada pessoa recebe o evento na própria
 // agenda (Gmail, iPhone…), no e-mail que escolheu em Minha conta.
 import { dados, espacoInfo } from "./db.js";
+import { eu } from "./permissoes.js";
 import { addDias, dataDe, hojeISO } from "./ui.js";
 
 export const FUSO = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo";
@@ -68,6 +69,17 @@ export const configEquipe = () => {
   const vistos = new Set();
   return lista.filter((p) => { const k = (p.email || p.nome).toLowerCase(); if (vistos.has(k)) return false; vistos.add(k); return true; });
 };
+
+/** Quem pode ser responsável por tarefas: a equipe, sem a conta da Hyper (dona do espaço, só administra). */
+export function responsaveis() {
+  const dona = dados.membros.find((m) => m.id === espacoInfo.dono);
+  const nomeDona = dona ? (dona.nome || dona.email) : "";
+  const nomes = configEquipe().map((p) => p.nome).filter((n) => n && n !== nomeDona);
+  if (!nomes.length) nomes.push("Matheus");
+  return nomes;
+}
+/** Responsável de tarefa nova: quem está usando (se for da equipe) ou a primeira pessoa da equipe. */
+export const responsavelPadrao = () => (responsaveis().includes(eu.nome) ? eu.nome : responsaveis()[0]);
 
 const RRULE = { semanal: "RRULE:FREQ=WEEKLY", quinzenal: "RRULE:FREQ=WEEKLY;INTERVAL=2", mensal: "RRULE:FREQ=MONTHLY" };
 

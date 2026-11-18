@@ -362,6 +362,9 @@ export const listarErros = async () => (await comPrazo(getDocs(ref("erros")), 30
 export const excluirErro = (id) => comPrazo(deleteDoc(doc(ref("erros"), id)));
 
 /** Grava muitos documentos em lotes de 400 (limite do Firestore é 500 por lote). */
+/** Confere no banco (não na memória) se o documento já existe. */
+export const existeNoBanco = async (col, id) => (await comPrazo(getDoc(doc(ref(col), id)), 15)).exists();
+
 export async function gravarEmLote(col, itens, aoProgredir) {
   for (let i = 0; i < itens.length; i += 400) {
     const lote = writeBatch(db);
