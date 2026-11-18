@@ -78,7 +78,8 @@ export function render({ params, estado, renderizar }) {
     if (/^\d{4}-\d{2}$/.test(params[1] || "")) estado.mes = params[1];
   }
   estado.mes ??= hojeISO().slice(0, 7);
-  estado.modo ??= "mes";
+  // No celular a grade do mês fica apertada: começa na lista
+  estado.modo ??= window.matchMedia("(max-width: 760px)").matches ? "lista" : "mes";
   estado.camada ??= pode("conteudo") ? "tudo" : "compromissos";
   if (!pode("conteudo")) estado.camada = "compromissos"; // sem acesso a conteúdo: só compromissos
   const verPosts = estado.camada !== "compromissos";

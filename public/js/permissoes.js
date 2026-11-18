@@ -12,9 +12,11 @@ export const rotuloArea = (a) => AREAS.find(([v]) => v === a)?.[1] || a;
 /** Dados do usuário no espaço: { uid, email, nome, papel: "admin" | "basico", permissoes: [], dono: bool } */
 export const eu = { uid: "", email: "", nome: "", papel: "basico", permissoes: [], dono: false, status: "" };
 
-export function definirEu(valores) { Object.assign(eu, { papel: "basico", permissoes: [], dono: false, status: "" }, valores); }
+export function definirEu(valores) { Object.assign(eu, { papel: "basico", permissoes: [], dono: false, status: "", acessoClientes: "todos", clientes: [] }, valores); }
 
 export const ehAdmin = () => eu.dono || eu.papel === "admin";
+/** Quem vê só alguns clientes (definido pelo administrador em Usuários). */
+export const clientesRestritos = () => !ehAdmin() && eu.acessoClientes === "alguns";
 export const pode = (area) => ehAdmin() || (eu.permissoes || []).includes(area);
 
 /** Tipos de tarefa que pertencem a cada área (quem não tem a área não vê essas tarefas). */

@@ -25,6 +25,16 @@ export const atrasada = (t) => t.status !== "concluido" && t.prazo && t.prazo < 
 /** Cor que identifica o cliente: 1ª cor da paleta da marca ou a cor escolhida no cadastro. */
 export const corCliente = (c) => c?.paleta?.[0] || c?.cor || "#606060";
 
+/** Foto da pessoa (membro ou nome da equipe) ou as iniciais, quando não tem foto. */
+export function avatar(pessoa, { grande = false, titulo } = {}) {
+  const m = typeof pessoa === "string" ? dados.membros.find((x) => x.nome === pessoa) : pessoa;
+  const nome = typeof pessoa === "string" ? pessoa : (pessoa?.nome || pessoa?.email || "");
+  const classe = `avatar${grande ? " grande" : ""}`;
+  return m?.foto
+    ? el("img", { class: classe, src: m.foto, alt: "", title: titulo || nome, referrerpolicy: "no-referrer" })
+    : el("span", { class: classe, title: titulo || nome }, iniciais(nome));
+}
+
 /** Cor de um post/tarefa: a da marca (se tiver) ou a do cliente. */
 export const corDoItem = (t) => corCliente(porId("marcas", t?.marcaId) || porId("clientes", t?.clienteId));
 /** "Cliente" ou "Cliente · Marca". */
@@ -238,7 +248,7 @@ export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
         ehConteudo(t) && t.copy ? el("span", { class: "progresso-mini", title: "Copy salva" }, "✎ copy") : null,
         linkExterno(t.linkCanva, "Canva"), linkExterno(t.linkDrive, "Drive"),
         t.atalho ? el("a", { class: "link-externo", href: t.atalho, onClick: (e) => e.stopPropagation() }, t.rotina === "planejamento" ? "Planejar →" : t.rotina === "cobranca" ? "Financeiro →" : "Ver posts →") : null,
-        t.responsavel ? el("span", { class: "avatar", title: `Responsável: ${t.responsavel}` }, iniciais(t.responsavel)) : null,
+        t.responsavel ? avatar(t.responsavel, { titulo: `Responsável: ${t.responsavel}` }) : null,
         el("span", { class: `prazo ${classePrazo}` }, t.status === "concluido" && t.concluidoEm ? `feita ${fmtPrazoRelativo(t.concluidoEm)}` : fmtPrazoRelativo(t.prazo)))));
 }
 

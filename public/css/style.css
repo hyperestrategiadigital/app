@@ -183,8 +183,27 @@ body.logado #app { display: flex; }
 .busca-detalhe { margin-left: auto; font-size: 12px; color: var(--cor-texto-suave); white-space: nowrap; }
 .busca-nota { margin-top: 10px; }
 .busca-vazio { padding: 12px 8px; color: var(--cor-texto-suave); }
-.usuario { padding: 16px 22px; border-top: 1px solid rgba(255, 255, 255, 0.15); font-size: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.usuario span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--hyper-gelo); }
+.usuario { padding: 12px; border-top: 1px solid rgba(255, 255, 255, 0.15); position: relative; }
+.btn-usuario {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: var(--raio-pequeno);
+  background: none; color: var(--hyper-branco); font: inherit; text-align: left; cursor: pointer;
+}
+.btn-usuario:hover, .btn-usuario[aria-expanded="true"] { background: rgba(255, 255, 255, 0.10); }
+.btn-usuario .avatar { width: 32px; height: 32px; font-size: 12px; background: var(--hyper-branco); color: var(--hyper-roxo); flex: none; }
+.usuario-textos { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.usuario-textos strong, .usuario-textos small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usuario-textos small { color: var(--hyper-gelo); font-size: 11px; }
+.menu-usuario {
+  position: absolute; left: 12px; right: 12px; bottom: calc(100% - 4px); background: var(--cor-superficie); border-radius: var(--raio-pequeno);
+  box-shadow: var(--sombra-forte); padding: 6px; display: flex; flex-direction: column; z-index: 60;
+}
+.menu-usuario[hidden] { display: none; }
+.menu-usuario a, .menu-usuario button {
+  padding: 10px 12px; border-radius: var(--raio-pequeno); color: var(--cor-texto); text-decoration: none; font: inherit; font-weight: 500;
+  background: none; border: 0; text-align: left; cursor: pointer;
+}
+.menu-usuario a:hover, .menu-usuario button:hover { background: var(--cor-primaria-clara); color: var(--hyper-roxo); }
+.menu-usuario #btn-sair { color: var(--cor-alerta); border-top: 1px solid var(--cor-borda-suave); border-radius: 0 0 var(--raio-pequeno) var(--raio-pequeno); }
 .principal { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .barra-movel { display: none; }
 #conteudo { flex: 1; outline: none; }
@@ -597,6 +616,8 @@ a.cartao-cliente:hover { transform: translateY(-2px); }
 .membro-topo > div { flex: 1; min-width: 200px; }
 .membro-acessos { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .avatar.grande { width: 42px; height: 42px; font-size: 15px; }
+img.avatar { object-fit: cover; padding: 0; }
+.avatar.enorme { width: 96px; height: 96px; font-size: 32px; }
 .destaque-admin { align-self: flex-start; }
 @media (max-width: 760px) { .faixa-topo { margin: 12px 14px 0; } }
 
@@ -610,3 +631,52 @@ a.cartao-cliente:hover { transform: translateY(-2px); }
 .marca-cabeca { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
 .marca-cabeca .campo { flex: 1; min-width: 200px; }
 .lista-fundir { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 6px; }
+
+/* ---------------- Minha conta e Usuários ---------------- */
+.conta-perfil { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.conta-foto { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.conta-foto .avatar.grande { width: 96px; height: 96px; font-size: 32px; }
+.conta-dados { flex: 1; min-width: 240px; }
+.pedir-acesso { margin-top: 12px; }
+.pedir-acesso summary { cursor: pointer; font-weight: 700; color: var(--cor-primaria); }
+.conexao + .conexao { border-top: 1px solid var(--cor-borda-suave); margin-top: 16px; padding-top: 16px; }
+.pedido-texto { margin-top: 4px; font-size: 13px; background: var(--cor-destaque-clara); padding: 6px 10px; border-radius: var(--raio-pequeno); }
+.lista-clientes-acesso { margin-top: 8px; max-height: 220px; overflow-y: auto; }
+.passo-a-passo summary { cursor: pointer; font-weight: 600; color: var(--cor-primaria); margin-bottom: 8px; }
+.modal form > .campo { margin-top: 14px; }
+
+/* ---------------- Celular: para "quebrar um galho" fora do computador ---------------- */
+.nav-movel { display: none; }
+@media (max-width: 760px) {
+  .principal, .ficha > *, .bloco { min-width: 0; }
+  .abas { display: flex; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .abas::-webkit-scrollbar { display: none; }
+  .abas button { white-space: nowrap; flex: none; }
+  .tela-topo { flex-wrap: wrap; }
+  .tela-acoes { flex-wrap: wrap; }
+  .tela-acoes > * { flex: 1 1 auto; }
+  table { display: block; max-width: 100%; overflow-x: auto; }
+  .links-cliente, .com-acao { flex-wrap: wrap; }
+  .cartao-titulo, .linha-tabela { overflow-wrap: anywhere; }
+  .linha-tabela { flex-wrap: wrap; }
+  /* Modais ocupam a tela inteira e rolam por dentro */
+  .modal-fundo { padding: 0; align-items: stretch; }
+  .modal, .modal.modal-largo { width: 100%; max-width: none; max-height: 100dvh; height: 100dvh; border-radius: 0; overflow-y: auto; }
+  .modal .acoes { position: sticky; bottom: 0; background: var(--cor-superficie); padding: 10px 0; flex-wrap: wrap; }
+  input, select, textarea { font-size: 16px; } /* evita o zoom automático do iPhone */
+  .barra-movel .busca-movel { margin-left: auto; color: var(--hyper-branco); font-size: 22px; }
+  /* Barra de atalhos embaixo */
+  .nav-movel {
+    display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
+    background: var(--cor-superficie); border-top: 1px solid var(--cor-borda); padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+  .nav-movel a, .nav-movel button {
+    display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; background: none; border: 0;
+    color: var(--cor-texto-suave); font: inherit; font-size: 11px; text-decoration: none; border-radius: var(--raio-pequeno);
+  }
+  .nav-movel span[aria-hidden] { font-size: 20px; line-height: 1; }
+  .nav-movel a.ativo { color: var(--hyper-roxo); font-weight: 700; }
+  .nav-movel .nav-novo span[aria-hidden] { background: var(--cor-destaque); color: var(--hyper-preto); border-radius: 50%; width: 32px; height: 32px; display: grid; place-items: center; }
+  body.logado #conteudo { padding-bottom: 72px; }
+  .aviso { bottom: 84px; }
+}

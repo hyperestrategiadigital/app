@@ -4,13 +4,13 @@
 import { app } from "./firebase.js";
 import {
   getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch, getDocs, getDoc
+  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch, getDocs, getDoc, query, where
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
-import { eu, definirEu, colecoesPermitidas, pode } from "./permissoes.js";
+import { eu, definirEu, colecoesPermitidas, pode, ehAdmin, clientesRestritos } from "./permissoes.js";
 
 export const ESPACO = "hyper";
 /** Dados do documento do espaço (ex.: uid do dono). */
-export const espacoInfo = { dono: "" };
+export const espacoInfo = { dono: "", emailUrl: "" };
 
 // O console do Firebase pode criar o banco com o id "(default)" ou com o nome "default".
 const BANCOS = ["(default)", "default"];
@@ -74,24 +74,31 @@ function comPrazo(promessa, segundos = 30) {
   ]);
 }
 
-/** Descobre qual banco existe (lendo o documento do espaço, que qualquer pessoa logada pode ler). */
+/**
+ * Descobre qual banco usar (lendo o documento do espaço, que qualquer pessoa logada pode ler).
+ * Prefere o banco onde o espaço da Hyper já existe: assim uma conta nova nunca cai num banco vazio.
+ */
 async function escolherBanco() {
   let salvo = null;
   try { salvo = localStorage.getItem("hyper-banco"); } catch {}
   const ordem = salvo && BANCOS.includes(salvo) ? [salvo, ...BANCOS.filter((b) => b !== salvo)] : BANCOS;
   let ultimoErro = null;
+  let semEspaco = null; // primeiro banco que respondeu, mas sem o espaço
   for (const id of ordem) {
     const candidato = abrirBanco(id);
     try {
       const espaco = await comPrazo(getDoc(doc(candidato, "espacos", ESPACO)), 15);
-      try { localStorage.setItem("hyper-banco", id); } catch {}
-      return { banco: candidato, espaco };
+      if (espaco.exists()) {
+        try { localStorage.setItem("hyper-banco", id); } catch {}
+        return { banco: candidato, espaco };
+      }
+      semEspaco ??= { banco: candidato, espaco, id };
     } catch (e) {
       console.warn(`Banco ${id}:`, e.code, e.message);
       ultimoErro = e;
-      if (e.code === "permission-denied") break;
     }
   }
+  if (semEspaco) return semEspaco;
   throw ultimoErro;
 }
 
@@ -113,9 +120,15 @@ export async function conectar(usuario, aoErro) {
     return antigos && !antigos.empty ? "migrar" : "sem-espaco";
   }
   espacoInfo.dono = espaco.data().dono;
+  espacoInfo.emailUrl = espaco.data().emailUrl || "";
   const dono = espaco.data().dono === usuario.uid;
-  const membro = await comPrazo(getDoc(doc(ref("membros"), usuario.uid)), 15);
-  if (!membro.exists() && !dono) return "novo";
+  let membro = await comPrazo(getDoc(doc(ref("membros"), usuario.uid)), 15);
+  if (!membro.exists() && !dono) {
+    // Convidado pelo administrador? Entra direto com o acesso definido no convite.
+    if (!(await aceitarConvite(usuario))) return "novo";
+    membro = await comPrazo(getDoc(doc(ref("membros"), usuario.uid)), 15);
+    espacoInfo.boasVindas = true;
+  }
   if (!dono && membro.data().status !== "ativo") {
     // Recarrega sozinho quando o administrador liberar
     cancelamentos.push(onSnapshot(doc(ref("membros"), usuario.uid), (s) => { if (s.data()?.status === "ativo") location.reload(); }, () => {}));
@@ -127,22 +140,84 @@ export async function conectar(usuario, aoErro) {
   return "ok";
 }
 
+const emailChave = (email = "") => email.trim().toLowerCase();
+
+async function aceitarConvite(usuario) {
+  const refConvite = doc(ref("convites"), emailChave(usuario.email));
+  const convite = await comPrazo(getDoc(refConvite), 15).catch(() => null);
+  if (!convite?.exists()) return false;
+  const c = convite.data();
+  await comPrazo(setDoc(doc(ref("membros"), usuario.uid), {
+    nome: usuario.displayName || c.nome || usuario.email, email: usuario.email,
+    papel: c.papel, permissoes: c.permissoes, acessoClientes: c.acessoClientes || "todos", clientes: c.clientes || [],
+    status: "ativo", criadoEm: Date.now(), convidadoPor: c.criadoPor || ""
+  }));
+  await comPrazo(deleteDoc(refConvite)).catch(() => {});
+  return true;
+}
+
+// Coleções em que quem vê só alguns clientes também vê os itens sem cliente ("")
+const COM_SEM_CLIENTE = new Set(["tarefas", "tarefasArquivo", "compromissos", "recorrencias"]);
+// Coleções cujo id do documento é o id do cliente
+const POR_ID = new Set(["clientes", "contratos"]);
+
+/**
+ * Ouve uma coleção. Para quem vê só alguns clientes, as regras exigem que a leitura já venha filtrada:
+ * documentos um a um (clientes, contratos) ou consultas por clienteId (em lotes de 30, limite do Firestore).
+ */
+function ouvirColecao(col, aoMudar, aoErro) {
+  if (col === "membros" || !clientesRestritos()) return [onSnapshot(ref(col), (s) => aoMudar(s.docs.map((d) => ({ id: d.id, ...d.data() }))), aoErro)];
+  const ids = [...new Set(eu.clientes || [])];
+  const partes = new Map();
+  const juntar = () => aoMudar([...partes.values()].flat());
+  if (POR_ID.has(col)) {
+    if (!ids.length) { aoMudar([]); return []; }
+    return ids.map((id) => onSnapshot(doc(ref(col), id), (s) => { partes.set(id, s.exists() ? [{ id: s.id, ...s.data() }] : []); if (partes.size === ids.length) juntar(); },
+      (e) => { partes.set(id, []); if (partes.size === ids.length) juntar(); console.warn(col, id, e.code); }));
+  }
+  const valores = COM_SEM_CLIENTE.has(col) ? [...ids, ""] : ids;
+  if (!valores.length) { aoMudar([]); return []; }
+  const lotes = [];
+  for (let i = 0; i < valores.length; i += 30) lotes.push(valores.slice(i, i + 30));
+  return lotes.map((lote, i) => onSnapshot(query(ref(col), where("clienteId", "in", lote)), (s) => {
+    partes.set(i, s.docs.map((d) => ({ id: d.id, ...d.data() })));
+    if (partes.size === lotes.length) juntar();
+  }, aoErro));
+}
+
+async function lerColecao(col) {
+  if (!clientesRestritos()) return (await comPrazo(getDocs(ref(col)), 60)).docs.map((d) => ({ id: d.id, ...d.data() }));
+  const valores = COM_SEM_CLIENTE.has(col) ? [...(eu.clientes || []), ""] : [...(eu.clientes || [])];
+  const lista = [];
+  for (let i = 0; i < valores.length; i += 30) {
+    const snap = await comPrazo(getDocs(query(ref(col), where("clienteId", "in", valores.slice(i, i + 30)))), 60);
+    lista.push(...snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }
+  return lista;
+}
+
+const assinaturaAcesso = (m) => JSON.stringify([m.papel, m.permissoes, m.acessoClientes || "todos", m.clientes || []]);
+
 function ouvirTudo(aoErro) {
   const permitidas = colecoesPermitidas();
   const colecoes = permitidas.map((col) => new Promise((pronto) => {
     let primeira = true;
-    cancelamentos.push(onSnapshot(ref(col), (snap) => {
-      dados[col] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    cancelamentos.push(...ouvirColecao(col, (lista) => {
+      dados[col] = lista;
       if (col === "membros") {
         const meu = dados.membros.find((m) => m.id === eu.uid);
-        if (meu && !eu.dono) { const antes = JSON.stringify([eu.papel, eu.permissoes]); definirEu({ ...eu, ...meu }); if (antes !== JSON.stringify([eu.papel, eu.permissoes])) location.reload(); }
+        if (meu && !eu.dono) {
+          const antes = assinaturaAcesso(eu);
+          definirEu({ ...eu, ...meu });
+          if (antes !== assinaturaAcesso(eu)) location.reload(); // mudaram meus acessos
+        }
       }
       if (primeira) { primeira = false; pronto(); }
       notificar();
     }, (erro) => { aoErro?.(traduzirErro(erro)); if (primeira) { primeira = false; pronto(); } }));
   }));
   // Documentos de configuração (lidos um a um, porque cada um tem uma regra)
-  const docs = ["equipe", "agenda", ...(pode("conteudo") ? ["openai"] : [])].map((id) => new Promise((pronto) => {
+  const docs = ["equipe", "agenda", "clientes", ...(pode("conteudo") ? ["openai"] : []), ...(ehAdmin() ? ["email"] : [])].map((id) => new Promise((pronto) => {
     let primeira = true;
     cancelamentos.push(onSnapshot(docConfig(id), (snap) => {
       dados.config = [...dados.config.filter((c) => c.id !== id), ...(snap.exists() ? [{ id, ...snap.data() }] : [])];
@@ -160,10 +235,34 @@ export function desconectar() {
 }
 
 /** Pessoa nova pede acesso: entra como básica e o admin libera as áreas depois. */
-export async function pedirAcesso({ nome, funcoes }) {
+/** Primeiro acesso: cria o cadastro pendente com o que a pessoa pediu (o administrador decide). */
+export async function pedirAcesso({ nome, pedido }) {
   await comPrazo(setDoc(doc(ref("membros"), eu.uid), {
-    nome, email: eu.email, papel: "basico", permissoes: [], funcoesPedidas: funcoes || [], status: "pendente", criadoEm: Date.now()
+    nome, email: eu.email, papel: "basico", permissoes: [], status: "pendente", criadoEm: Date.now(),
+    pedido: { ...pedido, em: Date.now() }
   }));
+}
+
+/** Campos do documento do espaço (o administrador só pode mudar a URL dos e-mails). */
+export const atualizarEspaco = (valores) => comPrazo(updateDoc(doc(db, "espacos", ESPACO), valores)).then(() => Object.assign(espacoInfo, valores));
+
+/** A própria pessoa: nome, foto e pedido de mais acesso (as regras não deixam mudar o resto). */
+export const atualizarMeuCadastro = (valores) => comPrazo(updateDoc(doc(ref("membros"), eu.uid), { ...valores, atualizadoEm: Date.now() }));
+
+/* ---------------- Convites (administrador) ---------------- */
+
+export async function listarConvites() {
+  const snap = await comPrazo(getDocs(ref("convites")), 30);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+export const salvarConvite = (c) => comPrazo(setDoc(doc(ref("convites"), emailChave(c.email)), { ...c, email: emailChave(c.email), criadoEm: Date.now(), criadoPor: eu.email }));
+export const excluirConvite = (email) => comPrazo(deleteDoc(doc(ref("convites"), emailChave(email))));
+
+/** Lista de nomes dos clientes (config/clientes) para quem vê só alguns poder pedir outros. Só o administrador grava. */
+export async function sincronizarNomesClientes() {
+  const lista = dados.clientes.filter((c) => c.ativo !== false).map((c) => ({ id: c.id, nome: c.nome })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const atual = dados.config.find((c) => c.id === "clientes")?.lista || [];
+  if (JSON.stringify(atual) !== JSON.stringify(lista)) await salvarComId("config", "clientes", { lista });
 }
 
 /* ---------------- Escrita ---------------- */
@@ -202,8 +301,8 @@ let arquivoCarregado = null;
 /** Carrega o arquivo uma vez por sessão (as telas se atualizam quando chega). */
 export function carregarArquivo() {
   if (!arquivoCarregado) {
-    arquivoCarregado = comPrazo(getDocs(ref("tarefasArquivo")), 60).then((snap) => {
-      dados.tarefasArquivo = snap.docs.map((d) => ({ id: d.id, arquivada: true, ...d.data() }));
+    arquivoCarregado = lerColecao("tarefasArquivo").then((lista) => {
+      dados.tarefasArquivo = lista.map((t) => ({ ...t, arquivada: true }));
       notificar();
     }).catch((e) => { arquivoCarregado = null; console.warn("Arquivo:", e.message); });
   }

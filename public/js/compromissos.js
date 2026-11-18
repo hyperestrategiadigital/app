@@ -102,7 +102,7 @@ export function avisoPendentes() {
   const pendentes = dados.compromissos.filter((c) => c.sincronizar && !c.googleEventId);
   if (!pendentes.length) return null;
   if (!agendaConectada()) return el("p", { class: "faixa-aviso" }, `${pendentes.length} compromisso(s) esperando a Google Agenda. `,
-    el("a", { href: "#/config" }, "Conectar a agenda em Ajustes →"));
+    el("a", { href: "#/conta" }, "Conectar a agenda em Minha conta →"));
   return el("p", { class: "faixa-aviso" }, `${pendentes.length} compromisso(s) ainda não foram para a Google Agenda. `,
     el("button", { class: "mini", onClick: async (e) => {
       e.currentTarget.disabled = true;
