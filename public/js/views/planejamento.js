@@ -30,11 +30,21 @@ function seletor(lista, valor, aoMudar, rotulo) {
     lista.map((o) => { const [v, r] = Array.isArray(o) ? o : [o, o]; return el("option", { value: v, selected: v === valor }, r); }));
 }
 
+/** O planejamento é um modo do Calendário: #/calendario/<cliente>/<mês>/planejar */
+export const linkPlano = (clienteId, mes) => `#/calendario/${clienteId}/${mes}/planejar`;
+
+/** Rota antiga #/planejamento/<cliente>/<mês>: leva para o Calendário. */
+export function redirecionar({ params }) {
+  const [clienteId, mes] = params;
+  location.replace(clienteId ? linkPlano(clienteId, /^\d{4}-\d{2}$/.test(mes || "") ? mes : hojeISO().slice(0, 7)) : "#/calendario");
+  return el("div");
+}
+
 export function render({ params, estado, renderizar }) {
   const [clienteId, mesParam] = params;
   if (!clienteId) return telaEscolha();
   const cliente = porId("clientes", clienteId);
-  if (!cliente) return el("div", { class: "tela" }, vazio("Cliente não encontrado.", el("a", { href: "#/planejamento", class: "link" }, "← Voltar")));
+  if (!cliente) return el("div", { class: "tela" }, vazio("Cliente não encontrado.", el("a", { href: "#/calendario", class: "link" }, "← Calendário")));
   const mes = /^\d{4}-\d{2}$/.test(mesParam || "") ? mesParam : hojeISO().slice(0, 7);
   const chave = `${clienteId}|${mes}`;
 
@@ -53,7 +63,7 @@ export function render({ params, estado, renderizar }) {
     const [a, m] = mes.split("-").map(Number);
     const d = new Date(a, m - 1 + n, 1);
     if (estado.alterado && !window.confirm("Há alterações não salvas. Sair mesmo assim?")) return;
-    location.hash = `#/planejamento/${clienteId}/${hojeISO(d).slice(0, 7)}`;
+    location.hash = linkPlano(clienteId, hojeISO(d).slice(0, 7));
   };
 
   const adicionar = () => {
@@ -183,7 +193,11 @@ export function render({ params, estado, renderizar }) {
   const botaoSalvar = el("button", { class: "destaque", disabled: !estado.alterado, onClick: (e) => salvar(e.currentTarget) }, "Salvar planejamento");
 
   return el("div", { class: "tela tela-larga" },
-    el("a", { href: "#/planejamento", class: "voltar" }, "← Planejamento"),
+    el("div", { class: "filtros" },
+      abas([["ver", "Calendário"], ["planejar", "Planejar mês"]], "planejar", () => {
+        if (estado.alterado && !window.confirm("Há alterações não salvas. Sair mesmo assim?")) return;
+        location.hash = `#/calendario/${clienteId}/${mes}`;
+      })),
     el("header", { class: "tela-topo ficha-topo", style: { "--selo": corCliente(cliente) } },
       el("div", {},
         el("h1", {}, `Planejamento · ${cliente.nome}`),
@@ -199,7 +213,7 @@ export function render({ params, estado, renderizar }) {
       cliente.tomDeVoz ? [el("strong", {}, "Tom de voz: "), cliente.tomDeVoz, " "] : null,
       cliente.publico ? [el("strong", {}, " Público: "), cliente.publico] : null) : null,
     el("div", { class: "filtros" },
-      abas([["calendario", "Calendário"], ["tabela", "Tabela"]], estado.modo, (m) => { estado.modo = m; renderizar(); }),
+      abas([["calendario", "Grade do mês"], ["tabela", "Tabela"]], estado.modo, (m) => { estado.modo = m; renderizar(); }),
       el("button", { class: "secundario mini", onClick: preencher }, "Preencher dias fixos"),
       el("span", { class: "espaco" }),
       estado.alterado ? el("button", { class: "link", onClick: () => { estado.chave = null; renderizar(); } }, "Descartar alterações") : null),
@@ -214,7 +228,7 @@ function telaEscolha() {
     el("div", { class: "grade-clientes" }, clientesAtivos().map((c) => {
       const n = postsDoMes(c.id, mes).length;
       const prox = postsDoMes(c.id, hojeISO(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)).slice(0, 7)).length;
-      return el("a", { class: "cartao-cliente", href: `#/planejamento/${c.id}/${mes}`, style: { "--selo": corCliente(c) } },
+      return el("a", { class: "cartao-cliente", href: linkPlano(c.id, mes), style: { "--selo": corCliente(c) } },
         el("h3", {}, c.nome),
         el("div", { class: "numeros-cliente" },
           el("span", {}, el("strong", {}, n), " posts este mês"),

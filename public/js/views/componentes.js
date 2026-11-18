@@ -1,5 +1,6 @@
 // Peças reutilizadas entre telas: cartão e formulário de tarefa, selo de cliente.
 import { pode } from "../permissoes.js";
+import { abrirCriarArte } from "./criar.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId } from "../db.js";
@@ -163,7 +164,7 @@ function secaoCriativos(tarefa) {
   carregar();
   caixa.append(lista, el("div", { class: "acoes-criativos" },
     el("label", { class: "botao-link secundario mini" }, "📎 Anexar criativo final", entrada),
-    el("a", { class: "botao-link secundario mini", href: `#/criar/${tarefa.id}`, onClick: () => fecharModais() }, "🎨 Gerar imagem no Criar")));
+    el("button", { type: "button", class: "secundario mini", onClick: () => { fecharModais(); abrirCriarArte(porId("tarefas", tarefa.id) || tarefa); } }, "✦ Criar arte (imagem + Canva)")));
   return caixa;
 }
 

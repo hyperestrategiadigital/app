@@ -48,7 +48,7 @@ export function ocorrencia(r, d) {
   if (r.modelo === "planejamento") {
     const mes = mesSeguinte(d);
     return { ...base, tipo: "Planejamento", titulo: `Planejar ${MESES[Number(mes.slice(5)) - 1]}${nome ? ` — ${nome}` : ""}`,
-      mesAlvo: mes, atalho: `#/planejamento/${r.clienteId}/${mes}`,
+      mesAlvo: mes, atalho: `#/calendario/${r.clienteId}/${mes}/planejar`,
       checklist: base.checklist.length ? base.checklist : [
         { texto: "Planejar os posts no calendário", feito: false },
         { texto: "Enviar o PDF para o cliente aprovar", feito: false },

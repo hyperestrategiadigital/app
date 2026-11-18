@@ -37,8 +37,9 @@ const ROTAS = {
   usuarios: { titulo: "Usuários e equipe", icone: "☺", view: usuarios, area: "admin", grupo: "admin" },
   config: { titulo: "Ajustes", icone: "⚙", view: config, grupo: "admin" },
   // Abertas a partir do calendário e do post
-  planejamento: { titulo: "Planejamento", icone: "☷", view: planejamento, area: "conteudo", menu: false },
-  criar: { titulo: "Criar", icone: "✦", view: criar, area: "conteudo", menu: false }
+  // Endereços antigos: o planejamento agora é um modo do Calendário e o Criar abre dentro do post
+  planejamento: { titulo: "Planejamento", icone: "☷", view: { render: planejamento.redirecionar }, area: "conteudo", menu: false },
+  criar: { titulo: "Criar", icone: "✦", view: { render: criar.redirecionar }, area: "conteudo", menu: false }
 };
 const liberada = (r) => !r.area || (r.area === "admin" ? ehAdmin() : pode(r.area));
 

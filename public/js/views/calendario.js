@@ -1,5 +1,6 @@
 // Calendário de conteúdo: cada post é uma tarefa do tipo Conteúdo. Mostra o mês com a cor e o nome
 // do cliente em cada post, filtros, planejamento e exportação para aprovação do cliente.
+import * as planejamento from "./planejamento.js";
 import { el, hojeISO, addDias, fmtData, vazio, formulario } from "../ui.js";
 import { dados, porId, opcoesClientes, nomeCliente } from "../db.js";
 import { cabecalho, abas, seloCliente, abrirTarefa, corCliente } from "./componentes.js";
@@ -62,6 +63,13 @@ function chip(t) {
 }
 
 export function render({ params, estado, renderizar }) {
+  // Modo planejar: #/calendario/<cliente>/<mês>/planejar
+  if (params[2] === "planejar" && params[0] && pode("conteudo")) {
+    estado.cliente = params[0];
+    if (/^\d{4}-\d{2}$/.test(params[1] || "")) estado.mes = params[1];
+    estado.plano ??= {};
+    return planejamento.render({ params: [params[0], estado.mes], estado: estado.plano, renderizar });
+  }
   // Atalho #/calendario/<cliente>/<mês> (ex.: rotina "Produzir semana")
   const chaveParams = params.join("/");
   if (params.length && estado.params !== chaveParams) {
@@ -104,6 +112,8 @@ export function render({ params, estado, renderizar }) {
   };
 
   const filtros = el("div", { class: "filtros" },
+    estado.cliente && pode("conteudo") ? abas([["ver", "Calendário"], ["planejar", "Planejar mês"]], "ver",
+      () => (location.hash = planejamento.linkPlano(estado.cliente, estado.mes))) : null,
     el("div", { class: "navegador-mes" },
       el("button", { class: "icone", "aria-label": "Mês anterior", onClick: () => mudarMes(-1) }, "‹"),
       el("strong", {}, nomeMes(estado.mes)),
@@ -162,7 +172,7 @@ export function render({ params, estado, renderizar }) {
   return el("div", { class: "tela" },
     cabecalho("Calendário",
       !pode("conteudo") ? "Seus compromissos e reuniões" : contagem.length ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para criar um post",
-      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = `#/planejamento/${c}/${m}`), "Planejar mês") }, "☷ Planejar mês") : null,
+      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = planejamento.linkPlano(c, m)), "Planejar mês") }, "☷ Planejar mês") : null,
       pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente(exportarPDF, "Exportar PDF") }, "⬇ PDF para o cliente") : null,
       el("button", { class: "secundario", onClick: () => abrirCompromisso({ clienteId: estado.cliente || "" }) }, "+ Compromisso"),
       pode("conteudo") ? el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "" }) }, "+ Novo post") : null),

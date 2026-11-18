@@ -306,3 +306,21 @@ export const opcoesClientes = (incluirVazio = true) => [
 ];
 /** Contrato do cliente (mensalidade, dia de vencimento). Só chega para quem tem acesso ao financeiro. */
 export const contrato = (clienteId) => porId("contratos", clienteId) || {};
+
+/** Campos de identidade (aba Marca), que existem no cliente e em cada marca dele. */
+export const CAMPOS_IDENTIDADE = ["paleta", "cor", "fontes", "tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva"];
+export const marcasDo = (clienteId) => (dados.marcas || []).filter((m) => m.clienteId === clienteId && m.ativo !== false)
+  .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+/**
+ * Identidade usada na copy, na imagem e no pedido do Canva: a da marca (quando o post é de uma marca),
+ * completando o que faltar com a do cliente. `nome` vira o da marca e `clienteNome` guarda o do cliente.
+ */
+export function identidade(clienteId, marcaId) {
+  const c = porId("clientes", clienteId) || {};
+  const m = marcaId ? porId("marcas", marcaId) : null;
+  if (!m) return { ...c, clienteNome: c.nome };
+  const r = { ...c, nome: m.nome, clienteNome: c.nome, marcaId: m.id };
+  for (const k of CAMPOS_IDENTIDADE) if (m[k] && (!Array.isArray(m[k]) || m[k].filter(Boolean).length)) r[k] = m[k];
+  if (m.paleta?.[0]) r.cor = m.paleta[0];
+  return r;
+}

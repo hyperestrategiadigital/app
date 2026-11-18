@@ -1,4 +1,5 @@
 // Clientes: lista com indicadores e ficha completa de cada cliente.
+import { linkPlano } from "./planejamento.js";
 import { el, formulario, confirmar, avisar, fmtMoeda, fmtData, linkExterno, vazio, hojeISO, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, porId, contrato, salvarComId } from "../db.js";
 import { pode, ehAdmin, tarefaVisivel } from "../permissoes.js";
@@ -126,7 +127,7 @@ function ficha(id, estado, renderizar) {
     conteudo: () => [
       el("div", { class: "com-acao" }, el("h2", {}, `Conteúdos (${conts.length})`),
         el("div", { class: "tela-acoes" },
-          el("a", { class: "botao-link secundario mini", href: `#/planejamento/${id}/${hojeISO().slice(0, 7)}` }, "☷ Planejar mês"),
+          el("a", { class: "botao-link secundario mini", href: linkPlano(id, hojeISO().slice(0, 7)) }, "☷ Planejar mês"),
           el("button", { class: "mini", onClick: () => novoPost({ clienteId: id }) }, "+ Post"))),
       conts.length ? conts.slice(0, 60).map((x) => el("div", { class: "linha-tabela", onClick: () => abrirTarefa(x) },
         el("span", { class: "data-mini" }, fmtData(dataPost(x), true)), el("strong", {}, x.titulo),

@@ -1,15 +1,18 @@
-// Textos enviados às IAs: copy (Claude) e imagem (OpenAI). Tudo usa o que está na ficha do cliente.
-import { porId } from "./db.js";
+// Textos enviados às IAs: copy (Claude) e imagem (OpenAI). Usam a identidade da marca do post
+// (ou do cliente, quando o post não é de uma marca específica).
+import { identidade } from "./db.js";
 import { fmtData } from "./ui.js";
 
 const ehVertical = (f) => /story|reels|tiktok|vídeo|video/i.test(f || "");
 
 export function promptCopy(post) {
-  const c = porId("clientes", post.clienteId) || {};
+  const c = identidade(post.clienteId, post.marcaId);
+  const deMarca = c.marcaId && c.clienteNome;
   const linhas = [
-    `Você é copywriter da Hyper, agência de tráfego pago e social media. Escreva a copy de um conteúdo para o cliente ${c.nome || "(sem cliente)"}.`,
+    `Você é copywriter da Hyper, agência de tráfego pago e social media. Escreva a copy de um conteúdo para ${deMarca ? `a marca ${c.nome}, do cliente ${c.clienteNome}` : `o cliente ${c.nome || "(sem cliente)"}`}.`,
+    deMarca ? `Use a identidade e a linguagem da marca ${c.nome}, que é diferente das outras marcas do grupo.` : null,
     "",
-    "## Sobre o cliente",
+    deMarca ? "## Sobre a marca" : "## Sobre o cliente",
     c.tomDeVoz ? `- Tom de voz: ${c.tomDeVoz}` : "- Tom de voz: não informado (use um tom próximo e profissional)",
     c.publico ? `- Público-alvo: ${c.publico}` : null,
     c.persona ? `- Persona: ${c.persona}` : null,
@@ -58,7 +61,7 @@ export function promptImagem({ cliente = {}, descricao, formato, espacoTexto = "
 export function promptCanva({ post = {}, cliente = {}, formato, tamanho, texto = {} }) {
   const paleta = (cliente.paleta || []).filter(Boolean);
   const linhas = [
-    `Crie no Canva uma arte para o cliente ${cliente.nome || "(sem cliente)"} usando a imagem que anexei nesta mensagem como fundo.`,
+    `Crie no Canva uma arte para ${cliente.marcaId ? `a marca ${cliente.nome} (cliente ${cliente.clienteNome})` : `o cliente ${cliente.nome || "(sem cliente)"}`} usando a imagem que anexei nesta mensagem como fundo.`,
     "",
     "## Peça",
     `- Formato: ${formato || post.formato || "Feed estático"} (${tamanho ? `${tamanho[0]}×${tamanho[1]} px` : "1080×1350 px"})`,
