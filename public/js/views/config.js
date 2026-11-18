@@ -4,9 +4,11 @@ import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes,
 import { cabecalho } from "./componentes.js";
 import { analisarPlanilha } from "../importacao.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
-import { salvarComId, carregarArquivo } from "../db.js";
+import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
-import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail } from "../emails.js";
+import { configMeta } from "../meta.js";
+import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO } from "../constantes.js";
+import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
 
 
 function abrirImportacao() {
@@ -86,6 +88,9 @@ export function render() {
     cabecalho("Ajustes", "E-mails automáticos, OpenAI, importação e backup. Sua Google Agenda fica em Minha conta (clique no seu nome)."),
 
     blocoEmail(),
+    blocoMeta(),
+    blocoModelos(),
+    blocoErros(),
     ehAdmin() ? blocoOpenAI() : null,
 
     ehAdmin() ? blocoImportarMarcas() : null,
@@ -199,38 +204,124 @@ function blocoImportarMarcas() {
     entrada, previa);
 }
 
-/** E-mails automáticos pelo Gmail da Hyper (Google Apps Script em docs/email/Codigo.gs). */
+/** E-mails e automações pelo Google Apps Script da conta da Hyper (docs/email). */
 function blocoEmail() {
   const cfg = configEmail();
+  const backup = dados.config.find((c) => c.id === "backup") || {};
   const url = el("input", { id: "email-url", type: "url", placeholder: "https://script.google.com/macros/s/.../exec", value: cfg.url || "" });
-  const codigo = "https://github.com/hyperestrategiadigital/app/blob/main/docs/email/Codigo.gs";
+  const pasta = "https://github.com/hyperestrategiadigital/app/blob/main/docs/email/";
+  const kb = (n) => n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+  const acao = (rotulo, fn) => el("button", { class: "secundario", onClick: async (e) => {
+    e.currentTarget.disabled = true;
+    try { avisar(await fn()); } catch (erro) { avisar(erro.message, "erro"); }
+    e.currentTarget.disabled = false;
+  } }, rotulo);
   return el("section", { class: "bloco" },
-    el("h2", {}, "E-mails automáticos"),
+    el("h2", {}, "E-mails e automações"),
     emailAtivo()
-      ? el("p", {}, el("span", { class: "etiqueta ok" }, "Conectado"), ` Os e-mails saem de ${cfg.conta || "a conta que instalou o script"}: convite para quem você adiciona, aviso de acesso liberado e aviso aos administradores quando alguém pede acesso.`)
-      : el("p", {}, "Para o app mandar e-mails (convites, acesso liberado, pedidos de acesso), instale uma vez o script de e-mail na conta Google da Hyper. Ele envia pelo Gmail dela, sem custo (até 100 e-mails por dia)."),
+      ? el("p", {}, el("span", { class: "etiqueta ok" }, "Conectado"), ` Rodando na conta ${cfg.conta || "da Hyper"}: convites, acesso liberado, avisos de pedidos e menções, resumo diário às 8h para cada pessoa e backup toda segunda às 3h.`)
+      : el("p", {}, "Instale uma vez o script de automações na conta Google da Hyper. Ele manda os e-mails pelo Gmail dela (até 100 por dia, sem custo), envia o resumo diário às 8h e faz o backup semanal no Drive da Hyper."),
+    emailAtivo() ? el("p", { class: "subtitulo" }, backup.ultimo
+      ? ["Último backup: ", new Date(backup.ultimo).toLocaleString("pt-BR"), ` (${kb(backup.tamanho || 0)}, compactado, sem imagens; ficam os ${backup.guardados || 8} mais recentes). `, el("a", { href: backup.pasta, target: "_blank", rel: "noopener" }, "Abrir a pasta no Drive ↗")]
+      : "Backup automático: o primeiro sai na próxima segunda às 3h (ou clique em Fazer backup agora).") : null,
     el("details", { class: "passo-a-passo", open: !emailAtivo() },
-      el("summary", {}, "Como instalar (5 minutos)"),
+      el("summary", {}, emailAtivo() ? "Como instalar ou atualizar o script" : "Como instalar (5 minutos)"),
       el("ol", { class: "passos" },
         el("li", {}, "Logado na conta da Hyper, abra ", el("a", { href: "https://script.google.com/home/projects/create", target: "_blank", rel: "noopener" }, "script.google.com → Novo projeto"), "."),
-        el("li", {}, "Apague o texto que aparece, copie o código de ", el("a", { href: codigo, target: "_blank", rel: "noopener" }, "docs/email/Codigo.gs"), " (botão Copiar) e cole. Salve (Ctrl+S)."),
-        el("li", {}, "Clique em Implantar → Nova implantação → engrenagem → App da Web. Executar como: Eu. Quem pode acessar: Qualquer pessoa. Implantar."),
-        el("li", {}, "Autorize com a conta da Hyper (se aparecer \"app não verificado\": Avançado → Acessar). Copie a URL do app da Web."),
-        el("li", {}, "Cole a URL aqui embaixo e clique em Conectar."))),
+        el("li", {}, "Engrenagem (Configurações do projeto) → marque \"Mostrar o arquivo de manifesto appsscript.json\"."),
+        el("li", {}, "Volte ao editor, abra appsscript.json e troque tudo pelo conteúdo de ", el("a", { href: pasta + "appsscript.json", target: "_blank", rel: "noopener" }, "appsscript.json"), "."),
+        el("li", {}, "Abra Código.gs, apague tudo e cole ", el("a", { href: pasta + "Codigo.gs", target: "_blank", rel: "noopener" }, "Codigo.gs"), " (botão Copiar). Salve (Ctrl+S)."),
+        el("li", {}, "Implantar → Nova implantação → engrenagem → App da Web. Executar como: Eu. Quem pode acessar: Qualquer pessoa. Implantar e autorize com a conta da Hyper (se aparecer \"app não verificado\": Avançado → Acessar)."),
+        el("li", {}, "Copie a URL do app da Web, cole aqui embaixo e clique em Conectar."),
+        el("li", {}, "Para atualizar depois: cole o código novo, salve, Implantar → Gerenciar implantações → lápis → Versão: Nova versão → Implantar, e clique em Conectar de novo aqui."))),
     el("label", { class: "campo", for: "email-url" }, el("span", {}, "URL do app da Web"), url),
     el("div", { class: "acoes" },
       el("button", { class: emailAtivo() ? "secundario" : "destaque", onClick: async (e) => {
         e.currentTarget.disabled = true;
-        try { const conta = await conectarEmail(url.value); avisar(`E-mails conectados${conta ? ` (${conta})` : ""}.`); }
+        try { const conta = await conectarEmail(url.value); avisar(`Automações conectadas${conta ? ` (${conta})` : ""}.`); }
         catch (erro) { avisar(erro.message, "erro"); e.currentTarget.disabled = false; }
       } }, emailAtivo() ? "Conectar de novo" : "Conectar"),
-      emailAtivo() ? el("button", { class: "secundario", onClick: async (e) => {
-        e.currentTarget.disabled = true;
-        try { const r = await testarEmail(); avisar(`E-mail de teste enviado para você. Restam ${r.restantes ?? "?"} envios hoje.`); }
-        catch (erro) { avisar(erro.message, "erro"); }
-        e.currentTarget.disabled = false;
-      } }, "Enviar e-mail de teste") : null,
+      emailAtivo() ? acao("E-mail de teste", async () => { const r = await testarEmail(); return `E-mail de teste enviado para você. Restam ${r.restantes ?? "?"} envios hoje.`; }) : null,
+      emailAtivo() ? acao("Meu resumo agora", async () => { await resumoAgora(); return "Resumo do dia enviado para o seu e-mail."; }) : null,
+      emailAtivo() ? acao("Fazer backup agora", async () => { const r = await backupAgora(); return `Backup feito (${kb(r.tamanho || 0)}).`; }) : null,
       emailAtivo() ? el("button", { class: "perigo-texto", onClick: async () => {
-        if (await confirmar("Desligar os e-mails automáticos?")) { await desconectarEmail(); avisar("E-mails desligados."); }
+        if (await confirmar("Desligar os e-mails e automações?")) { await desconectarEmail(); avisar("Desligado."); }
       } }, "Desligar") : null));
+}
+
+/** Erros que aconteceram com alguém da equipe (para diagnosticar sem depender de print). */
+function blocoErros() {
+  const lista = el("div", { class: "lista-erros" });
+  let erros = [];
+  const fmt = (e) => `${new Date(e.em).toLocaleString("pt-BR")} · ${e.email || "?"} · ${e.rota || "-"}\n${e.msg}${e.detalhe ? `\n${e.detalhe}` : ""}`;
+  const carregar = async (botao) => {
+    botao.disabled = true;
+    try {
+      erros = await listarErros();
+      lista.replaceChildren(...(erros.length ? [
+        el("div", { class: "acoes" },
+          el("button", { class: "secundario mini", onClick: async () => { await navigator.clipboard.writeText(erros.map(fmt).join("\n\n")).catch(() => {}); avisar("Copiado. Cole na conversa com o Claude."); } }, "Copiar todos para o Claude"),
+          el("button", { class: "perigo-texto", onClick: async () => { for (const e of erros) await excluirErro(e.id); lista.replaceChildren(el("p", { class: "subtitulo" }, "Lista limpa.")); } }, "Limpar lista")),
+        ...erros.slice(0, 50).map((e) => el("details", { class: "erro-item" },
+          el("summary", {}, el("strong", {}, e.msg.slice(0, 120)), el("span", { class: "subtitulo" }, ` · ${e.email || "?"} · ${new Date(e.em).toLocaleString("pt-BR")}`)),
+          el("pre", {}, fmt(e))))
+      ] : [el("p", { class: "subtitulo" }, "Nenhum erro registrado nos últimos 30 dias. 🎉")]));
+    } catch (erro) { avisar(erro.message, "erro"); }
+    botao.disabled = false;
+  };
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Erros recentes"),
+    el("p", {}, "Quando algo dá errado para alguém da equipe, o app guarda o erro aqui por 30 dias. Se algo estranho acontecer, copie e mande para o Claude."),
+    el("button", { class: "secundario", onClick: (e) => carregar(e.currentTarget) }, "Ver erros"),
+    lista);
+}
+
+/** Modelos de checklist por formato de post e por tipo de tarefa (um passo por linha). */
+function blocoModelos() {
+  const meus = dados.config.find((c) => c.id === "modelos")?.modelos || {};
+  const chaves = [...FORMATOS.filter((f) => f !== "Outro"), ...TIPOS_TAREFA.filter((t) => ![TIPO_CONTEUDO, "Reunião", "Outro"].includes(t))];
+  const areas = {};
+  const linhas = chaves.map((k) => {
+    const a = el("textarea", { rows: 3, id: `modelo-${k}`, placeholder: "Um passo por linha (vazio = sem checklist)" });
+    a.value = (meus[k] ?? MODELOS_PADRAO[k] ?? []).join("\n");
+    areas[k] = a;
+    return el("label", { class: "campo", for: a.id }, el("span", {}, FORMATOS.includes(k) ? `Post · ${k}` : `Tarefa · ${k}`), a);
+  });
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Modelos de checklist"),
+    el("p", {}, "Tarefa ou post novo já nasce com estes passos (pelo formato do post ou pelo tipo da tarefa). Dá para mudar em cada tarefa."),
+    el("details", {}, el("summary", {}, "Editar modelos"),
+      el("div", { class: "form-grade" }, linhas),
+      el("div", { class: "acoes" }, el("button", { onClick: async () => {
+        const modelos = Object.fromEntries(Object.entries(areas).map(([k, a]) => [k, a.value.split("\n").map((l) => l.trim()).filter(Boolean)]));
+        await salvarComId("config", "modelos", { modelos });
+        avisar("Modelos salvos.");
+      } }, "Salvar modelos"))));
+}
+
+/** App da Meta para os relatórios do Instagram e do Facebook (o App ID não é secreto). */
+function blocoMeta() {
+  const cfg = configMeta();
+  const appId = el("input", { id: "meta-app", type: "text", inputmode: "numeric", placeholder: "Ex.: 1234567890123456", value: cfg.appId || "" });
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Relatórios do Instagram e Facebook"),
+    cfg.appId ? el("p", {}, el("span", { class: "etiqueta ok" }, "Ligado"), " Cada pessoa conecta o próprio Facebook na aba Resultados do cliente (ou em Minha conta).")
+      : el("p", {}, "Para puxar os números das contas e de cada post, crie uma vez um app gratuito na Meta e cole o App ID aqui."),
+    el("details", { class: "passo-a-passo", open: !cfg.appId },
+      el("summary", {}, "Como criar o app da Meta (10 minutos)"),
+      el("ol", { class: "passos" },
+        el("li", {}, "Logado no Facebook que administra as páginas dos clientes, abra ", el("a", { href: "https://developers.facebook.com/apps/create/", target: "_blank", rel: "noopener" }, "developers.facebook.com → Criar app"), ". Se pedir, cadastre-se como desenvolvedor (é grátis)."),
+        el("li", {}, "Caso de uso: escolha \"Outro\" e depois o tipo \"Empresa\". Nome: Hyper App. Ligue ao portfólio empresarial da Hyper, se aparecer."),
+        el("li", {}, "No painel do app, adicione o produto \"Login do Facebook\" (Facebook Login) e escolha \"Web\". Em Site, coloque ", el("code", {}, location.origin), "."),
+        el("li", {}, "Em Configurações do app → Básico: em Domínios do app coloque ", el("code", {}, location.hostname), " e salve. Copie o \"ID do aplicativo\"."),
+        el("li", {}, "Em Login do Facebook → Configurações, em URIs de redirecionamento OAuth válidos coloque ", el("code", {}, location.origin + "/"), " e salve."),
+        el("li", {}, "Pode deixar o app em modo de desenvolvimento. Quem for usar os relatórios precisa ter função no app: em Funções do app → Funções, adicione as pessoas da equipe como Testadoras (elas aceitam o convite no Facebook)."),
+        el("li", {}, "Cole o ID do aplicativo aqui embaixo e salve. Depois abra um cliente → aba Resultados → Conectar."))),
+    el("label", { class: "campo", for: "meta-app" }, el("span", {}, "ID do aplicativo (App ID)"), appId),
+    el("div", { class: "acoes" }, el("button", { onClick: async () => {
+      const v = appId.value.replace(/\D/g, "");
+      if (appId.value && !v) { avisar("O App ID tem só números.", "erro"); return; }
+      await salvarComId("config", "meta", { appId: v });
+      avisar(v ? "App da Meta salvo." : "Relatórios desligados.");
+    } }, "Salvar")));
 }

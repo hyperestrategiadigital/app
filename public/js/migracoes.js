@@ -36,7 +36,7 @@ export async function migrarReunioes() {
       tipo: "Reunião", descricao: t.notas || "", local: "", participantes: [], convidados: "", repetir: "",
       sincronizar: true, criadoEm: Date.now()
     });
-    await excluir("tarefas", t.id);
+    await excluir("tarefas", t.id, { lixeira: false });
   }
   return reunioes.length;
 }

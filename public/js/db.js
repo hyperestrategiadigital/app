@@ -15,6 +15,8 @@ export const espacoInfo = { dono: "", emailUrl: "" };
 // O console do Firebase pode criar o banco com o id "(default)" ou com o nome "default".
 const BANCOS = ["(default)", "default"];
 let db = null;
+/** Id do banco em uso ("(default)" ou "default"): o script de e-mail precisa saber para ler os dados. */
+export const bancoInfo = { id: "" };
 // Cache no navegador: abre na hora com os dados da última visita e só busca o que mudou.
 function abrirBanco(id) {
   try {
@@ -28,7 +30,7 @@ function abrirBanco(id) {
 
 const TODAS = [
   "clientes", "marcas", "tarefas", "recorrencias", "compromissos", "membros",
-  "financeiro", "orcamentos", "contratos", "contasAds", "manutencoes", "config"
+  "financeiro", "orcamentos", "contratos", "contasAds", "manutencoes", "aprovacoes", "config"
 ];
 
 /** Dados em memória: dados.clientes = [{ id, ...campos }]. `config` reúne documentos avulsos (openai, equipe, agenda). */
@@ -41,7 +43,7 @@ let cancelamentos = [];
 const ouvintes = new Set();
 export function aoMudar(fn) { ouvintes.add(fn); return () => ouvintes.delete(fn); }
 let agendado = false;
-function notificar() {
+export function notificar() {
   if (agendado) return;
   agendado = true;
   queueMicrotask(() => { agendado = false; ouvintes.forEach((fn) => fn()); });
@@ -90,7 +92,7 @@ async function escolherBanco() {
       const espaco = await comPrazo(getDoc(doc(candidato, "espacos", ESPACO)), 15);
       if (espaco.exists()) {
         try { localStorage.setItem("hyper-banco", id); } catch {}
-        return { banco: candidato, espaco };
+        return { banco: candidato, espaco, id };
       }
       semEspaco ??= { banco: candidato, espaco, id };
     } catch (e) {
@@ -112,8 +114,9 @@ async function escolherBanco() {
  */
 export async function conectar(usuario, aoErro) {
   desconectar();
-  const { banco, espaco } = await escolherBanco();
+  const { banco, espaco, id } = await escolherBanco();
   db = banco;
+  bancoInfo.id = id;
   definirEu({ uid: usuario.uid, email: usuario.email, nome: usuario.displayName || usuario.email });
   if (!espaco.exists()) {
     const antigos = await comPrazo(getDocs(collection(db, "users", usuario.uid, "clientes")), 30).catch(() => null);
@@ -217,7 +220,7 @@ function ouvirTudo(aoErro) {
     }, (erro) => { aoErro?.(traduzirErro(erro)); if (primeira) { primeira = false; pronto(); } }));
   }));
   // Documentos de configuração (lidos um a um, porque cada um tem uma regra)
-  const docs = ["equipe", "agenda", "clientes", ...(pode("conteudo") ? ["openai"] : []), ...(ehAdmin() ? ["email"] : [])].map((id) => new Promise((pronto) => {
+  const docs = ["equipe", "agenda", "clientes", "meta", "modelos", ...(pode("conteudo") ? ["openai"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
     let primeira = true;
     cancelamentos.push(onSnapshot(docConfig(id), (snap) => {
       dados.config = [...dados.config.filter((c) => c.id !== id), ...(snap.exists() ? [{ id, ...snap.data() }] : [])];
@@ -275,7 +278,88 @@ export const novoId = (col) => doc(ref(col)).id;
 export const salvarComId = (col, id, valores) =>
   comPrazo(setDoc(col === "config" ? docConfig(id) : doc(ref(col), id), valores, { merge: true }));
 export const atualizar = (col, id, valores) => comPrazo(updateDoc(doc(ref(col), id), { ...valores, atualizadoEm: Date.now() }));
-export const excluir = (col, id) => comPrazo(deleteDoc(doc(ref(col), id)));
+/* ---------------- Comentários e histórico das tarefas ---------------- */
+// espacos/hyper/tarefas/{id}/atividade: { tipo: "comentario" | "mudanca", texto, uid, nome, em, mencoes }
+const refAtividade = (tarefaId) => collection(db, "espacos", ESPACO, "tarefas", tarefaId, "atividade");
+export async function listarAtividade(tarefaId) {
+  const snap = await comPrazo(getDocs(refAtividade(tarefaId)), 30);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.em - b.em);
+}
+/** Registra algo na tarefa (sem esperar: histórico nunca atrapalha o trabalho). */
+export function registrarAtividade(tarefaId, { tipo = "mudanca", texto, mencoes = [] }) {
+  if (!tarefaId || !texto || !db) return Promise.resolve();
+  return setDoc(doc(refAtividade(tarefaId)), { tipo, texto: String(texto).slice(0, 3000), mencoes, uid: eu.uid, nome: eu.nome || eu.email || "", em: Date.now() })
+    .catch((e) => console.warn("Histórico:", e.message));
+}
+export const excluirAtividade = (tarefaId, id) => comPrazo(deleteDoc(doc(refAtividade(tarefaId), id)));
+
+/* ---------------- Lixeira (30 dias) ---------------- */
+// O que é excluído destas coleções vai antes para a lixeira, de onde o administrador pode restaurar.
+export const COM_LIXEIRA = new Set(["tarefas", "compromissos", "clientes", "marcas", "recorrencias", "financeiro", "orcamentos", "contasAds", "manutencoes"]);
+export const DIAS_LIXEIRA = 30;
+
+/** Exclui. Com lixeira (padrão nas coleções acima), guarda uma cópia por 30 dias. */
+export async function excluir(col, id, { lixeira = true } = {}) {
+  const item = porId(col, id);
+  if (!lixeira || !COM_LIXEIRA.has(col) || !item) return comPrazo(deleteDoc(doc(ref(col), id)));
+  const { id: _, ...valores } = item;
+  const lote = writeBatch(db);
+  lote.set(doc(ref("lixeira"), `${col}__${id}`), {
+    colecao: col, idOriginal: id, dados: valores, clienteId: col === "clientes" ? id : (valores.clienteId || ""),
+    titulo: valores.titulo || valores.nome || valores.descricao || valores.plataforma || "(sem título)",
+    excluidoEm: Date.now(), excluidoPor: eu.nome || eu.email || "", excluidoPorUid: eu.uid
+  });
+  lote.delete(doc(ref(col), id));
+  await comPrazo(lote.commit());
+}
+
+/** Lista a lixeira (só administrador). */
+export const listarLixeira = async () => (await comPrazo(getDocs(ref("lixeira")), 30)).docs.map((d) => ({ id: d.id, ...d.data() }));
+/** Devolve o item ao lugar de origem. */
+export async function restaurarDaLixeira(item) {
+  const lote = writeBatch(db);
+  lote.set(doc(ref(item.colecao), item.idOriginal), item.dados);
+  lote.delete(doc(ref("lixeira"), item.id));
+  await comPrazo(lote.commit());
+}
+/** "Desfazer" logo depois de excluir: devolve o item e tira da lixeira. */
+export async function desfazerExclusao(col, id, valores) {
+  await salvarComId(col, id, valores);
+  await comPrazo(deleteDoc(doc(ref("lixeira"), `${col}__${id}`))).catch(() => {});
+}
+export const excluirDaLixeira = (id) => comPrazo(deleteDoc(doc(ref("lixeira"), id)));
+/** Apaga de vez o que está na lixeira há mais de 30 dias, e erros antigos (administrador, ao entrar). */
+export async function limparAntigos() {
+  const limite = Date.now() - DIAS_LIXEIRA * 86400000;
+  for (const col of ["lixeira", "erros"]) {
+    const snap = await comPrazo(getDocs(ref(col)), 30).catch(() => null);
+    const velhos = (snap?.docs || []).filter((d) => (d.data().excluidoEm || d.data().em || 0) < limite);
+    for (let i = 0; i < velhos.length; i += 400) {
+      const lote = writeBatch(db);
+      velhos.slice(i, i + 400).forEach((d) => lote.delete(d.ref));
+      await comPrazo(lote.commit());
+    }
+  }
+}
+
+/* ---------------- Registro de erros ---------------- */
+let errosEnviados = 0;
+const errosVistos = new Set();
+/** Guarda um erro (para o administrador e o Claude diagnosticarem). Limitado a 15 por sessão. */
+export async function registrarErro(msg, detalhe = "") {
+  try {
+    if (!db || !eu.uid) return;
+    const chave = String(msg).slice(0, 200);
+    if (errosVistos.has(chave) || ++errosEnviados > 15) return;
+    errosVistos.add(chave);
+    await setDoc(doc(ref("erros")), {
+      msg: chave, detalhe: String(detalhe || "").slice(0, 1500), rota: location.hash.slice(0, 120),
+      uid: eu.uid, email: eu.email || "", navegador: navigator.userAgent.slice(0, 200), em: Date.now()
+    });
+  } catch { /* registrar erro nunca pode gerar outro erro */ }
+}
+export const listarErros = async () => (await comPrazo(getDocs(ref("erros")), 30)).docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.em - a.em);
+export const excluirErro = (id) => comPrazo(deleteDoc(doc(ref("erros"), id)));
 
 /** Grava muitos documentos em lotes de 400 (limite do Firestore é 500 por lote). */
 export async function gravarEmLote(col, itens, aoProgredir) {
@@ -341,6 +425,12 @@ export async function salvarSub(caminho, valores, id) {
   const r = id ? doc(refSub(caminho), id) : doc(refSub(caminho));
   await comPrazo(setDoc(r, { ...valores, criadoEm: Date.now() }, { merge: true }), 60);
   return r.id;
+}
+/** Atualiza só os campos dados de um documento de subcoleção (sem mexer em criadoEm). */
+export const atualizarSub = (caminho, id, valores) => comPrazo(updateDoc(doc(refSub(caminho), id), valores));
+/** Ouve uma subcoleção (ex.: respostas de um link de aprovação). Devolve a função para parar. */
+export function ouvirSub(caminho, aoMudar) {
+  return onSnapshot(refSub(caminho), (s) => aoMudar(s.docs.map((d) => ({ id: d.id, ...d.data() }))), (e) => console.warn(caminho.join("/"), e.code));
 }
 export const excluirSub = (caminho, id) => comPrazo(deleteDoc(doc(refSub(caminho), id)));
 

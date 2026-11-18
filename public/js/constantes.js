@@ -72,3 +72,18 @@ export const DIAS_SEMANA = [
   ["1", "Segunda"], ["2", "Terça"], ["3", "Quarta"], ["4", "Quinta"],
   ["5", "Sexta"], ["6", "Sábado"], ["0", "Domingo"]
 ];
+
+// Modelos de checklist: tarefa ou post novo sem checklist já nasce com estes passos.
+// O administrador muda em Ajustes → Modelos de checklist (config/modelos).
+export const MODELOS_PADRAO = {
+  "Feed estático": ["Briefing", "Copy", "Arte no Canva", "Aprovação do cliente", "Agendar"],
+  "Carrossel": ["Roteiro das lâminas", "Copy", "Arte no Canva", "Aprovação do cliente", "Agendar"],
+  "Reels": ["Roteiro", "Gravação", "Edição", "Capa", "Legenda", "Aprovação do cliente", "Agendar"],
+  "Story": ["Roteiro", "Arte ou gravação", "Publicar"],
+  "Sequência de stories": ["Roteiro", "Artes ou gravações", "Aprovação do cliente", "Publicar"],
+  "Anúncio estático": ["Briefing", "Copy", "Arte", "Aprovação do cliente", "Subir no gerenciador"],
+  "Anúncio em vídeo": ["Roteiro", "Gravação", "Edição", "Aprovação do cliente", "Subir no gerenciador"],
+  "Tráfego pago": ["Conferir resultados", "Ajustar orçamentos", "Pausar o que não performa", "Registrar manutenção"],
+  "Planejamento": ["Planejar os posts no calendário", "Enviar link de aprovação ao cliente", "Ajustar com o retorno"],
+  "Vídeo / Roteiro": ["Roteiro", "Gravação", "Edição", "Revisão"]
+};

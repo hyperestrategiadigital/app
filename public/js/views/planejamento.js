@@ -2,10 +2,11 @@
 // Ao salvar, cada linha vira (ou atualiza) uma tarefa do tipo Conteúdo — aparece na lista de tarefas e no calendário.
 import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal, confirmar, formulario, vazio, fecharModais } from "../ui.js";
 import { dados, porId, criar, atualizar, excluir, clientesAtivos, marcasDo } from "../db.js";
-import { cabecalho, abas } from "./componentes.js";
+import { cabecalho, abas, modeloChecklist } from "./componentes.js";
 import { FORMATOS, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
 import { postsDoMes, dataPost, exportarPDF, nomeMes, temPrefixo } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
+import { gerarLinkAprovacao } from "../aprovacoes.js";
 
 const CAMPOS = ["dataPublicacao", "hora", "formato", "rede", "titulo", "objetivo", "roteiro", "prazo", "statusConteudo", "marcaId"];
 let contador = 0;
@@ -123,7 +124,7 @@ export function render({ params, estado, renderizar }) {
             atualizados++;
           }
         } else {
-          const ref = await criar("tarefas", { ...v, tipo: TIPO_CONTEUDO, clienteId, status, concluidoEm: status === "concluido" ? hojeISO() : null, checklist: [], notas: "", linkCanva: "", linkDrive: "", copy: "" });
+          const ref = await criar("tarefas", { ...v, tipo: TIPO_CONTEUDO, clienteId, status, concluidoEm: status === "concluido" ? hojeISO() : null, checklist: modeloChecklist({ tipo: TIPO_CONTEUDO, formato: v.formato }), notas: "", linkCanva: "", linkDrive: "", copy: "" });
           l.id = ref.id; l.chave = ref.id; criados++;
         }
       }
@@ -136,7 +137,8 @@ export function render({ params, estado, renderizar }) {
         el("p", {}, `${criados} post(s) criado(s), ${atualizados} atualizado(s), ${removidos} removido(s). Tudo já está na sua lista de tarefas e no calendário.`),
         el("p", { class: "subtitulo" }, `Quer mandar o planejamento de ${nomeMes(mes)} para ${cliente.nome} aprovar?`),
         el("div", { class: "acoes" },
-          el("button", { class: "destaque", onClick: () => exportarPDF(clienteId, mes) }, "⬇ PDF para o cliente aprovar"),
+          el("button", { class: "destaque", onClick: () => gerarLinkAprovacao(clienteId, mes) }, "🔗 Link para o cliente aprovar"),
+          el("button", { class: "secundario", onClick: () => exportarPDF(clienteId, mes) }, "⬇ PDF"),
           el("span", { class: "espaco" }),
           el("button", { onClick: () => fechar() }, "Fechar"))));
     } catch (e) {
@@ -211,7 +213,8 @@ export function render({ params, estado, renderizar }) {
           el("button", { class: "icone", "aria-label": "Próximo mês", onClick: () => irMes(1) }, "›"),
           el("span", { class: "subtitulo" }, `${estado.linhas.length} post(s)${estado.alterado ? " · alterações não salvas" : ""}`))),
       el("div", { class: "tela-acoes" },
-        el("button", { class: "secundario", onClick: () => exportarPDF(clienteId, mes), disabled: estado.alterado, title: estado.alterado ? "Salve antes de exportar" : "" }, "⬇ PDF para o cliente"),
+        el("button", { class: "secundario", onClick: () => gerarLinkAprovacao(clienteId, mes), disabled: estado.alterado, title: estado.alterado ? "Salve antes" : "" }, "🔗 Link de aprovação"),
+        el("button", { class: "secundario", onClick: () => exportarPDF(clienteId, mes), disabled: estado.alterado, title: estado.alterado ? "Salve antes de exportar" : "" }, "⬇ PDF"),
         botaoSalvar)),
     cliente.tomDeVoz || cliente.publico ? el("p", { class: "dica-cliente" },
       cliente.tomDeVoz ? [el("strong", {}, "Tom de voz: "), cliente.tomDeVoz, " "] : null,

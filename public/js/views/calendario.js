@@ -1,9 +1,10 @@
 // Calendário de conteúdo: cada post é uma tarefa do tipo Conteúdo. Mostra o mês com a cor e o nome
 // do cliente em cada post, filtros, planejamento e exportação para aprovação do cliente.
 import * as planejamento from "./planejamento.js";
-import { el, hojeISO, addDias, fmtData, vazio, formulario } from "../ui.js";
-import { dados, marcasDo, porId, opcoesClientes, nomeCliente } from "../db.js";
-import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca } from "./componentes.js";
+import { gerarLinkAprovacao, seloResposta } from "../aprovacoes.js";
+import { el, hojeISO, addDias, fmtData, vazio, formulario, dataDe, avisar } from "../ui.js";
+import { dados, marcasDo, porId, opcoesClientes, nomeCliente, atualizar, registrarAtividade } from "../db.js";
+import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca, mudarEtapa, proximaEtapa } from "./componentes.js";
 import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost, exportarPDF, nomeMes } from "../exportacao.js";
 import { abrirCompromisso, rotuloCompromisso, avisoPendentes } from "../compromissos.js";
@@ -47,11 +48,23 @@ function escolherNoDia(data, clienteId) {
     el("button", { onClick: () => { fechar(); abrirCompromisso({ data, clienteId }); } }, "◷ Compromisso (reunião, gravação…)")));
 }
 
+/** Arrastar um post para outro dia: muda a publicação e leva o prazo de produção junto. */
+async function moverPost(id, novoDia) {
+  const t = porId("tarefas", id);
+  if (!t || dataPost(t) === novoDia) return;
+  const antes = { dataPublicacao: t.dataPublicacao || "", prazo: t.prazo || "" };
+  const delta = Math.round((dataDe(novoDia) - dataDe(dataPost(t))) / 86400000);
+  await atualizar("tarefas", id, { dataPublicacao: novoDia, prazo: t.prazo ? addDias(t.prazo, delta) : novoDia });
+  registrarAtividade(id, { texto: `mudou a publicação para ${fmtData(novoDia, true)}` });
+  avisar(`"${t.titulo}" foi para ${fmtData(novoDia, true)}.`, "ok", { desfazer: () => atualizar("tarefas", id, antes) });
+}
+
 function chip(t) {
   const cli = porId("clientes", t.clienteId);
-  return el("button", {
-    class: `chip-conteudo st-${t.statusConteudo || "ideia"}`, style: { "--selo": corDoItem(t) },
-    title: `${nomeComMarca(t)} · ${t.formato || "Post"} · ${t.titulo} · ${rotuloStatusConteudo(t.statusConteudo || "ideia")}`,
+  const prox = proximaEtapa(t);
+  const botao = el("button", {
+    class: `chip-conteudo st-${t.statusConteudo || "ideia"}`, style: { "--selo": corDoItem(t) }, draggable: "true",
+    title: `${nomeComMarca(t)} · ${t.formato || "Post"} · ${t.titulo} · ${rotuloStatusConteudo(t.statusConteudo || "ideia")} (arraste para outro dia)`,
     onClick: (e) => { e.stopPropagation(); abrirTarefa(t); }
   },
   el("span", { class: "chip-cliente" }, cli ? nomeComMarca(t) : "Sem cliente"),
@@ -59,7 +72,12 @@ function chip(t) {
     el("span", { class: "chip-icone", "aria-hidden": "true" }, ICONE_FORMATO[t.formato] || "•"),
     t.hora ? el("small", {}, t.hora) : null,
     t.qtdArtes ? el("span", { class: "chip-arte", title: "Tem criativo" }, "🖼 ") : null,
-    t.titulo));
+    dados.respostasCliente?.[t.id] ? el("span", { class: "chip-arte", title: dados.respostasCliente[t.id].status === "aprovado" ? "Cliente aprovou" : `Cliente pediu ajuste: ${dados.respostasCliente[t.id].comentario || ""}` }, dados.respostasCliente[t.id].status === "aprovado" ? "✓ " : "✎ ") : null,
+    t.titulo),
+  prox ? el("span", { class: "chip-avancar", role: "button", tabindex: "0", title: `Avançar para: ${rotuloStatusConteudo(prox)}`,
+    onClick: (e) => { e.stopPropagation(); mudarEtapa(t, prox); } }, "›") : null);
+  botao.addEventListener("dragstart", (e) => { e.stopPropagation(); e.dataTransfer.setData("text/post", t.id); });
+  return botao;
 }
 
 export function render({ params, estado, renderizar }) {
@@ -151,6 +169,9 @@ export function render({ params, estado, renderizar }) {
         const comps = verCompromissos ? compromissosDoPeriodo.filter((x) => x.data === d) : [];
         return el("div", {
           class: `cal-dia ${d.slice(0, 7) !== estado.mes ? "fora" : ""} ${d === hoje ? "hoje" : ""}`,
+          onDragover: (e) => { if (e.dataTransfer.types.includes("text/post")) { e.preventDefault(); e.currentTarget.classList.add("alvo"); } },
+          onDragleave: (e) => e.currentTarget.classList.remove("alvo"),
+          onDrop: (e) => { e.preventDefault(); e.currentTarget.classList.remove("alvo"); const id = e.dataTransfer.getData("text/post"); if (id) moverPost(id, d); },
           onClick: () => estado.camada === "compromissos" ? abrirCompromisso({ data: d, clienteId: estado.cliente || "" })
             : estado.camada === "conteudo" ? novoPost({ data: d, clienteId: estado.cliente || "", marcaId: estado.marca || "" }) : escolherNoDia(d, estado.cliente || ""),
           title: "Clique para criar neste dia"
@@ -171,7 +192,10 @@ export function render({ params, estado, renderizar }) {
         el("span", { class: "data-mini" }, `${fmtData(dataPost(t), true)}${t.hora ? " " + t.hora : ""}`),
         seloCliente(t.clienteId, t), el("strong", {}, t.titulo),
         el("span", { class: "etiqueta" }, `${t.formato || "Post"} · ${t.rede || ""}`),
-        el("span", { class: `etiqueta st-${t.statusConteudo || "ideia"}` }, rotuloStatusConteudo(t.statusConteudo || "ideia")),
+        el("select", { class: `seletor-etapa st-${t.statusConteudo || "ideia"}`, "aria-label": "Etapa", onClick: (e) => e.stopPropagation(),
+          onChange: (e) => mudarEtapa(t, e.target.value) },
+          STATUS_CONTEUDO.map(([v, r]) => el("option", { value: v, selected: v === (t.statusConteudo || "ideia") }, r))),
+        seloResposta(t),
         t.copy ? el("span", { class: "etiqueta ok" }, "copy ✓") : el("span", { class: "etiqueta" }, "sem copy")))
       : vazio("Nada neste mês."));
   }
@@ -180,7 +204,8 @@ export function render({ params, estado, renderizar }) {
     cabecalho("Calendário",
       !pode("conteudo") ? "Seus compromissos e reuniões" : contagem.length ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para criar um post",
       pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = planejamento.linkPlano(c, m)), "Planejar mês") }, "☷ Planejar mês") : null,
-      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => exportarPDF(c, m, estado.cliente === c ? estado.marca ?? undefined : undefined), "Exportar PDF") }, "⬇ PDF para o cliente") : null,
+      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => gerarLinkAprovacao(c, m, estado.cliente === c ? estado.marca ?? undefined : undefined), "Link de aprovação") }, "🔗 Link de aprovação") : null,
+      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => exportarPDF(c, m, estado.cliente === c ? estado.marca ?? undefined : undefined), "Exportar PDF") }, "⬇ PDF") : null,
       el("button", { class: "secundario", onClick: () => abrirCompromisso({ clienteId: estado.cliente || "" }) }, "+ Compromisso"),
       pode("conteudo") ? el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "", marcaId: estado.marca || "" }) }, "+ Novo post") : null),
     verCompromissos ? avisoPendentes() : null,

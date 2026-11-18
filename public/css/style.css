@@ -680,3 +680,79 @@ img.avatar { object-fit: cover; padding: 0; }
   body.logado #conteudo { padding-bottom: 72px; }
   .aviso { bottom: 84px; }
 }
+
+.erro-item { border-bottom: 1px solid var(--cor-borda-suave); padding: 6px 0; }
+.erro-item summary { cursor: pointer; }
+.erro-item pre, .prompt-final pre { white-space: pre-wrap; font-size: 12px; }
+
+/* ---------------- Hoje: primeiros passos e dicas ---------------- */
+.primeiros-passos, .dicas { margin-bottom: 20px; }
+.barra-progresso { height: 8px; background: var(--cor-primaria-clara); border-radius: 99px; overflow: hidden; margin: 4px 0 12px; }
+.barra-progresso span { display: block; height: 100%; background: var(--cor-primaria); }
+.lista-passos { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.lista-passos li { display: flex; align-items: center; gap: 10px; }
+.lista-passos li.feito { color: var(--cor-texto-suave); text-decoration: line-through; }
+.check-passo { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--cor-borda); display: inline-grid; place-items: center; font-size: 12px; flex: none; }
+.lista-passos li.feito .check-passo { background: var(--cor-ok); border-color: var(--cor-ok); color: var(--hyper-branco); }
+.dicas ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+
+/* ---------------- Carga da equipe ---------------- */
+.tabela-carga { width: 100%; border-collapse: collapse; }
+.tabela-carga th, .tabela-carga td { padding: 8px; text-align: center; border-bottom: 1px solid var(--cor-borda-suave); }
+.tabela-carga th:first-child, .tabela-carga td:first-child { text-align: left; }
+.tabela-carga td.alerta { color: var(--cor-alerta); font-weight: 700; }
+.carga { display: inline-grid; place-items: center; min-width: 28px; height: 28px; border-radius: var(--raio-pequeno); font-weight: 700;
+  background: color-mix(in srgb, var(--cor-primaria) calc(var(--carga) * 70% + 10%), var(--cor-superficie));
+  color: var(--hyper-roxo-escuro); }
+.carga.forte { color: var(--hyper-branco); }
+
+/* ---------------- Calendário rápido ---------------- */
+.cal-dia.alvo { outline: 2px dashed var(--cor-primaria); outline-offset: -2px; background: var(--cor-primaria-clara); }
+.chip-conteudo { position: relative; cursor: grab; }
+.chip-avancar {
+  position: absolute; top: 1px; right: 1px; width: 18px; height: 18px; border-radius: 50%; display: none; place-items: center;
+  background: var(--cor-destaque); color: var(--hyper-preto); font-weight: 700; font-size: 13px; line-height: 1; cursor: pointer;
+}
+.chip-conteudo:hover .chip-avancar, .chip-conteudo:focus-within .chip-avancar { display: grid; }
+.seletor-etapa { padding: 2px 6px; font-size: 12px; border-radius: 99px; width: auto; }
+@media (hover: none) { .chip-avancar { display: none !important; } }
+
+/* ---------------- Comentários e histórico ---------------- */
+.secao-atividade { margin-top: 8px; }
+.atividade-lista { display: grid; gap: 8px; margin-bottom: 10px; max-height: 320px; overflow-y: auto; }
+.comentario { display: flex; gap: 10px; align-items: flex-start; }
+.comentario > div { flex: 1; background: var(--cor-fundo); border-radius: var(--raio-pequeno); padding: 8px 12px; }
+.comentario p { margin: 4px 0 0; white-space: pre-wrap; }
+.comentario-topo { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.comentario-topo .link { margin-left: auto; font-size: 12px; }
+.mudanca { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--cor-texto-suave); padding-left: 32px; }
+
+/* ---------------- Creators (em breve) ---------------- */
+.menu-selo { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--cor-destaque); color: var(--hyper-preto); padding: 1px 6px; border-radius: 99px; font-weight: 700; }
+.em-breve h2 { margin-top: 10px; }
+.lista-em-breve { display: grid; gap: 8px; padding-left: 18px; }
+
+/* ---------------- Página de aprovação do cliente ---------------- */
+.pagina-aprovacao { background: var(--cor-fundo); }
+.aprovacao-topo { background: var(--hyper-roxo); padding: 14px 20px; }
+.aprovacao-topo img { height: 30px; display: block; }
+.pagina-aprovacao .tela { margin: 0 auto; }
+.aprov-post { margin-bottom: 16px; }
+.aprov-post.respondido.aprovado { border-left: 6px solid var(--cor-ok); }
+.aprov-post.respondido.ajuste { border-left: 6px solid var(--cor-alerta); }
+.aprov-data { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.aprov-imagem { width: 100%; max-height: 520px; object-fit: contain; background: var(--cor-fundo); border-radius: var(--raio-pequeno); margin-bottom: 10px; }
+.aprov-copy { background: var(--cor-fundo); border-radius: var(--raio-pequeno); padding: 10px 14px; margin: 8px 0; }
+.aprov-copy p { margin: 4px 0 0; white-space: pre-wrap; }
+.aprov-ajuste { margin-top: 10px; }
+
+/* ---------------- Resultados (Meta) ---------------- */
+.conta-ig { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+.resumo-metricas { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.resumo-metricas .numero strong { font-size: 26px; }
+.grade-posts-ig { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+.post-ig { border: 1px solid var(--cor-borda-suave); border-radius: var(--raio); overflow: hidden; background: var(--cor-superficie); }
+.post-ig img { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; background: var(--cor-fundo); }
+.post-ig-info { padding: 10px; display: grid; gap: 6px; }
+.post-ig-legenda { margin: 0; font-size: 13px; }
+.bloco-vazio { padding: 16px 0; display: grid; gap: 10px; justify-items: start; }

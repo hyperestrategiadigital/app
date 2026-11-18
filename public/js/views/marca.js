@@ -119,6 +119,7 @@ export function abrirMarca(clienteId, marca = {}) {
   return formulario(editando ? `Marca · ${marca.nome}` : "Nova marca", [
     { nome: "nome", rotulo: "Nome da marca", obrigatorio: true, largura: "metade" },
     { nome: "instagram", rotulo: "Instagram", dica: "@perfil", largura: "metade" },
+    { nome: "facebookPageId", rotulo: "ID da página do Facebook", dica: "Para agendar e ver os resultados (dá para escolher na aba Resultados)", largura: "metade" },
     { nome: "descricao", rotulo: "Sobre a marca", tipo: "textarea", linhas: 3, dica: "O que é, para quem é e como se diferencia das outras marcas do grupo" },
     { nome: "ativo", rotulo: "Marca ativa", tipo: "checkbox", padrao: true }
   ], marca, {

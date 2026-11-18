@@ -61,7 +61,12 @@ export const fmtMoeda = (v) =>
 
 /* ---------------- Avisos ---------------- */
 /** Aviso no rodapé. Com { desfazer: fn }, mostra o botão "Desfazer" por 7 segundos. */
+let aoAvisarErro = null;
+/** O app registra aqui quem guarda os erros mostrados à pessoa (registro de erros). */
+export const quandoErro = (fn) => (aoAvisarErro = fn);
+
 export function avisar(msg, tipo = "ok", { desfazer } = {}) {
+  if (tipo === "erro") aoAvisarErro?.(msg);
   document.querySelectorAll(".aviso").forEach((a) => a.remove());
   let fechar;
   const botao = desfazer ? el("button", { class: "link-claro desfazer", onClick: async () => { fechar(); try { await desfazer(); avisar("Desfeito."); } catch (e) { avisar("Não deu para desfazer: " + e.message, "erro"); } } }, "Desfazer") : null;
