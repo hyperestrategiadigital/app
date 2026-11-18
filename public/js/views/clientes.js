@@ -1,7 +1,7 @@
 // Clientes: lista com indicadores e ficha completa de cada cliente.
 import { linkPlano } from "./planejamento.js";
 import { el, formulario, confirmar, avisar, fmtMoeda, fmtData, linkExterno, vazio, hojeISO, fecharModais } from "../ui.js";
-import { dados, criar, atualizar, excluir, porId, contrato, salvarComId } from "../db.js";
+import { dados, criar, atualizar, excluir, porId, contrato, salvarComId, marcasDo } from "../db.js";
 import { pode, ehAdmin, tarefaVisivel } from "../permissoes.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas, corCliente } from "./componentes.js";
 import { SERVICOS, rotuloStatusConteudo } from "../constantes.js";
@@ -64,7 +64,12 @@ export function abrirCliente(cliente = {}) {
 }
 
 export function render({ params, estado, renderizar }) {
-  if (params[0]) return ficha(params[0], estado, renderizar);
+  if (params[0]) {
+    // Cada cliente guarda a própria aba e marca escolhidas
+    estado.fichas ??= {};
+    estado.fichas[params[0]] ??= {};
+    return ficha(params[0], estado.fichas[params[0]], renderizar, params.slice(1));
+  }
 
   estado.mostrarInativos ??= false;
   const lista = dados.clientes
@@ -83,7 +88,8 @@ export function render({ params, estado, renderizar }) {
     lista.length ? el("div", { class: "grade-clientes" }, lista.map(({ c, abertas, atrasadas, total }) =>
       el("a", { class: `cartao-cliente ${c.ativo === false ? "inativo" : ""}`, href: `#/clientes/${c.id}`, style: { "--selo": corCliente(c) } },
         el("h3", {}, c.nome),
-        el("div", { class: "cartao-meta" }, (c.servicos || []).map((s) => el("span", { class: "etiqueta" }, s))),
+        el("div", { class: "cartao-meta" }, (c.servicos || []).map((s) => el("span", { class: "etiqueta" }, s)),
+          marcasDo(c.id).length ? el("span", { class: "etiqueta compromisso" }, `${marcasDo(c.id).length} marca(s)`) : null),
         el("div", { class: "numeros-cliente" },
           el("span", {}, el("strong", {}, abertas), " abertas"),
           atrasadas ? el("span", { class: "alerta" }, el("strong", {}, atrasadas), " atrasadas") : null,
@@ -93,8 +99,11 @@ export function render({ params, estado, renderizar }) {
         el("a", { href: "#/config", class: "link" }, "Importar planilha →")));
 }
 
-function ficha(id, estado, renderizar) {
+function ficha(id, estado, renderizar, resto = []) {
   const c = porId("clientes", id);
+  // #/clientes/<id>/marca/<marcaId> (busca rápida): abre a aba Marca naquela marca
+  const chave = [id, ...resto].join("/");
+  if (resto[0] === "marca" && estado.atalho !== chave) { estado.atalho = chave; estado.aba = "marca"; estado.marcaSel = resto[1] || ""; }
   if (!c) return el("div", { class: "tela" }, vazio("Cliente não encontrado.", el("a", { href: "#/clientes", class: "link" }, "← Voltar")));
   const abasPermitidas = [["tarefas", "Tarefas"],
     ...(pode("conteudo") ? [["conteudo", "Conteúdo"], ["marca", "Marca"]] : []),
@@ -115,7 +124,7 @@ function ficha(id, estado, renderizar) {
   const insta = c.instagram ? linkExterno(`https://instagram.com/${c.instagram.replace(/^@/, "")}`, c.instagram) : null;
 
   const conteudoAba = {
-    marca: () => abaMarca(c),
+    marca: () => abaMarca(c, estado, renderizar),
     contas: () => abaContas(c),
     tarefas: () => [
       el("div", { class: "com-acao" }, el("h2", {}, `Abertas (${abertas.length})`),
@@ -131,6 +140,7 @@ function ficha(id, estado, renderizar) {
           el("button", { class: "mini", onClick: () => novoPost({ clienteId: id }) }, "+ Post"))),
       conts.length ? conts.slice(0, 60).map((x) => el("div", { class: "linha-tabela", onClick: () => abrirTarefa(x) },
         el("span", { class: "data-mini" }, fmtData(dataPost(x), true)), el("strong", {}, x.titulo),
+        x.marcaId ? el("span", { class: "etiqueta" }, porId("marcas", x.marcaId)?.nome || "") : null,
         el("span", { class: "etiqueta" }, x.formato || "Post"), el("span", { class: `etiqueta st-${x.statusConteudo || "ideia"}` }, rotuloStatusConteudo(x.statusConteudo || "ideia"))))
         : vazio("Nenhum conteúdo programado.")],
     trafego: () => [

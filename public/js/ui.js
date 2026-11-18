@@ -117,9 +117,15 @@ export function confirmar(msg) {
  * campos: [{ nome, rotulo, tipo: text|textarea|date|time|number|select|checkbox|checklist|multi, opcoes, obrigatorio, dica, largura: "metade" }]
  * Resolve com os valores ou null se cancelado. extras = elementos adicionais (ex.: botão excluir).
  */
+const opcoesSelect = (opcoes = [], valor) => opcoes.map((o) => {
+  const [val, rot] = Array.isArray(o) ? o : [o, o];
+  return el("option", { value: val, selected: String(val) === String(valor ?? "") }, rot);
+});
+
 export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = [], rotuloSalvar = "Salvar", largo = false } = {}) {
   const entradas = {};
   const condicionais = []; // [{ c, elemento, entrada }] com c.mostrarSe(valores)
+  const dinamicos = []; // selects com c.opcoesDe(valores): opções mudam conforme outros campos
   const grade = el("div", { class: "form-grade" });
   for (const c of campos) {
     if (c.tipo === "secao") {
@@ -134,10 +140,8 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
       entrada = el("textarea", { rows: c.linhas || 4, placeholder: c.dica || "" });
       entrada.value = v;
     } else if (c.tipo === "select") {
-      entrada = el("select", {}, (c.opcoes || []).map((o) => {
-        const [val, rot] = Array.isArray(o) ? o : [o, o];
-        return el("option", { value: val, selected: String(val) === String(v) }, rot);
-      }));
+      entrada = el("select", {}, opcoesSelect(c.opcoesDe ? c.opcoesDe(valores) : c.opcoes, v));
+      if (c.opcoesDe) dinamicos.push({ c, entrada });
     } else if (c.tipo === "checkbox") {
       entrada = el("input", { type: "checkbox", checked: !!v });
     } else if (c.tipo === "multi") {
@@ -173,7 +177,15 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
     return out;
   };
   const atualizarVisiveis = () => {
-    const v = lerValores();
+    let v = lerValores();
+    for (const { c, entrada } of dinamicos) {
+      const opcoes = c.opcoesDe(v);
+      const assinatura = JSON.stringify(opcoes);
+      if (entrada.dataset.opcoes === assinatura) continue;
+      entrada.dataset.opcoes = assinatura;
+      entrada.replaceChildren(...opcoesSelect(opcoes, entrada.value));
+      v = lerValores();
+    }
     for (const { c, elemento, entrada } of condicionais) {
       const mostrar = !!c.mostrarSe(v);
       elemento.hidden = !mostrar;

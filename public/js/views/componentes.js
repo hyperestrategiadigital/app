@@ -3,7 +3,7 @@ import { pode } from "../permissoes.js";
 import { abrirCriarArte } from "./criar.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
-import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId } from "../db.js";
+import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo } from "../db.js";
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
 import { promptCopy } from "../prompts.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
@@ -25,11 +25,20 @@ export const atrasada = (t) => t.status !== "concluido" && t.prazo && t.prazo < 
 /** Cor que identifica o cliente: 1ª cor da paleta da marca ou a cor escolhida no cadastro. */
 export const corCliente = (c) => c?.paleta?.[0] || c?.cor || "#606060";
 
-export function seloCliente(clienteId) {
+/** Cor de um post/tarefa: a da marca (se tiver) ou a do cliente. */
+export const corDoItem = (t) => corCliente(porId("marcas", t?.marcaId) || porId("clientes", t?.clienteId));
+/** "Cliente" ou "Cliente · Marca". */
+export const nomeComMarca = (t) => {
+  const m = porId("marcas", t?.marcaId);
+  return m ? `${nomeCliente(t.clienteId)} · ${m.nome}` : nomeCliente(t?.clienteId);
+};
+
+/** Selo com o nome (e a cor) do cliente; passe a tarefa para mostrar também a marca. */
+export function seloCliente(clienteId, item) {
   if (!clienteId) return null;
   const c = porId("clientes", clienteId);
-  return el("a", { class: "selo-cliente", href: `#/clientes/${clienteId}`, onClick: (e) => e.stopPropagation(), style: c ? { "--selo": corCliente(c) } : undefined },
-    nomeCliente(clienteId));
+  return el("a", { class: "selo-cliente", href: `#/clientes/${clienteId}`, onClick: (e) => e.stopPropagation(), style: c ? { "--selo": item ? corDoItem(item) : corCliente(c) } : undefined },
+    item ? nomeComMarca(item) : nomeCliente(clienteId));
 }
 
 export function abrirTarefa(tarefa = {}) {
@@ -41,6 +50,9 @@ export function abrirTarefa(tarefa = {}) {
     { nome: "titulo", rotulo: "Tarefa / tema do post", obrigatorio: true, dica: "Ex.: Black Week — plano anual" },
     { nome: "clienteId", rotulo: "Cliente", tipo: "select", opcoes: opcoesClientes(), largura: "metade" },
     { nome: "tipo", rotulo: "Tipo", tipo: "select", opcoes: TIPOS_TAREFA, largura: "metade" },
+    { nome: "marcaId", rotulo: "Marca", tipo: "select", largura: "metade",
+      opcoesDe: (v) => [["", "Marca principal do cliente"], ...marcasDo(v.clienteId).map((m) => [m.id, m.nome])],
+      mostrarSe: (v) => marcasDo(v.clienteId).length > 0 },
 
     { tipo: "secao", rotulo: "Post (aparece no calendário de conteúdo)", mostrarSe: conteudo },
     { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: "Feed estático", largura: "metade", mostrarSe: conteudo },
@@ -217,7 +229,7 @@ export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
     el("div", { class: "cartao-corpo" },
       el("div", { class: "cartao-titulo" }, t.titulo),
       el("div", { class: "cartao-meta" },
-        mostrarCliente ? seloCliente(t.clienteId) : null,
+        mostrarCliente ? seloCliente(t.clienteId, t) : t.marcaId ? el("span", { class: "etiqueta" }, porId("marcas", t.marcaId)?.nome || "") : null,
         ehConteudo(t) ? el("span", { class: "etiqueta formato" }, `${t.formato || "Post"}${t.dataPublicacao ? " · " + fmtData(t.dataPublicacao, true) : ""}`) : t.tipo ? el("span", { class: "etiqueta" }, t.tipo) : null,
         ehConteudo(t) && t.statusConteudo ? el("span", { class: `etiqueta st-${t.statusConteudo}` }, rotuloStatusConteudo(t.statusConteudo)) : null,
         t.status === "andamento" ? el("span", { class: "etiqueta andamento" }, "Em andamento") : null,

@@ -5,7 +5,7 @@ import { cabecalho } from "./componentes.js";
 import { analisarPlanilha } from "../importacao.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
 import { configAgenda, conectarAgenda, desconectarAgenda, configEquipe, sincronizar } from "../agenda.js";
-import { salvarComId } from "../db.js";
+import { salvarComId, carregarArquivo } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
 
 
@@ -76,7 +76,8 @@ function abrirImportacao() {
     entrada, area), { largo: true });
 }
 
-function baixarBackup() {
+async function baixarBackup() {
+  await carregarArquivo(); // inclui as tarefas arquivadas
   baixar(new Blob([JSON.stringify({ exportadoEm: new Date().toISOString(), ...dados }, null, 2)], { type: "application/json" }), `hyper-backup-${hojeISO()}.json`);
 }
 
@@ -161,10 +162,15 @@ function blocoAgenda() {
     el("p", { class: "subtitulo" }, "O Google libera o acesso por cerca de 1 hora. Depois disso, ao salvar um compromisso, o app pede para conectar de novo."));
 }
 
-const CAMPOS_MARCA = ["tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "fontes", "observacoes", "instagram", "linkDrive", "paleta"];
-const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", estiloVisual: "estilo de imagem", identidadeVisual: "diagramação", fontes: "fontes", observacoes: "observações", instagram: "Instagram", linkDrive: "Drive", paleta: "paleta" };
+const CAMPOS_MARCA = ["tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "fontes", "observacoes", "descricao", "instagram", "linkDrive", "linkCanva", "paleta"];
+const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", estiloVisual: "estilo de imagem", identidadeVisual: "diagramação", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
+const preenchido = (x) => (Array.isArray(x) ? x.filter(Boolean).length : String(x ?? "").trim());
 
-/** Importa definições de marca (arquivo .json preparado pelo Claude a partir do ChatGPT). */
+/**
+ * Importa definições de marca (arquivo .json preparado pelo Claude a partir do ChatGPT).
+ * Cada item: { cliente, marca?, tomDeVoz, persona, ... }. Sem "marca" (ou marca = nome do cliente),
+ * vai para a identidade do próprio cliente; com "marca", cria ou atualiza a marca dentro do cliente.
+ */
 function blocoImportarMarcas() {
   const entrada = el("input", { type: "file", accept: ".json,application/json" });
   const previa = el("div", { class: "importacao-previa" });
@@ -175,35 +181,51 @@ function blocoImportarMarcas() {
     try { lista = JSON.parse(await arquivo.text()); if (!Array.isArray(lista)) lista = lista.marcas || lista.clientes || []; }
     catch { previa.replaceChildren(el("p", { class: "erro" }, "Arquivo inválido. Use o .json que o Claude preparou.")); return; }
     const itens = lista.map((m) => {
-      const alvo = dados.clientes.find((c) => normalizar(c.nome) === normalizar(m.cliente || m.nome || ""));
-      const campos = CAMPOS_MARCA.filter((k) => Array.isArray(m[k]) ? m[k].length : String(m[k] || "").trim());
-      return { m, alvo, campos };
+      const nomeCli = m.cliente || m.nome || "";
+      const cliente = dados.clientes.find((c) => normalizar(c.nome) === normalizar(nomeCli));
+      const nomeMarca = m.marca && normalizar(m.marca) !== normalizar(nomeCli) ? m.marca : "";
+      const marca = nomeMarca && cliente ? (dados.marcas || []).find((x) => x.clienteId === cliente.id && normalizar(x.nome) === normalizar(nomeMarca)) : null;
+      const campos = CAMPOS_MARCA.filter((k) => preenchido(m[k]));
+      return { m, nomeCli, cliente, nomeMarca, marca, campos };
     });
     const sobrescrever = el("input", { type: "checkbox", id: "marcas-sobrescrever" });
+    const destino = ({ nomeCli, cliente, nomeMarca, marca }) => nomeMarca
+      ? `${cliente ? cliente.nome : `${nomeCli} (cliente novo)`} › ${marca ? marca.nome : `${nomeMarca} (marca nova)`}`
+      : cliente ? cliente.nome : `${nomeCli} (cliente novo)`;
     previa.replaceChildren(el("div", {},
-      el("ul", {}, itens.map(({ m, alvo, campos }) => el("li", {},
-        el("strong", {}, m.cliente || m.nome), alvo ? ` → ${alvo.nome}: ` : " → cliente não encontrado (será criado): ",
-        campos.map((k) => ROTULO_CAMPO[k]).join(", ") || "nada para importar"))),
+      el("ul", {}, itens.map((i) => el("li", {},
+        el("strong", {}, destino(i)), ": ", i.campos.map((k) => ROTULO_CAMPO[k]).join(", ") || "nada para importar"))),
       el("label", { class: "check-inline", for: "marcas-sobrescrever" }, sobrescrever, "Substituir o que já está preenchido (sem marcar, só preenche campos vazios)"),
       el("div", { class: "acoes" }, el("button", { class: "destaque", onClick: async (e) => {
         e.currentTarget.disabled = true;
         let n = 0;
-        for (const { m, alvo, campos } of itens) {
-          const v = {};
-          for (const k of campos) if (sobrescrever.checked || !alvo || !(Array.isArray(alvo[k]) ? alvo[k].length : alvo[k])) v[k] = m[k];
-          if (v.paleta) v.cor = v.paleta[0];
-          if (!Object.keys(v).length) continue;
-          if (alvo) await atualizar("clientes", alvo.id, v);
-          else await criar("clientes", { nome: m.cliente || m.nome, ativo: true, servicos: [], ...v });
-          n++;
-        }
-        avisar(`${n} cliente(s) atualizado(s). Revise cada um na aba Marca.`);
+        const criados = {};
+        try {
+          for (const { m, nomeCli, cliente, nomeMarca, marca, campos } of itens) {
+            const atual = marca || (!nomeMarca ? cliente : null);
+            const v = {};
+            for (const k of campos) if (sobrescrever.checked || !atual || !preenchido(atual[k])) v[k] = m[k];
+            if (v.paleta) v.cor = v.paleta[0];
+            let clienteId = cliente?.id || criados[normalizar(nomeCli)];
+            if (!clienteId) {
+              clienteId = (await criar("clientes", { nome: nomeCli, ativo: true, servicos: [], ...(nomeMarca ? {} : v) })).id;
+              criados[normalizar(nomeCli)] = clienteId;
+              if (!nomeMarca) { n++; continue; }
+            }
+            if (!Object.keys(v).length && (marca || !nomeMarca)) continue;
+            if (!nomeMarca) await atualizar("clientes", clienteId, v);
+            else if (marca) await atualizar("marcas", marca.id, v);
+            else await criar("marcas", { nome: nomeMarca, clienteId, ativo: true, paleta: [], criadoEm: Date.now(), ...v });
+            n++;
+          }
+          avisar(`${n} cliente(s)/marca(s) atualizados. Revise cada um na aba Marca.`);
+        } catch (erro) { avisar("Parou no meio: " + erro.message, "erro"); }
         previa.replaceChildren();
         entrada.value = "";
       } }, "Importar definições"))));
   });
   return el("section", { class: "bloco" },
     el("h2", {}, "Importar definições de marca"),
-    el("p", {}, "Tom de voz, persona, público, identidade e cores de cada cliente, a partir do arquivo .json que o Claude monta com as suas conversas e agentes do ChatGPT."),
+    el("p", {}, "Tom de voz, persona, público, identidade e cores de cada cliente e de cada marca dele, a partir do arquivo .json que o Claude monta com as suas conversas e agentes do ChatGPT."),
     entrada, previa);
 }

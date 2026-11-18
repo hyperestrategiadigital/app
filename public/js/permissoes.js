@@ -31,7 +31,7 @@ export function tarefaVisivel(t) {
 
 /** Coleções que o usuário pode ler (as outras nem são pedidas ao banco). */
 export function colecoesPermitidas() {
-  const base = ["clientes", "tarefas", "compromissos", "recorrencias", "membros"];
+  const base = ["clientes", "marcas", "tarefas", "compromissos", "recorrencias", "membros"];
   if (pode("financeiro")) base.push("financeiro", "orcamentos", "contratos");
   if (pode("trafego")) base.push("contasAds", "manutencoes");
   return base;
