@@ -6,6 +6,7 @@ import { analisarPlanilha } from "../importacao.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
 import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
+import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO } from "../constantes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail } from "../emails.js";
 
 
@@ -86,6 +87,7 @@ export function render() {
     cabecalho("Ajustes", "E-mails automáticos, OpenAI, importação e backup. Sua Google Agenda fica em Minha conta (clique no seu nome)."),
 
     blocoEmail(),
+    blocoModelos(),
     blocoErros(),
     ehAdmin() ? blocoOpenAI() : null,
 
@@ -261,4 +263,27 @@ function blocoErros() {
     el("p", {}, "Quando algo dá errado para alguém da equipe, o app guarda o erro aqui por 30 dias. Se algo estranho acontecer, copie e mande para o Claude."),
     el("button", { class: "secundario", onClick: (e) => carregar(e.currentTarget) }, "Ver erros"),
     lista);
+}
+
+/** Modelos de checklist por formato de post e por tipo de tarefa (um passo por linha). */
+function blocoModelos() {
+  const meus = dados.config.find((c) => c.id === "modelos")?.modelos || {};
+  const chaves = [...FORMATOS.filter((f) => f !== "Outro"), ...TIPOS_TAREFA.filter((t) => ![TIPO_CONTEUDO, "Reunião", "Outro"].includes(t))];
+  const areas = {};
+  const linhas = chaves.map((k) => {
+    const a = el("textarea", { rows: 3, id: `modelo-${k}`, placeholder: "Um passo por linha (vazio = sem checklist)" });
+    a.value = (meus[k] ?? MODELOS_PADRAO[k] ?? []).join("\n");
+    areas[k] = a;
+    return el("label", { class: "campo", for: a.id }, el("span", {}, FORMATOS.includes(k) ? `Post · ${k}` : `Tarefa · ${k}`), a);
+  });
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Modelos de checklist"),
+    el("p", {}, "Tarefa ou post novo já nasce com estes passos (pelo formato do post ou pelo tipo da tarefa). Dá para mudar em cada tarefa."),
+    el("details", {}, el("summary", {}, "Editar modelos"),
+      el("div", { class: "form-grade" }, linhas),
+      el("div", { class: "acoes" }, el("button", { onClick: async () => {
+        const modelos = Object.fromEntries(Object.entries(areas).map(([k, a]) => [k, a.value.split("\n").map((l) => l.trim()).filter(Boolean)]));
+        await salvarComId("config", "modelos", { modelos });
+        avisar("Modelos salvos.");
+      } }, "Salvar modelos"))));
 }

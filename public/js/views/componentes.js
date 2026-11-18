@@ -4,7 +4,7 @@ import { abrirCriarArte } from "./criar.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo, desfazerExclusao } from "../db.js";
-import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
+import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa, MODELOS_PADRAO } from "../constantes.js";
 import { promptCopy } from "../prompts.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
 import { abrirCompromisso } from "../compromissos.js";
@@ -51,11 +51,20 @@ export function seloCliente(clienteId, item) {
     item ? nomeComMarca(item) : nomeCliente(clienteId));
 }
 
+/** Passos do modelo para a tarefa: pelo formato (posts) ou pelo tipo. */
+export function modeloChecklist(t = {}) {
+  const meus = dados.config.find((c) => c.id === "modelos")?.modelos || {};
+  const modelos = { ...MODELOS_PADRAO, ...meus };
+  const passos = (t.tipo === TIPO_CONTEUDO && modelos[t.formato]) || modelos[t.tipo] || [];
+  return passos.map((texto) => ({ texto, feito: false }));
+}
+
 export function abrirTarefa(tarefa = {}) {
   const editando = !!tarefa.id;
   const conteudo = (v) => v.tipo === TIPO_CONTEUDO;
   const valores = { ...tarefa };
   if (!editando && tarefa.tipo === undefined) valores.tipo = TIPO_CONTEUDO;
+  if (!editando && !valores.checklist?.length) valores.checklist = modeloChecklist({ formato: "Feed estático", ...valores });
   const campos = [
     { nome: "titulo", rotulo: "Tarefa / tema do post", obrigatorio: true, dica: "Ex.: Black Week — plano anual" },
     { nome: "clienteId", rotulo: "Cliente", tipo: "select", opcoes: opcoesClientes(), largura: "metade" },
@@ -192,6 +201,12 @@ function secaoCriativos(tarefa) {
 
 /** Grava uma tarefa (ou post) mantendo status de tarefa e etapa do post coerentes. */
 export async function salvarTarefa(original, v) {
+  // Tarefa nova: se o checklist ficou com o modelo de outro formato/tipo, troca pelo certo
+  if (!original.id) {
+    const doInicio = JSON.stringify(modeloChecklist({ formato: "Feed estático", ...original }).map((i) => i.texto));
+    const atual = JSON.stringify((v.checklist || []).map((i) => i.texto));
+    if (!v.checklist?.length || atual === doInicio) v.checklist = modeloChecklist(v);
+  }
   if (v.tipo !== TIPO_CONTEUDO) {
     for (const k of ["formato", "rede", "dataPublicacao", "hora", "statusConteudo", "objetivo", "roteiro", "copy"]) delete v[k];
   } else {
@@ -206,6 +221,17 @@ export async function salvarTarefa(original, v) {
   if (original.id && (v.status === "concluido") !== (original.status === "concluido")) await quitarCobranca(original, v.status === "concluido");
   avisar(original.id ? "Salvo." : v.tipo === TIPO_CONTEUDO ? "Post criado e adicionado ao calendário." : "Tarefa criada.");
 }
+
+/** Muda só a etapa de um post (e o status de tarefa que sai dela), com desfazer. */
+export async function mudarEtapa(t, etapa) {
+  if (!etapa || etapa === (t.statusConteudo || "ideia")) return;
+  const antes = { statusConteudo: t.statusConteudo || "ideia", status: t.status || "a_fazer", concluidoEm: t.concluidoEm || null };
+  const status = statusDaEtapa(etapa);
+  await atualizar("tarefas", t.id, { statusConteudo: etapa, status, concluidoEm: status === "concluido" ? (t.concluidoEm || hojeISO()) : null });
+  avisar(`Etapa: ${rotuloStatusConteudo(etapa)}.`, "ok", { desfazer: () => atualizar("tarefas", t.id, antes) });
+}
+/** Próxima etapa do post (ideia → produção → aprovação → aprovado → agendado → publicado). */
+export const proximaEtapa = (t) => { const i = STATUS_CONTEUDO.findIndex(([v]) => v === (t.statusConteudo || "ideia")); return STATUS_CONTEUDO[i + 1]?.[0] || null; };
 
 export async function alternarConcluida(t) {
   const concluir = t.status !== "concluido";

@@ -1,17 +1,66 @@
 // Tela inicial: o que está atrasado, o que vence hoje, a semana e os conteúdos próximos.
 import { el, hojeISO, addDias, fmtData, fmtDiaSemana, fmtMoeda, vazio } from "../ui.js";
 import { dados, nomeCliente } from "../db.js";
-import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, seloCliente } from "./componentes.js";
+import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, seloCliente, abas } from "./componentes.js";
+import { emailAtivo } from "../emails.js";
+import { configOpenAI } from "../openai.js";
+import { configAgenda } from "../agenda.js";
 import { rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
-import { pode, tarefaVisivel } from "../permissoes.js";
+import { pode, tarefaVisivel, eu, ehAdmin } from "../permissoes.js";
 import { compromissosEntre } from "../agenda.js";
 import { abrirCompromisso, cartaoCompromisso, avisoPendentes } from "../compromissos.js";
 
-export function render() {
+const lerPreferencia = () => { try { return localStorage.getItem("hyper-hoje-visao"); } catch { return null; } };
+const guardar = (chave, valor) => { try { localStorage.setItem(chave, valor); } catch {} };
+
+/** Lista de primeiros passos do administrador (some quando tudo estiver pronto ou ao dispensar). */
+function primeirosPassos(renderizar) {
+  if (!ehAdmin()) return null;
+  try { if (localStorage.getItem("hyper-primeiros-passos") === "ok") return null; } catch {}
+  const ativos = dados.clientes.filter((c) => c.ativo !== false);
+  const comMarca = ativos.filter((c) => c.tomDeVoz && (c.paleta || []).length).length;
+  const passos = [
+    ["Ligar os e-mails automáticos (convites, avisos, resumo diário)", emailAtivo(), "#/config"],
+    ["Cadastrar a chave da OpenAI (imagens e sugestões)", !!configOpenAI().chave, "#/config"],
+    ["Conectar a sua Google Agenda", !!configAgenda().email, "#/conta"],
+    [`Preencher a identidade das marcas (${comMarca} de ${ativos.length} clientes)`, ativos.length > 0 && comMarca >= ativos.length, "#/clientes"],
+    ["Convidar a equipe", dados.membros.length > 1, "#/usuarios"],
+    ["Criar as rotinas (produção, planejamento, cobrança)", dados.recorrencias.length > 0, "#/rotinas"],
+    ["Ligar os relatórios do Instagram e Facebook", !!(dados.config.find((c) => c.id === "meta")?.appId), "#/config"]
+  ];
+  const feitos = passos.filter(([, ok]) => ok).length;
+  if (feitos === passos.length) return null;
+  return el("section", { class: "bloco primeiros-passos" },
+    el("div", { class: "com-acao" }, el("h2", {}, `Primeiros passos (${feitos}/${passos.length})`),
+      el("button", { class: "link", onClick: () => { guardar("hyper-primeiros-passos", "ok"); renderizar(); } }, "Dispensar")),
+    el("div", { class: "barra-progresso" }, el("span", { style: { width: `${Math.round((feitos / passos.length) * 100)}%` } })),
+    el("ul", { class: "lista-passos" }, passos.map(([texto, ok, link]) => el("li", { class: ok ? "feito" : "" },
+      el("span", { class: "check-passo", "aria-hidden": "true" }, ok ? "✓" : ""), ok ? texto : el("a", { href: link }, texto)))));
+}
+
+/** Dicas rápidas para quem está começando (uma vez por navegador). */
+function dicas(renderizar) {
+  try { if (localStorage.getItem("hyper-dicas") === "ok") return null; } catch {}
+  const item = (titulo, texto) => el("li", {}, el("strong", {}, titulo), " ", texto);
+  return el("section", { class: "bloco dicas" },
+    el("div", { class: "com-acao" }, el("h2", {}, "Dicas rápidas"), el("button", { class: "link", onClick: () => { guardar("hyper-dicas", "ok"); renderizar(); } }, "Entendi")),
+    el("ul", {},
+      item("Ctrl+K", "(⌘K no Mac) busca qualquer cliente, post, tarefa ou tela."),
+      item("Clique no seu nome", "(embaixo, no menu) para pôr foto, conectar a sua Google Agenda e pedir mais acesso."),
+      item("Minhas × Equipe:", "aqui no Hoje você vê primeiro o que é seu."),
+      item("No celular,", "use \"Adicionar à tela de início\" no navegador para ter o app da Hyper como um aplicativo.")));
+}
+
+export function render({ estado = {}, renderizar = () => {} } = {}) {
   const hoje = hojeISO();
   const fimSemana = addDias(hoje, 7);
-  const visiveis = dados.tarefas.filter(tarefaVisivel);
+  const todasVisiveis = dados.tarefas.filter(tarefaVisivel);
+  const minha = (t) => t.responsavel && t.responsavel === eu.nome;
+  // Começa em "Minhas" quando a pessoa tem tarefas abertas em seu nome
+  estado.visao ??= lerPreferencia() || (todasVisiveis.some((t) => minha(t) && t.status !== "concluido") ? "minhas" : "equipe");
+  const soMinhas = estado.visao === "minhas";
+  const visiveis = soMinhas ? todasVisiveis.filter(minha) : todasVisiveis;
   const abertas = visiveis.filter((t) => t.status !== "concluido");
   const atrasadas = abertas.filter(atrasada).sort((a, b) => a.prazo.localeCompare(b.prazo));
   const deHoje = abertas.filter((t) => t.prazo === hoje);
@@ -23,7 +72,8 @@ export function render() {
     .filter((c) => c.tipo === TIPO_CONTEUDO && dataPost(c) >= hoje && dataPost(c) <= fimSemana && c.statusConteudo !== "publicado")
     .sort((a, b) => (dataPost(a) + (a.hora || "")).localeCompare(dataPost(b) + (b.hora || "")));
 
-  const compromissos = compromissosEntre(hoje, fimSemana);
+  const compromissos = compromissosEntre(hoje, fimSemana)
+    .filter(({ c }) => !soMinhas || !(c.participantes || []).length || c.participantes.includes(eu.nome));
   const mes = hoje.slice(0, 7);
   const aReceber = dados.financeiro.filter((f) => f.tipo === "receita" && f.status !== "pago" && f.vencimento?.startsWith(mes));
   const vencidas = dados.financeiro.filter((f) => f.tipo === "receita" && f.status !== "pago" && f.vencimento && f.vencimento < hoje);
@@ -41,8 +91,11 @@ export function render() {
   };
 
   return el("div", { class: "tela" },
-    cabecalho(`${saudacao}!`, dataExtenso.charAt(0).toUpperCase() + dataExtenso.slice(1),
-      el("button", { class: "destaque", onClick: () => abrirTarefa({ prazo: hoje }) }, "+ Nova tarefa")),
+    cabecalho(`${saudacao}${eu.nome ? `, ${eu.nome.split(" ")[0]}` : ""}!`, dataExtenso.charAt(0).toUpperCase() + dataExtenso.slice(1),
+      abas([["minhas", "Minhas"], ["equipe", "Equipe"]], estado.visao, (v) => { estado.visao = v; guardar("hyper-hoje-visao", v); renderizar(); }),
+      el("button", { class: "destaque", onClick: () => abrirTarefa({ prazo: hoje, responsavel: eu.nome }) }, "+ Nova tarefa")),
+    primeirosPassos(renderizar),
+    dicas(renderizar),
 
     el("div", { class: "resumo" },
       cartaoNumero("Atrasadas", atrasadas.length, atrasadas.length ? "alerta" : ""),
@@ -58,7 +111,7 @@ export function render() {
       el("section", { class: "bloco" },
         atrasadas.length ? [el("h2", { class: "titulo-alerta" }, `Atrasadas (${atrasadas.length})`), atrasadas.map((t) => cartaoTarefa(t))] : null,
         el("h2", {}, `Hoje (${deHoje.length})`),
-        deHoje.length ? deHoje.map((t) => cartaoTarefa(t)) : vazio("Nada vencendo hoje. 🎉"),
+        deHoje.length ? deHoje.map((t) => cartaoTarefa(t)) : vazio(soMinhas ? "Nada seu vencendo hoje. 🎉" : "Nada vencendo hoje. 🎉"),
         el("h2", {}, "Próximos 7 dias"),
         semana.length ? grupoPorDia(semana) : vazio("Semana livre por enquanto."),
         semPrazo.length ? [el("h2", {}, `Sem prazo (${semPrazo.length})`), semPrazo.map((t) => cartaoTarefa(t))] : null),
