@@ -783,3 +783,28 @@ img.avatar { object-fit: cover; padding: 0; }
 .cartao-cliente h3 { overflow-wrap: anywhere; }
 .marcas-cartao { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
 .marcas-cartao .etiqueta { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 3px solid var(--selo); }
+
+/* ---------------- Contratos, orçamentos e configurações do financeiro ---------------- */
+.previa-contrato { width: 100%; font-family: var(--fonte-texto); font-size: 13px; line-height: 1.5; }
+.itens-orcamento { display: grid; gap: 8px; margin-top: 10px; }
+.item-orcamento {
+  display: grid; grid-template-columns: minmax(0, 1fr) 110px 70px 100px auto; gap: 8px; align-items: end;
+  padding: 10px; border: 1px solid var(--hyper-gelo); border-radius: var(--raio-pequeno);
+}
+.item-orcamento .item-nome { display: grid; gap: 6px; min-width: 0; }
+.item-orcamento label span { display: block; font-size: 11px; color: var(--cor-texto-suave); }
+.totais-orcamento { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; justify-content: flex-end; margin: 12px 0; font-size: 18px; color: var(--hyper-roxo); }
+.acoes-esquerda { display: flex; gap: 16px; align-items: center; margin-top: 8px; }
+.lista-config { display: grid; gap: 8px; margin-bottom: 12px; }
+.item-config { border: 1px solid var(--hyper-gelo); border-radius: var(--raio-pequeno); padding: 10px 12px; }
+.item-config summary { cursor: pointer; }
+.item-config .form-grade { margin-top: 10px; }
+.lista-fixas { display: grid; gap: 8px; max-width: 760px; margin-bottom: 12px; }
+.fixa { display: grid; grid-template-columns: minmax(0, 1.6fr) 110px 70px 140px auto; gap: 8px; align-items: center; }
+.linha-importar { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--hyper-gelo); }
+@media (max-width: 760px) {
+  .item-orcamento { grid-template-columns: 1fr 1fr; }
+  .item-orcamento .item-nome { grid-column: 1 / -1; }
+  .fixa { grid-template-columns: 1fr 90px; }
+  .linha-importar { grid-template-columns: 1fr; }
+}

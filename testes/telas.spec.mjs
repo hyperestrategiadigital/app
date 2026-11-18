@@ -422,3 +422,70 @@ test("financeiro: mensalidade do mês entra sozinha e a aba Contratos mostra qua
   expect(erros).toEqual([]);
 });
 
+
+test("valores por extenso e dia útil", async ({ page }) => {
+  await abrir(page);
+  const r = await page.evaluate(async () => {
+    const c = await import("/js/comercial.js");
+    return [c.valorExtenso(800), c.valorExtenso(1221), c.valorExtenso(2310), c.valorExtenso(1200), c.valorExtenso(100), c.valorExtenso(1234.5), c.valorExtenso(1000000), c.valorExtenso(439.5), c.diaUtil("2026-12", 5)];
+  });
+  expect(r).toEqual(["oitocentos reais", "mil duzentos e vinte e um reais", "dois mil trezentos e dez reais", "mil e duzentos reais", "cem reais",
+    "mil duzentos e trinta e quatro reais e cinquenta centavos", "um milhão de reais", "quatrocentos e trinta e nove reais e cinquenta centavos", "2026-12-07"]);
+});
+
+test("contrato: o administrador gera o contrato do cliente e os dados ficam guardados", async ({ page }) => {
+  const erros = await abrir(page);
+  await page.evaluate(async () => { const db = await import("/js/db.js"); await db.salvarComId("config", "comercial", { contratada: { nome: "Fulano de Tal", documento: "CNPJ 00.000.000/0001-00", cidade: "Cidade/SP", foro: "Cidade/SP" } }); });
+  await page.goto("/#/financeiro/contratos");
+  await page.locator(".linha-tabela", { hasText: "Grupo Exemplo" }).getByRole("button", { name: /contrato/i }).click();
+  await page.fill("#f-contratante", "Empresa Exemplo LTDA");
+  await page.fill("#f-documento", "CNPJ 11.111.111/0001-11");
+  await page.locator(".chip-check", { hasText: "Gestão de tráfego pago" }).locator("input").check();
+  await page.getByRole("button", { name: "Ver contrato" }).click();
+  const texto = (await page.locator(".previa-contrato").inputValue()).replace(/\u00a0/g, " ");
+  expect(texto).toContain("CONTRATANTE EMPRESA EXEMPLO LTDA, registrada sob o CNPJ 11.111.111/0001-11");
+  expect(texto).toContain("CONTRATADA FULANO DE TAL");
+  expect(texto).toContain("R$ 2.000,00 (dois mil reais)");
+  expect(texto).toContain("(a) Manutenção e organização");
+  expect(texto).toContain("5º - O valor destinado aos anúncios");
+  expect(texto).toContain("foro da cidade de Cidade/SP");
+  const k = await page.evaluate(() => window.__store["espacos/hyper/contratos"].grupo);
+  expect(k.dadosContrato).toMatchObject({ contratante: "Empresa Exemplo LTDA" });
+  expect(erros).toEqual([]);
+});
+
+test("orçamento: monta com os serviços do catálogo e calcula o total com desconto", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/financeiro/orcamentos");
+  await page.getByRole("button", { name: "+ Orçamento" }).click();
+  await page.locator(".modal input[placeholder='Nome da empresa ou pessoa']").fill("Padaria Exemplo");
+  await page.locator(".item-orcamento input[aria-label='Preço (R$)']").fill("1000");
+  await page.locator(".modal label", { hasText: "Desconto (%)" }).locator("input").fill("10");
+  await expect(page.locator(".totais-orcamento")).toContainText("900,00/mês");
+  await page.locator(".modal").getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/orcamentos"] || {})[0]?.valorMensal)).toBe(900);
+  const o = await page.evaluate(() => Object.values(window.__store["espacos/hyper/orcamentos"])[0]);
+  expect(o).toMatchObject({ para: "Padaria Exemplo", desconto: 10, recorrente: true });
+  expect(o.itens[0].nome).toContain("tráfego");
+});
+
+test("importar financeiro: contratos, despesas fixas e mês fechado no zero a zero", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/financeiro/configurar");
+  await page.evaluate(async (mes) => {
+    const v = await import("/js/views/comercial.js");
+    v.previaImportacao({ tipo: "financeiro-hyper", reserva: 30,
+      contratos: [{ cliente: "loja exemplo", mensalidade: 500, diaVencimento: 5, vencimentoUtil: true, pagamento: "pre" }],
+      despesasFixas: [{ id: "canva", descricao: "Canva", valor: 34.9, dia: 10, categoria: "Ferramentas" }], quitarAte: mes });
+  }, MES);
+  await expect(page.locator(".linha-importar select")).toHaveValue("loja");
+  await page.locator(".modal").getByRole("button", { name: "Importar" }).click();
+  await expect.poll(() => page.evaluate((m) => window.__store["espacos/hyper/financeiro"]?.[`fixa-canva-${m}`]?.status, MES)).toBe("pago");
+  const s = await page.evaluate(() => window.__store);
+  expect(s["espacos/hyper/contratos"].loja).toMatchObject({ mensalidade: 500, vencimentoUtil: true, pagamento: "pre" });
+  expect(s["espacos/hyper/financeiro"][`mens-loja-${MES}`].status).toBe("pago");
+  expect(s["espacos/hyper/financeiro"][`mens-grupo-${MES}`].status).toBe("pago");
+  await page.getByRole("tab", { name: "Contratos" }).click();
+  await expect(page.locator(".resumo")).toContainText("Reserva (30%)");
+});
+

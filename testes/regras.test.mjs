@@ -51,6 +51,7 @@ beforeEach(async () => {
     await setDoc(doc(db, `${E}/manutencoes/x1`), { acoes: "ajuste" });
     await setDoc(doc(db, `${E}/config/openai`), { chave: "sk-teste" });
     await setDoc(doc(db, `${E}/config/equipe`), { pessoas: [] });
+    await setDoc(doc(db, `${E}/config/comercial`), { reserva: 30, despesasFixas: [{ descricao: "Canva", valor: 35 }] });
     await setDoc(doc(db, `${E}/recorrencias/r1`), { modelo: "livre" });
     await setDoc(doc(db, `${E}/clientes/c1/artes/a1`), { dados: "data:" });
     await setDoc(doc(db, `${E}/pessoal/basico/config/agenda`), { email: "b@x.com" });
@@ -194,6 +195,14 @@ test("acesso só a alguns clientes", async () => {
   // Quem vê todos continua lendo a coleção inteira
   await assertSucceeds(getDocs(collection(como("basico"), `${E}/tarefas`)));
   await assertSucceeds(getDocs(collection(como("financeiro"), `${E}/financeiro`)));
+});
+
+test("comercial (preços, despesas fixas, modelo de contrato): Financeiro que vê todos lê; só administrador grava", async () => {
+  await assertSucceeds(ler("financeiro", `${E}/config/comercial`));
+  await assertSucceeds(ler("admin", `${E}/config/comercial`));
+  for (const quem of ["basico", "conteudo", "trafego", "luisa"]) await assertFails(ler(quem, `${E}/config/comercial`));
+  await assertFails(gravar("financeiro", `${E}/config/comercial`, { reserva: 0 }));
+  await assertSucceeds(gravar("admin", `${E}/config/comercial`, { reserva: 25 }));
 });
 
 test("configuração de e-mail: só administrador", async () => {

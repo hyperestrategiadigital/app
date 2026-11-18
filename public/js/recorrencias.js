@@ -3,9 +3,10 @@
 // - producao:     toda semana, produzir os posts da SEMANA SEGUINTE do cliente
 // - planejamento: todo mês, planejar o MÊS SEGUINTE do cliente
 // - cobranca:     todo mês, cobrar a mensalidade no vencimento do cliente (ou X dias antes)
-import { dados, gravarEmLote, atualizar, porId, contrato, salvarComId, existeNoBanco } from "./db.js";
+import { dados, gravarEmLote, atualizar, porId, contrato, salvarComId, existeNoBanco, clientesAtivos } from "./db.js";
 import { pode } from "./permissoes.js";
 import { responsavelPadrao } from "./agenda.js";
+import { diaUtil, despesasFixas } from "./comercial.js";
 import { hojeISO, addDias, dataDe, normalizar, fmtData } from "./ui.js";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -96,12 +97,35 @@ export async function garantirMensalidade(clienteId, mes) {
   if (!pode("financeiro") || !(Number(c.mensalidade) > 0) || dados.financeiro.some((f) => f.id === id)) return false;
   if (await existeNoBanco("financeiro", id)) return false; // nunca sobrescreve uma mensalidade já paga
   const [a, m] = mes.split("-").map(Number);
-  const dia = String(Math.min(Number(c.diaVencimento) || 10, new Date(a, m, 0).getDate())).padStart(2, "0");
+  const vencimento = c.vencimentoUtil ? diaUtil(mes, Number(c.diaVencimento) || 5)
+    : `${mes}-${String(Math.min(Number(c.diaVencimento) || 10, new Date(a, m, 0).getDate())).padStart(2, "0")}`;
   await salvarComId("financeiro", id, {
     descricao: `Mensalidade ${MESES[m - 1]}`, tipo: "receita", categoria: "Mensalidade", clienteId,
-    valor: Number(c.mensalidade), vencimento: `${mes}-${dia}`, status: "pendente", pagoEm: null, criadoEm: Date.now()
+    valor: Number(c.mensalidade), vencimento, status: "pendente", pagoEm: null, criadoEm: Date.now()
   });
   return true;
+}
+
+/** Despesa fixa da Hyper (Financeiro → Configurar) no mês: id fixa-<id>-<mês>, nunca duplica nem sobrescreve. */
+export async function garantirFixa(f, mes) {
+  const id = `fixa-${f.id}-${mes}`;
+  if (!pode("financeiro") || !(Number(f.valor) > 0) || dados.financeiro.some((x) => x.id === id) || await existeNoBanco("financeiro", id)) return false;
+  const [a, m] = mes.split("-").map(Number);
+  await salvarComId("financeiro", id, {
+    descricao: f.descricao, tipo: "despesa", categoria: f.categoria || "Ferramentas", clienteId: "", fixaId: f.id,
+    valor: Number(f.valor), vencimento: `${mes}-${String(Math.min(Number(f.dia) || 10, new Date(a, m, 0).getDate())).padStart(2, "0")}`,
+    status: "pendente", pagoEm: null, criadoEm: Date.now()
+  });
+  return true;
+}
+
+/** Mensalidades dos contratos e despesas fixas do mês. Devolve quantos lançamentos criou. */
+export async function garantirMes(mes) {
+  const r = await Promise.all([
+    ...clientesAtivos().filter((c) => Number(contrato(c.id).mensalidade) > 0).map((c) => garantirMensalidade(c.id, mes)),
+    ...despesasFixas().map((f) => garantirFixa(f, mes))
+  ]);
+  return r.filter(Boolean).length;
 }
 
 /** Concluir a tarefa de cobrança marca a mensalidade como paga (e reabrir volta para pendente). */
