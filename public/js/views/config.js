@@ -6,6 +6,7 @@ import { analisarPlanilha } from "../importacao.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
 import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
+import { configMeta } from "../meta.js";
 import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO } from "../constantes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
 
@@ -87,6 +88,7 @@ export function render() {
     cabecalho("Ajustes", "E-mails automáticos, OpenAI, importação e backup. Sua Google Agenda fica em Minha conta (clique no seu nome)."),
 
     blocoEmail(),
+    blocoMeta(),
     blocoModelos(),
     blocoErros(),
     ehAdmin() ? blocoOpenAI() : null,
@@ -295,4 +297,31 @@ function blocoModelos() {
         await salvarComId("config", "modelos", { modelos });
         avisar("Modelos salvos.");
       } }, "Salvar modelos"))));
+}
+
+/** App da Meta para os relatórios do Instagram e do Facebook (o App ID não é secreto). */
+function blocoMeta() {
+  const cfg = configMeta();
+  const appId = el("input", { id: "meta-app", type: "text", inputmode: "numeric", placeholder: "Ex.: 1234567890123456", value: cfg.appId || "" });
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Relatórios do Instagram e Facebook"),
+    cfg.appId ? el("p", {}, el("span", { class: "etiqueta ok" }, "Ligado"), " Cada pessoa conecta o próprio Facebook na aba Resultados do cliente (ou em Minha conta).")
+      : el("p", {}, "Para puxar os números das contas e de cada post, crie uma vez um app gratuito na Meta e cole o App ID aqui."),
+    el("details", { class: "passo-a-passo", open: !cfg.appId },
+      el("summary", {}, "Como criar o app da Meta (10 minutos)"),
+      el("ol", { class: "passos" },
+        el("li", {}, "Logado no Facebook que administra as páginas dos clientes, abra ", el("a", { href: "https://developers.facebook.com/apps/create/", target: "_blank", rel: "noopener" }, "developers.facebook.com → Criar app"), ". Se pedir, cadastre-se como desenvolvedor (é grátis)."),
+        el("li", {}, "Caso de uso: escolha \"Outro\" e depois o tipo \"Empresa\". Nome: Hyper App. Ligue ao portfólio empresarial da Hyper, se aparecer."),
+        el("li", {}, "No painel do app, adicione o produto \"Login do Facebook\" (Facebook Login) e escolha \"Web\". Em Site, coloque ", el("code", {}, location.origin), "."),
+        el("li", {}, "Em Configurações do app → Básico: em Domínios do app coloque ", el("code", {}, location.hostname), " e salve. Copie o \"ID do aplicativo\"."),
+        el("li", {}, "Em Login do Facebook → Configurações, em URIs de redirecionamento OAuth válidos coloque ", el("code", {}, location.origin + "/"), " e salve."),
+        el("li", {}, "Pode deixar o app em modo de desenvolvimento. Quem for usar os relatórios precisa ter função no app: em Funções do app → Funções, adicione as pessoas da equipe como Testadoras (elas aceitam o convite no Facebook)."),
+        el("li", {}, "Cole o ID do aplicativo aqui embaixo e salve. Depois abra um cliente → aba Resultados → Conectar."))),
+    el("label", { class: "campo", for: "meta-app" }, el("span", {}, "ID do aplicativo (App ID)"), appId),
+    el("div", { class: "acoes" }, el("button", { onClick: async () => {
+      const v = appId.value.replace(/\D/g, "");
+      if (appId.value && !v) { avisar("O App ID tem só números.", "erro"); return; }
+      await salvarComId("config", "meta", { appId: v });
+      avisar(v ? "App da Meta salvo." : "Relatórios desligados.");
+    } }, "Salvar")));
 }

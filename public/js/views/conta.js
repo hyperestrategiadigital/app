@@ -7,6 +7,7 @@ import { eu, ehAdmin, AREAS, rotuloArea, clientesRestritos } from "../permissoes
 import { configAgenda, conectarAgenda, desconectarAgenda, sincronizar } from "../agenda.js";
 import { comprimirImagem } from "../arquivos.js";
 import { avisarAdmins } from "../emails.js";
+import { metaDisponivel, metaConectada, conectarMeta, desconectarMeta, contaMeta } from "../meta.js";
 
 const meuCadastro = () => dados.membros.find((m) => m.id === eu.uid) || eu;
 /** Nomes de todos os clientes ativos (config/clientes): quem vê só alguns usa para pedir outros. */
@@ -133,6 +134,21 @@ function blocoAgenda() {
     el("p", { class: "subtitulo" }, "O Google libera o acesso por cerca de 1 hora. Depois disso, ao salvar um compromisso, o app pede para conectar de novo."));
 }
 
+function blocoMeta() {
+  if (!metaDisponivel()) return null;
+  return el("div", { class: "conexao" },
+    el("div", { class: "com-acao" }, el("h3", {}, "Facebook e Instagram (relatórios)"),
+      metaConectada() ? el("span", { class: "etiqueta ok" }, "Conectado") : el("span", { class: "etiqueta" }, "Não conectado")),
+    el("p", {}, metaConectada() ? ["Conectado como ", el("strong", {}, contaMeta()), ". Os números aparecem na aba Resultados de cada cliente."]
+      : "Conecte o Facebook que administra as páginas dos clientes para ver os resultados. O acesso vale por algumas horas e fica só neste navegador."),
+    el("div", { class: "acoes" }, metaConectada()
+      ? el("button", { class: "perigo-texto", onClick: () => { desconectarMeta(); avisar("Facebook desconectado."); location.reload(); } }, "Desconectar")
+      : el("button", { onClick: async (e) => {
+        e.currentTarget.disabled = true;
+        try { avisar(`Facebook conectado: ${await conectarMeta()}.`); location.reload(); } catch (erro) { avisar(erro.message, "erro"); e.currentTarget.disabled = false; }
+      } }, "Conectar Facebook / Instagram")));
+}
+
 export function render() {
   const m = meuCadastro();
   return el("div", { class: "tela tela-estreita" },
@@ -142,5 +158,6 @@ export function render() {
     el("section", { class: "bloco" },
       el("h2", {}, "Suas conexões"),
       el("p", { class: "subtitulo" }, "Contas que são só suas. Cada pessoa da equipe conecta as próprias."),
-      blocoAgenda()));
+      blocoAgenda(),
+      blocoMeta()));
 }

@@ -10,6 +10,7 @@ import { dataPost } from "../exportacao.js";
 import { TIPO_CONTEUDO } from "../constantes.js";
 import { abrirConta, abrirManutencao } from "./trafego.js";
 import { abaMarca } from "./marca.js";
+import { abaResultados } from "./resultados.js";
 import { abaContas, linkGoogleAds, linkGerenciadorMeta } from "./contas.js";
 
 const podeEditar = () => ehAdmin() || pode("conteudo") || pode("trafego");
@@ -108,6 +109,7 @@ function ficha(id, estado, renderizar, resto = []) {
   const abasPermitidas = [["tarefas", "Tarefas"],
     ...(pode("conteudo") ? [["conteudo", "Conteúdo"], ["marca", "Marca"]] : []),
     ...(pode("conteudo") || pode("trafego") ? [["contas", "Contas"]] : []),
+    ...(pode("conteudo") || pode("trafego") ? [["resultados", "Resultados"]] : []),
     ...(pode("trafego") ? [["trafego", "Tráfego pago"]] : []),
     ...(pode("financeiro") ? [["financeiro", "Financeiro"]] : [])];
   if (!abasPermitidas.some(([v]) => v === estado.aba)) estado.aba = "tarefas";
@@ -126,6 +128,7 @@ function ficha(id, estado, renderizar, resto = []) {
   const conteudoAba = {
     marca: () => abaMarca(c, estado, renderizar),
     contas: () => abaContas(c),
+    resultados: () => abaResultados(c, estado, renderizar),
     tarefas: () => [
       el("div", { class: "com-acao" }, el("h2", {}, `Abertas (${abertas.length})`),
         el("button", { onClick: () => abrirTarefa({ clienteId: id, prazo: hojeISO() }) }, "+ Tarefa")),
