@@ -3,7 +3,7 @@
 // A "marca principal" é a identidade do próprio cliente; as demais ficam em `marcas` e, onde um campo
 // estiver vazio, usam o do cliente. Alimenta a copy, o prompt de imagem e o pedido de arte no Canva.
 import { el, avisar, linkExterno, campoCor, abrirModal, confirmar, formulario, fecharModais, normalizar } from "../ui.js";
-import { dados, atualizar, criar, excluir, porId, marcasDo, salvarComId, gravarEmLote, contrato, listarSub, salvarSub, identidade, carregarArquivo } from "../db.js";
+import { dados, atualizar, criar, excluir, porId, marcasDo, salvarComId, gravarEmLote, contrato, listarSub, salvarSub, excluirSub, identidade, carregarArquivo } from "../db.js";
 import { gerarTexto, temChave } from "../openai.js";
 import { ehAdmin, pode } from "../permissoes.js";
 import { caminhoArtes, comprimirImagem } from "../arquivos.js";
@@ -185,7 +185,8 @@ export function juntarClientes(c) {
       el("button", { class: "destaque", onClick: async (e) => {
         const ids = caixas.map((l) => l.querySelector("input")).filter((i) => i.checked).map((i) => i.value);
         if (!ids.length) { avisar("Marque pelo menos um cliente.", "erro"); return; }
-        e.currentTarget.disabled = true;
+        const botao = e.currentTarget;
+        botao.disabled = true;
         try {
           for (const id of ids) await juntarUm(c, porId("clientes", id), (msg) => (status.textContent = msg));
           fechar();
@@ -194,7 +195,7 @@ export function juntarClientes(c) {
           console.error(erro);
           status.textContent = "";
           avisar("Parou no meio: " + erro.message + " Rode de novo para terminar (o que já foi movido não duplica).", "erro");
-          e.currentTarget.disabled = false;
+          botao.disabled = false;
         }
       } }, "Juntar"))), { largo: true });
 }
@@ -251,6 +252,46 @@ export async function juntarUm(destino, origem, progresso, marcaExistente) {
   return marcaId;
 }
 
+/**
+ * O contrário de juntar: a marca sai do grupo e vira um cliente próprio (ex.: tem contrato separado).
+ * Se a marca veio de um cliente que foi juntado, reativa esse cliente; senão cria um novo.
+ * Posts e tarefas da marca, contas de anúncio, manutenções e criativos vão junto. Contrato e financeiro ficam
+ * no grupo (o cliente novo recebe o contrato dele depois, no Editar).
+ */
+export async function separarMarca(grupo, marca, progresso = () => {}) {
+  const antigo = marca.origemClienteId ? porId("clientes", marca.origemClienteId) : null;
+  const id = antigo?.id || `cli-${marca.id}`;
+  const identidadeMarca = {};
+  for (const k of [...CAMPOS_COPIADOS, "logo"]) if (marca[k] != null && marca[k] !== "") identidadeMarca[k] = marca[k];
+  progresso(`${marca.nome}: ${antigo ? "reativando o cliente" : "criando o cliente"}…`);
+  if (antigo) await atualizar("clientes", id, { ...identidadeMarca, nome: marca.nome, ativo: true, viraMarcaDe: "", marcaId: "" });
+  else await salvarComId("clientes", id, {
+    nome: marca.nome, ativo: true, servicos: grupo.servicos || [], segmento: grupo.segmento || "", paleta: [], cor: "",
+    observacoes: marca.descricao || "", criadoEm: Date.now(), separadoDe: grupo.id, ...identidadeMarca
+  });
+
+  progresso(`${marca.nome}: movendo posts e tarefas…`);
+  const mover = (lista) => lista.filter((x) => x.clienteId === grupo.id && x.marcaId === marca.id)
+    .map(({ id: i, arquivada, ...x }) => ({ id: i, ...x, clienteId: id, marcaId: "" }));
+  const tarefas = mover(dados.tarefas);
+  await gravarEmLote("tarefas", tarefas);
+  await carregarArquivo();
+  const arquivo = mover(dados.tarefasArquivo);
+  await gravarEmLote("tarefasArquivo", arquivo);
+  if (pode("trafego")) {
+    await gravarEmLote("contasAds", mover(dados.contasAds));
+    await gravarEmLote("manutencoes", mover(dados.manutencoes));
+  }
+  if (pode("conteudo")) {
+    progresso(`${marca.nome}: movendo criativos…`);
+    const ids = new Set([...tarefas, ...arquivo].map((t) => t.id));
+    const artes = (await listarSub(caminhoArtes(grupo.id)).catch(() => [])).filter((a) => ids.has(a.tarefaId));
+    for (const { id: i, ...a } of artes) { await salvarSub(caminhoArtes(id), a, i); await excluirSub(caminhoArtes(grupo.id), i); }
+  }
+  await excluir("marcas", marca.id, { lixeira: false });
+  return id;
+}
+
 /* ---------------- Aba ---------------- */
 
 export function abaMarca(c, estado = {}, renderizar = () => {}) {
@@ -288,7 +329,18 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
       el("div", {},
         el("h3", {}, `${c.nome} · ${marca.nome}`),
         el("p", { class: "subtitulo" }, [marca.instagram, marca.descricao].filter(Boolean).join(" · ") || "Campos vazios usam o que estiver no grupo (institucional).")),
-      podeGerir ? el("button", { class: "secundario mini", onClick: () => abrirMarca(c.id, marca) }, "Editar nome, Instagram e status") : null) : null,
+      el("div", { class: "acoes" },
+        podeGerir ? el("button", { class: "secundario mini", onClick: () => abrirMarca(c.id, marca) }, "Editar nome, Instagram e status") : null,
+        ehAdmin() ? el("button", { class: "link", onClick: async (e) => {
+          const botao = e.currentTarget;
+          if (!(await confirmar(`Tirar ${marca.nome} de ${c.nome} e transformar num cliente próprio? Os ${contar(marca.id)} post(s) e tarefas dela, a identidade (logo, cores, tom de voz…), contas de anúncio e criativos vão junto. O contrato de ${c.nome} continua no grupo; o de ${marca.nome} você preenche depois no Editar do cliente novo.`))) return;
+          botao.disabled = true;
+          try {
+            const novo = await separarMarca(c, marca, (msg) => avisar(msg));
+            avisar(`${marca.nome} agora é um cliente próprio.`);
+            location.hash = `#/clientes/${novo}`;
+          } catch (erro) { console.error(erro); avisar("Parou no meio: " + erro.message + " Clique de novo para terminar.", "erro"); botao.disabled = false; }
+        } }, "Separar em cliente próprio…") : null)) : null,
     campoLogo(alvo),
     campoLink(alvo, "linkDrive", "Pasta da marca no Drive",
       "Logos, fontes, manual e criativos de referência ficam nesta pasta. O link vai junto no pedido de arte do Canva.",

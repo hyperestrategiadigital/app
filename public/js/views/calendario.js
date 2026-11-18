@@ -4,13 +4,13 @@ import * as planejamento from "./planejamento.js";
 import { gerarLinkAprovacao, seloResposta } from "../aprovacoes.js";
 import { el, hojeISO, addDias, fmtData, vazio, formulario, dataDe, avisar } from "../ui.js";
 import { dados, marcasDo, porId, opcoesClientes, nomeCliente, atualizar, registrarAtividade } from "../db.js";
-import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca, mudarEtapa, proximaEtapa } from "./componentes.js";
+import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca, mudarEtapa, proximaEtapa, visoesTarefas, seletorResponsavel, atrasada } from "./componentes.js";
 import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost, exportarPDF, nomeMes } from "../exportacao.js";
 import { abrirCompromisso, rotuloCompromisso, avisoPendentes } from "../compromissos.js";
 import { compromissosEntre } from "../agenda.js";
 import { abrirModal } from "../ui.js";
-import { pode } from "../permissoes.js";
+import { pode, eu, ehAdmin, tarefaVisivel } from "../permissoes.js";
 
 const ICONE_FORMATO = {
   "Feed estático": "▣", "Carrossel": "▤", "Reels": "▶", "Story": "◫", "Sequência de stories": "◫",
@@ -42,10 +42,11 @@ function chipCompromisso({ c }) {
   }, el("span", { class: "chip-icone", "aria-hidden": "true" }, "◷"), rotuloCompromisso(c));
 }
 
-/** Clique num dia no modo "Tudo": escolhe entre post e compromisso. */
+/** Clique num dia no modo "Tudo": escolhe entre post, tarefa e compromisso. */
 function escolherNoDia(data, clienteId) {
   const fechar = abrirModal("O que você quer criar?", el("div", { class: "escolha-dia" },
-    el("button", { class: "destaque", onClick: () => { fechar(); novoPost({ data, clienteId }); } }, "▣ Post de conteúdo"),
+    pode("conteudo") ? el("button", { class: "destaque", onClick: () => { fechar(); novoPost({ data, clienteId }); } }, "▣ Post de conteúdo") : null,
+    el("button", { onClick: () => { fechar(); abrirTarefa({ prazo: data, clienteId }); } }, "✓ Tarefa (entrega no dia)"),
     el("button", { onClick: () => { fechar(); abrirCompromisso({ data, clienteId }); } }, "◷ Compromisso (reunião, gravação…)")));
 }
 
@@ -58,6 +59,16 @@ async function moverPost(id, novoDia) {
   await atualizar("tarefas", id, { dataPublicacao: novoDia, prazo: t.prazo ? addDias(t.prazo, delta) : novoDia });
   registrarAtividade(id, { texto: `mudou a publicação para ${fmtData(novoDia, true)}` });
   avisar(`"${t.titulo}" foi para ${fmtData(novoDia, true)}.`, "ok", { desfazer: () => atualizar("tarefas", id, antes) });
+}
+
+/** Tarefa comum (não é post) no dia do prazo. */
+function chipTarefa(t) {
+  const feita = t.status === "concluido";
+  return el("button", {
+    class: `chip-tarefa ${feita ? "feita" : ""} ${atrasada(t) ? "atrasada" : ""}`, style: { "--selo": corDoItem(t) },
+    title: `${t.tipo || "Tarefa"} · ${t.titulo}${t.responsavel ? " · " + t.responsavel : ""}${t.clienteId ? " · " + nomeCliente(t.clienteId) : ""}`,
+    onClick: (e) => { e.stopPropagation(); abrirTarefa(t); }
+  }, el("span", { class: "chip-icone", "aria-hidden": "true" }, feita ? "✓" : "○"), t.titulo);
 }
 
 function chip(t) {
@@ -89,6 +100,7 @@ export function render({ params, estado, renderizar }) {
     estado.plano ??= {};
     return planejamento.render({ params: [params[0], estado.mes], estado: estado.plano, renderizar });
   }
+  estado.visao = "calendario"; // lembra a visão para o item "Tarefas" do menu
   // Atalho #/calendario/<cliente>/<mês> (ex.: rotina "Produzir semana")
   const chaveParams = params.join("/");
   if (params.length && estado.params !== chaveParams) {
@@ -99,16 +111,19 @@ export function render({ params, estado, renderizar }) {
   estado.mes ??= hojeISO().slice(0, 7);
   // No celular a grade do mês fica apertada: começa na lista
   estado.modo ??= window.matchMedia("(max-width: 760px)").matches ? "lista" : "mes";
-  estado.camada ??= pode("conteudo") ? "tudo" : "compromissos";
-  if (!pode("conteudo")) estado.camada = "compromissos"; // sem acesso a conteúdo: só compromissos
-  const verPosts = estado.camada !== "compromissos";
-  const verCompromissos = estado.camada !== "conteudo";
+  estado.camada ??= "tudo";
+  if (!pode("conteudo") && estado.camada === "conteudo") estado.camada = "tudo";
+  if (estado.responsavel === undefined) estado.responsavel = ehAdmin() ? "" : eu.nome; // igual em Tarefas
+  const verPosts = pode("conteudo") && ["tudo", "conteudo"].includes(estado.camada);
+  const verTarefas = ["tudo", "tarefas"].includes(estado.camada);
+  const verCompromissos = ["tudo", "compromissos"].includes(estado.camada);
+  const doResponsavel = (t) => !estado.responsavel || (t.responsavel || "") === estado.responsavel;
   const [ano, mes] = estado.mes.split("-").map(Number);
   const posts = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && dataPost(t));
   const marcas = estado.cliente ? marcasDo(estado.cliente) : [];
   if (!marcas.length) estado.marca = null;
   const filtrados = posts.filter((t) =>
-    (!estado.cliente || t.clienteId === estado.cliente) &&
+    (!estado.cliente || t.clienteId === estado.cliente) && doResponsavel(t) &&
     (estado.marca == null || (t.marcaId || "") === estado.marca) &&
     (!estado.status || (t.statusConteudo || "ideia") === estado.status));
 
@@ -116,6 +131,8 @@ export function render({ params, estado, renderizar }) {
   const set = (k) => (e) => { estado[k] = e.target.value; renderizar(); };
 
   const doMes = filtrados.filter((t) => dataPost(t).startsWith(estado.mes));
+  const tarefasCal = verTarefas ? dados.tarefas.filter((t) => t.tipo !== TIPO_CONTEUDO && t.prazo && tarefaVisivel(t) &&
+    (!estado.cliente || t.clienteId === estado.cliente) && doResponsavel(t)) : [];
   const contagem = STATUS_CONTEUDO.map(([s, r]) => [r, doMes.filter((t) => (t.statusConteudo || "ideia") === s).length]).filter(([, n]) => n);
 
   // Legenda: clientes com posts no mês (clique filtra)
@@ -147,10 +164,11 @@ export function render({ params, estado, renderizar }) {
     marcas.length ? el("select", { "aria-label": "Marca", onChange: (e) => { estado.marca = e.target.value === "*" ? null : e.target.value; renderizar(); } },
       [["*", "Todas as marcas"], ...marcas.map((m) => [m.id, m.nome]), ["", "Institucional do grupo"]]
         .map(([v, r]) => el("option", { value: v, selected: v === (estado.marca ?? "*") }, r))) : null,
-    !pode("conteudo") ? null : el("select", { onChange: set("status"), "aria-label": "Etapa" },
+    seletorResponsavel(estado, renderizar),
+    !verPosts ? null : el("select", { onChange: set("status"), "aria-label": "Etapa" },
       el("option", { value: "" }, "Todas as etapas"), STATUS_CONTEUDO.map(([v, r]) => el("option", { value: v, selected: v === estado.status }, r))),
-    pode("conteudo") ? abas([["tudo", "Tudo"], ["conteudo", "Conteúdo"], ["compromissos", "Compromissos"]], estado.camada, (m) => { estado.camada = m; renderizar(); }) : null,
-    abas([["mes", "Mês"], ["lista", "Lista"]], estado.modo, (m) => { estado.modo = m; renderizar(); }));
+    abas([["tudo", "Tudo"], ...(pode("conteudo") ? [["conteudo", "Posts"]] : []), ["tarefas", "Tarefas"], ["compromissos", "Compromissos"]], estado.camada, (m) => { estado.camada = m; renderizar(); }),
+    abas([["mes", "Grade"], ["lista", "Lista do mês"]], estado.modo, (m) => { estado.modo = m; renderizar(); }));
 
   const [ini, fimP] = [`${estado.mes}-01`, addDias(`${estado.mes}-01`, 41)];
   const compromissosDoPeriodo = compromissosEntre(addDias(ini, -7), fimP)
@@ -168,22 +186,33 @@ export function render({ params, estado, renderizar }) {
       dias.slice(0, semanas * 7).map((d) => {
         const doDia = verPosts ? filtrados.filter((t) => dataPost(t) === d).sort((a, b) => (a.hora || "").localeCompare(b.hora || "")) : [];
         const comps = verCompromissos ? compromissosDoPeriodo.filter((x) => x.data === d) : [];
+        const tarefasDia = tarefasCal.filter((t) => t.prazo === d);
         return el("div", {
           class: `cal-dia ${d.slice(0, 7) !== estado.mes ? "fora" : ""} ${d === hoje ? "hoje" : ""}`,
           onDragover: (e) => { if (e.dataTransfer.types.includes("text/post")) { e.preventDefault(); e.currentTarget.classList.add("alvo"); } },
           onDragleave: (e) => e.currentTarget.classList.remove("alvo"),
           onDrop: (e) => { e.preventDefault(); e.currentTarget.classList.remove("alvo"); const id = e.dataTransfer.getData("text/post"); if (id) moverPost(id, d); },
           onClick: () => estado.camada === "compromissos" ? abrirCompromisso({ data: d, clienteId: estado.cliente || "" })
-            : estado.camada === "conteudo" ? novoPost({ data: d, clienteId: estado.cliente || "", marcaId: estado.marca || "" }) : escolherNoDia(d, estado.cliente || ""),
+            : estado.camada === "conteudo" ? novoPost({ data: d, clienteId: estado.cliente || "", marcaId: estado.marca || "" })
+            : estado.camada === "tarefas" ? abrirTarefa({ prazo: d, clienteId: estado.cliente || "" }) : escolherNoDia(d, estado.cliente || ""),
           title: "Clique para criar neste dia"
-        }, el("span", { class: "cal-num" }, Number(d.slice(8))), comps.map(chipCompromisso), doDia.map(chip));
+        }, el("span", { class: "cal-num" }, Number(d.slice(8))), comps.map(chipCompromisso), doDia.map(chip), tarefasDia.map(chipTarefa));
       }));
   } else {
     const itens = [
       ...(verPosts ? doMes.map((t) => ({ chave: dataPost(t) + (t.hora || ""), t })) : []),
-      ...(verCompromissos ? compromissosDoPeriodo.filter((x) => x.data.startsWith(estado.mes)).map((x) => ({ chave: x.data + (x.c.hora || ""), x })) : [])
+      ...(verCompromissos ? compromissosDoPeriodo.filter((x) => x.data.startsWith(estado.mes)).map((x) => ({ chave: x.data + (x.c.hora || ""), x })) : []),
+      ...tarefasCal.filter((t) => t.prazo.startsWith(estado.mes)).map((t) => ({ chave: t.prazo + "~", tarefa: t }))
     ].sort((a, b) => a.chave.localeCompare(b.chave));
-    corpo = el("div", { class: "lista" }, itens.length ? itens.map(({ t, x }) => x
+    corpo = el("div", { class: "lista" }, itens.length ? itens.map(({ t, x, tarefa }) => tarefa
+      ? el("div", { class: `linha-tabela ${tarefa.status === "concluido" ? "feita" : ""}`, onClick: () => abrirTarefa(tarefa) },
+        el("span", { class: "data-mini" }, fmtData(tarefa.prazo, true)),
+        seloCliente(tarefa.clienteId, tarefa), el("strong", {}, tarefa.titulo),
+        el("span", { class: "etiqueta" }, tarefa.tipo || "Tarefa"),
+        tarefa.responsavel ? el("span", { class: "etiqueta" }, tarefa.responsavel) : null,
+        el("span", { class: `etiqueta ${tarefa.status === "concluido" ? "ok" : atrasada(tarefa) ? "alerta" : ""}` },
+          tarefa.status === "concluido" ? "Concluída" : atrasada(tarefa) ? "Atrasada" : tarefa.status === "andamento" ? "Em andamento" : "A fazer"))
+      : x
       ? el("div", { class: "linha-tabela linha-compromisso", onClick: () => abrirCompromisso(x.c) },
         el("span", { class: "data-mini" }, `${fmtData(x.data, true)}${x.c.hora ? " " + x.c.hora : ""}`),
         seloCliente(x.c.clienteId), el("strong", {}, x.c.titulo),
@@ -202,14 +231,16 @@ export function render({ params, estado, renderizar }) {
   }
 
   return el("div", { class: "tela" },
-    cabecalho("Calendário",
-      !pode("conteudo") ? "Seus compromissos e reuniões" : contagem.length ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para criar um post",
+    cabecalho("Tarefas",
+      contagem.length && verPosts ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para criar",
       pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = planejamento.linkPlano(c, m)), "Planejar mês") }, "☷ Planejar mês") : null,
       pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => gerarLinkAprovacao(c, m, estado.cliente === c ? estado.marca ?? undefined : undefined), "Link de aprovação") }, "🔗 Link de aprovação") : null,
       pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => exportarPDF(c, m, estado.cliente === c ? estado.marca ?? undefined : undefined), "Exportar PDF") }, "⬇ PDF") : null,
       el("button", { class: "secundario", onClick: () => abrirCompromisso({ clienteId: estado.cliente || "" }) }, "+ Compromisso"),
+      el("button", { class: pode("conteudo") ? "secundario" : "destaque", onClick: () => abrirTarefa({ clienteId: estado.cliente || "", prazo: hojeISO() }) }, "+ Tarefa"),
       pode("conteudo") ? el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "", marcaId: estado.marca || "" }) }, "+ Novo post") : null),
+    visoesTarefas(estado, renderizar),
     verCompromissos ? avisoPendentes() : null,
     filtros, verPosts ? legenda : null, corpo,
-    el("p", { class: "nota" }, "Posts são tarefas do tipo Conteúdo e nunca vão para a sua agenda pessoal. Compromissos (◷) são reuniões, gravações e visitas: esses podem ir para a Google Agenda. Para exportar ou planejar, filtre um cliente ou escolha na hora."));
+    el("p", { class: "nota" }, "Posts aparecem no dia da publicação e as outras tarefas (○) no dia do prazo. Compromissos (◷) são reuniões, gravações e visitas: só eles vão para a Google Agenda. Para exportar ou planejar, filtre um cliente ou escolha na hora."));
 }

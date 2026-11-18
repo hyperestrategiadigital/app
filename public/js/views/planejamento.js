@@ -3,6 +3,7 @@
 import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal, confirmar, formulario, vazio, fecharModais } from "../ui.js";
 import { dados, porId, criar, atualizar, excluir, clientesAtivos, marcasDo } from "../db.js";
 import { cabecalho, abas, modeloChecklist } from "./componentes.js";
+import { responsavelPadrao } from "../agenda.js";
 import { FORMATOS, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
 import { postsDoMes, dataPost, exportarPDF, nomeMes, temPrefixo } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
@@ -124,7 +125,7 @@ export function render({ params, estado, renderizar }) {
             atualizados++;
           }
         } else {
-          const ref = await criar("tarefas", { ...v, tipo: TIPO_CONTEUDO, clienteId, status, concluidoEm: status === "concluido" ? hojeISO() : null, checklist: modeloChecklist({ tipo: TIPO_CONTEUDO, formato: v.formato }), notas: "", linkCanva: "", linkDrive: "", copy: "" });
+          const ref = await criar("tarefas", { ...v, tipo: TIPO_CONTEUDO, clienteId, responsavel: responsavelPadrao(), status, concluidoEm: status === "concluido" ? hojeISO() : null, checklist: modeloChecklist({ tipo: TIPO_CONTEUDO, formato: v.formato }), notas: "", linkCanva: "", linkDrive: "", copy: "" });
           l.id = ref.id; l.chave = ref.id; criados++;
         }
       }

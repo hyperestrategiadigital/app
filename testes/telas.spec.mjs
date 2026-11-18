@@ -61,7 +61,7 @@ test("todas as telas abrem sem erro e o menu agrupa a administração", async ({
     await expect(page.locator("#conteudo h1").first()).toBeVisible();
   }
   await expect(page.locator(".menu-grupo summary")).toHaveText(/Administração/);
-  await expect(page.locator("#menu > a")).toHaveCount(7);
+  await expect(page.locator("#menu > a")).toHaveCount(6); // Tarefas e Calendário são um item só
   await expect(page.locator("#menu")).toContainText("Creators");
   for (const rota of ["lixeira", "creators"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
   expect(erros).toEqual([]);
@@ -362,3 +362,63 @@ test("juntar cliente solto numa marca de mesmo nome não duplica a marca", async
   expect(s["espacos/hyper/marcas"]["m-loja-ja"].tomDeVoz).toBe("Leve e direto");
   expect(s["espacos/hyper/tarefas"].p1.marcaId).toBe("m-loja-ja");
 });
+
+test("tarefas e calendário são uma tela só: tarefas aparecem no calendário e as visões trocam", async ({ page }) => {
+  await page.setViewportSize({ width: 1300, height: 900 });
+  const erros = await abrir(page);
+  await expect(page.locator("#menu > a", { hasText: "Tarefas" })).toHaveCount(1);
+  await page.goto("/#/calendario");
+  await expect(page.getByRole("tab", { name: "▦ Calendário" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".chip-tarefa", { hasText: "Revisar campanhas" })).toBeVisible();
+  await page.getByRole("tab", { name: "☰ Lista" }).click();
+  await expect(page).toHaveURL(/#\/tarefas$/);
+  await expect(page.getByRole("tab", { name: "☰ Lista" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#menu a.ativo")).toHaveText(/Tarefas/);
+  await page.getByRole("tab", { name: "▦ Calendário" }).click();
+  await expect(page).toHaveURL(/#\/calendario$/);
+  expect(erros).toEqual([]);
+});
+
+test("separar uma marca do grupo devolve o cliente com os posts dele", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/clientes/grupo");
+  await page.getByRole("tab", { name: "Marca" }).click();
+  await page.getByRole("button", { name: /Juntar outros clientes/ }).click();
+  await page.check(".modal input[value=loja]");
+  await page.locator(".modal").getByRole("button", { name: "Juntar" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].p1.marcaId)).toBe("m-loja");
+  await page.locator(".marcas-seletor").getByRole("button", { name: /Loja Exemplo/ }).click();
+  await page.getByRole("button", { name: "Separar em cliente próprio…" }).click();
+  await page.locator(".modal").getByRole("button", { name: "Confirmar" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.ativo)).toBe(true);
+  const s = await page.evaluate(() => window.__store);
+  expect(s["espacos/hyper/tarefas"].p1).toMatchObject({ clienteId: "loja", marcaId: "" });
+  expect(s["espacos/hyper/tarefas"].t2.clienteId).toBe("loja");
+  expect(s["espacos/hyper/marcas"]?.["m-loja"]).toBeUndefined();
+  expect(s["espacos/hyper/clientes"].loja.tomDeVoz).toBe("Leve e direto");
+});
+
+test("passar tarefas para uma pessoa e responsável padrão sem a conta da Hyper", async ({ page }) => {
+  await abrir(page, { membros: {
+    hyper: { nome: "Hyper Estratégia Digital", email: "hyper@exemplo.com", papel: "admin", status: "ativo" },
+    ana: { nome: "Ana", email: "ana@exemplo.com", papel: "basico", status: "ativo", permissoes: ["conteudo"] }
+  } });
+  await page.goto("/#/usuarios");
+  await page.selectOption("#passar-de", "*");
+  await expect(page.locator("#passar-para option")).toHaveText(["Ana"]);
+  await page.getByRole("button", { name: "Passar tarefas" }).click();
+  await page.locator(".modal").getByRole("button", { name: "Confirmar" }).click();
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).every((t) => t.responsavel === "Ana"))).toBe(true);
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefasArquivo"] || {}).every((t) => t.responsavel === "Ana" && !("arquivada" in t)))).toBe(true);
+});
+
+test("financeiro: mensalidade do mês entra sozinha e a aba Contratos mostra quanto cada cliente paga", async ({ page }) => {
+  const erros = await abrir(page);
+  await page.goto("/#/financeiro");
+  await expect.poll(() => page.evaluate((m) => window.__store["espacos/hyper/financeiro"]?.[`mens-grupo-${m}`]?.valor, MES)).toBe(2000);
+  await page.getByRole("tab", { name: "Contratos" }).click();
+  await expect(page.locator("#conteudo")).toContainText("Grupo Exemplo");
+  await expect(page.locator("#conteudo")).toContainText("Sem valor de contrato (1)");
+  expect(erros).toEqual([]);
+});
+

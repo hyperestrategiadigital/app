@@ -2,8 +2,8 @@
 // convites por e-mail, quem está no espaço, o que cada um pode ver (áreas e clientes) e a equipe sem conta.
 // Toda pessoa entra como "básico"; pelo convite, já entra com o acesso definido aqui.
 import { el, avisar, confirmar, hojeISO, vazio, formulario } from "../ui.js";
-import { dados, atualizar, excluir, espacoInfo, salvarComId, listarConvites, salvarConvite, excluirConvite } from "../db.js";
-import { cabecalho, avatar } from "./componentes.js";
+import { dados, atualizar, excluir, espacoInfo, salvarComId, listarConvites, salvarConvite, excluirConvite, gravarEmLote, carregarArquivo } from "../db.js";
+import { cabecalho, avatar, opcoesResponsaveis } from "./componentes.js";
 import { AREAS, eu, rotuloArea } from "../permissoes.js";
 import { descreverPedido } from "./conta.js";
 import { emailConvite, emailLiberado, emailMaisAcesso, emailAtivo, sincronizarAdmins } from "../emails.js";
@@ -182,7 +182,41 @@ export function render({ renderizar }) {
     el("p", { class: "subtitulo" }, "Link do app: ", el("a", { href: location.origin, target: "_blank", rel: "noopener" }, location.origin)),
     blocoConvites(renderizar),
     membros.length ? el("div", { class: "lista-membros" }, membros.map(cartaoMembro)) : vazio("Ninguém ainda."),
-    blocoEquipe());
+    blocoEquipe(),
+    blocoPassarTarefas(renderizar));
+}
+
+const SEM = "__sem";
+/** Passa todas as tarefas de uma pessoa (ou as sem responsável) para outra, de uma vez. */
+function blocoPassarTarefas(renderizar) {
+  const todas = () => [...dados.tarefas.map((t) => ["tarefas", t]), ...(dados.tarefasArquivo || []).map((t) => ["tarefasArquivo", t])];
+  const contagem = {};
+  for (const [, t] of todas()) { const k = t.responsavel || SEM; contagem[k] = (contagem[k] || 0) + 1; }
+  const quem = Object.keys(contagem).sort((a, b) => (a === SEM ? -1 : b === SEM ? 1 : a.localeCompare(b, "pt-BR")));
+  const de = el("select", { id: "passar-de" }, el("option", { value: "*" }, `Todas, de qualquer pessoa (${todas().length})`),
+    ...quem.map((k) => el("option", { value: k }, `${k === SEM ? "Sem responsável" : k} (${contagem[k]})`)));
+  const para = el("select", { id: "passar-para" }, ...opcoesResponsaveis().map((n) => el("option", { value: n }, n)));
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Passar tarefas para outra pessoa"),
+    el("p", { class: "subtitulo" }, "Muda o responsável de várias tarefas e posts de uma vez, inclusive as concluídas. Útil quando alguém sai da equipe ou para assumir tudo que está sem responsável."),
+    el("div", { class: "form-grade" },
+      el("label", { class: "campo metade", for: "passar-de" }, el("span", {}, "Tarefas de"), de),
+      el("label", { class: "campo metade", for: "passar-para" }, el("span", {}, "Passar para"), para)),
+    el("div", { class: "acoes" }, el("button", { onClick: async (e) => {
+      const botao = e.currentTarget;
+      await carregarArquivo();
+      const alvo = todas().filter(([, t]) => (de.value === "*" || (t.responsavel || SEM) === de.value) && (t.responsavel || "") !== para.value);
+      if (!alvo.length) { avisar(`Nada para mudar: já está tudo com ${para.value}.`); return; }
+      if (!(await confirmar(`Passar ${alvo.length} tarefa(s) para ${para.value}?`))) return;
+      botao.disabled = true;
+      try {
+        for (const col of ["tarefas", "tarefasArquivo"]) {
+          await gravarEmLote(col, alvo.filter(([c]) => c === col).map(([, { arquivada, ...t }]) => ({ ...t, responsavel: para.value })));
+        }
+        avisar(`${alvo.length} tarefa(s) agora são de ${para.value}.`);
+        renderizar();
+      } catch (erro) { avisar(erro.message, "erro"); botao.disabled = false; }
+    } }, "Passar tarefas")));
 }
 
 export function blocoEquipe() {

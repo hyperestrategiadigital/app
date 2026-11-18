@@ -7,6 +7,7 @@ import { dados, porId, criar, atualizar, salvarComId, marcasDo } from "../db.js"
 import { TIPO_CONTEUDO, FORMATOS, statusDaEtapa } from "../constantes.js";
 import { modeloChecklist } from "./componentes.js";
 import { registrarAtividade } from "../db.js";
+import { responsavelPadrao } from "../agenda.js";
 
 const semEspaco = (s) => normalizar(s).replace(/[^a-z0-9]/g, "");
 function hash(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); }
@@ -100,7 +101,7 @@ export function abrirImportarPlanejamento() {
           formato, rede: p.rede || "Instagram", dataPublicacao: p.data, hora: p.hora || "", prazo: p.prazo || p.data,
           statusConteudo: "ideia", status: statusDaEtapa("ideia"), concluidoEm: null,
           objetivo: p.objetivo || "", roteiro: p.roteiro || "", copy: "", linkCanva: "", linkDrive: "", notas: p.notas || "",
-          responsavel: p.responsavel || "", checklist: modeloChecklist({ tipo: TIPO_CONTEUDO, formato }),
+          responsavel: p.responsavel || responsavelPadrao(), checklist: modeloChecklist({ tipo: TIPO_CONTEUDO, formato }),
           origem: "importacao-planejamento", criadoEm: Date.now()
         });
         registrarAtividade(id, { texto: "criou (importação do planejamento)" });

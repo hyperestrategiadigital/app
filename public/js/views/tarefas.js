@@ -2,12 +2,14 @@
 import { quitarCobranca } from "../recorrencias.js";
 import { el, hojeISO, addDias, normalizar, vazio } from "../ui.js";
 import { dados, atualizar, opcoesClientes, registrarAtividade } from "../db.js";
-import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas, opcoesResponsaveis } from "./componentes.js";
-import { eu, ehAdmin, tarefaVisivel } from "../permissoes.js";
+import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, visoesTarefas, seletorResponsavel, opcoesResponsaveis } from "./componentes.js";
+import { novoPost } from "./calendario.js";
+import { eu, ehAdmin, tarefaVisivel, pode } from "../permissoes.js";
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, etapaDoStatus } from "../constantes.js";
 
 export function render({ estado, renderizar }) {
-  estado.modo ??= "quadro";
+  // Tarefas e Calendário compartilham o estado (filtros); aqui ficam as visões Quadro, Lista e Carga da equipe
+  if (!estado.visao || estado.visao === "calendario") estado.visao = "quadro";
   estado.periodoConcluidas ??= "30";
   const f = estado;
 
@@ -36,17 +38,14 @@ export function render({ estado, renderizar }) {
       opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (f.cliente || "") }, v ? r : "Todos os clientes"))),
     el("select", { onChange: set("tipo"), "aria-label": "Tipo" },
       el("option", { value: "" }, "Todos os tipos"), TIPOS_TAREFA.map((t) => el("option", { value: t, selected: t === f.tipo }, t))),
-    el("select", { onChange: set("responsavel"), "aria-label": "Responsável" },
-      el("option", { value: "" }, "Todos os responsáveis"),
-      [...new Set([...opcoesResponsaveis(), ...dados.tarefas.map((t) => t.responsavel).filter(Boolean)])].map((r) => el("option", { value: r, selected: r === f.responsavel }, r))),
-    abas([["quadro", "Quadro"], ["lista", "Lista"], ["equipe", "Carga da equipe"]], f.modo, (m) => { f.modo = m; if (m === "equipe") f.responsavel = ""; renderizar(); }));
+    seletorResponsavel(f, renderizar));
 
   const seletorPeriodo = el("select", { class: "mini", onChange: set("periodoConcluidas"), "aria-label": "Período das concluídas" },
     [["7", "últimos 7 dias"], ["30", "últimos 30 dias"], ["90", "últimos 90 dias"], ["tudo", "todas"]]
       .map(([v, r]) => el("option", { value: v, selected: v === f.periodoConcluidas }, r)));
 
   let corpo;
-  if (f.modo === "quadro") {
+  if (f.visao === "quadro") {
     corpo = el("div", { class: "quadro" }, STATUS_TAREFA.map(([st, rotulo]) =>
       el("section", {
         class: "coluna", dataset: { status: st },
@@ -72,8 +71,8 @@ export function render({ estado, renderizar }) {
         c.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", t.id));
         return c;
       }) : vazio("Nada aqui."))));
-  } else if (f.modo === "equipe") {
-    corpo = cargaDaEquipe(filtradas, (pessoa) => { f.responsavel = pessoa; f.modo = "lista"; renderizar(); });
+  } else if (f.visao === "equipe") {
+    corpo = cargaDaEquipe(filtradas, (pessoa) => { f.responsavel = pessoa; f.visao = "lista"; renderizar(); });
   } else {
     const abertas = [...colunas.a_fazer, ...colunas.andamento].sort(ordenarPrazo);
     corpo = el("div", { class: "lista" },
@@ -85,8 +84,9 @@ export function render({ estado, renderizar }) {
 
   return el("div", { class: "tela" },
     cabecalho("Tarefas", nAtrasadas ? `${nAtrasadas} atrasada(s)` : "Tudo em dia",
+      pode("conteudo") ? el("button", { class: "secundario", onClick: () => novoPost({ clienteId: f.cliente || "" }) }, "+ Novo post") : null,
       el("button", { class: "destaque", onClick: () => abrirTarefa({ clienteId: f.cliente || "", prazo: hojeISO() }) }, "+ Nova tarefa")),
-    filtros, corpo);
+    visoesTarefas(f, renderizar), filtros, corpo);
 }
 
 /** Quantas tarefas e posts abertos cada pessoa tem: atrasadas e por dia nos próximos 7 dias. */

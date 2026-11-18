@@ -3,8 +3,9 @@
 // - producao:     toda semana, produzir os posts da SEMANA SEGUINTE do cliente
 // - planejamento: todo mês, planejar o MÊS SEGUINTE do cliente
 // - cobranca:     todo mês, cobrar a mensalidade no vencimento do cliente (ou X dias antes)
-import { dados, gravarEmLote, atualizar, porId, contrato, salvarComId } from "./db.js";
+import { dados, gravarEmLote, atualizar, porId, contrato, salvarComId, existeNoBanco } from "./db.js";
 import { pode } from "./permissoes.js";
+import { responsavelPadrao } from "./agenda.js";
 import { hojeISO, addDias, dataDe, normalizar, fmtData } from "./ui.js";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -37,7 +38,7 @@ export function ocorrencia(r, d) {
   const nome = cliente?.nome || "";
   const base = {
     id: `rec-${r.id}-${d}`, clienteId: r.clienteId || "", status: "a_fazer", prazo: d,
-    notas: r.notas || "", recorrenciaId: r.id, rotina: r.modelo || "livre", criadoEm: Date.now(),
+    responsavel: r.responsavel || responsavelPadrao(), notas: r.notas || "", recorrenciaId: r.id, rotina: r.modelo || "livre", criadoEm: Date.now(),
     checklist: (r.checklist || []).map((i) => ({ texto: i.texto, feito: false }))
   };
   if (r.modelo === "producao") {
@@ -93,6 +94,7 @@ export async function garantirMensalidade(clienteId, mes) {
   const id = `mens-${clienteId}-${mes}`;
   const c = contrato(clienteId);
   if (!pode("financeiro") || !(Number(c.mensalidade) > 0) || dados.financeiro.some((f) => f.id === id)) return false;
+  if (await existeNoBanco("financeiro", id)) return false; // nunca sobrescreve uma mensalidade já paga
   const [a, m] = mes.split("-").map(Number);
   const dia = String(Math.min(Number(c.diaVencimento) || 10, new Date(a, m, 0).getDate())).padStart(2, "0");
   await salvarComId("financeiro", id, {
