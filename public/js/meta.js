@@ -1,5 +1,6 @@
 // Relatórios do Instagram e do Facebook pela API da Meta (Graph API), direto do navegador.
-// - O administrador cadastra o App ID do app da Meta em Ajustes (config/meta { appId }). O App ID não é secreto.
+// - O administrador cadastra o App ID do app da Meta em Ajustes (config/meta { appId, configId }). Nada disso é secreto.
+//   configId: ID da configuração do "Login do Facebook para Empresas" (apps do tipo Negócio).
 // - Cada pessoa conecta o próprio Facebook (o que administra as páginas dos clientes). O acesso dura algumas horas
 //   e fica só neste navegador (sessionStorage), nunca no banco.
 // - O app da Meta pode ficar em "modo de desenvolvimento": funciona para quem tem função no app (administrador,
@@ -39,7 +40,11 @@ function carregarSdk() {
 export async function conectarMeta() {
   if (!metaDisponivel()) throw new Error("O administrador ainda não cadastrou o App ID da Meta em Ajustes.");
   const FB = await carregarSdk();
-  const r = await new Promise((ok) => FB.login(ok, { scope: PERMISSOES, return_scopes: true, auth_type: "rerequest" }));
+  // App do tipo "Negócio" usa o Login do Facebook para Empresas: as permissões ficam numa "configuração" (config_id).
+  // App comum usa a lista de permissões (scope).
+  const { configId } = configMeta();
+  const opcoes = configId ? { config_id: configId } : { scope: PERMISSOES, return_scopes: true, auth_type: "rerequest" };
+  const r = await new Promise((ok) => FB.login(ok, opcoes));
   if (!r.authResponse) throw new Error("Conexão cancelada.");
   const token = r.authResponse.accessToken;
   const eu = await chamar("me", { fields: "name" }, token);
