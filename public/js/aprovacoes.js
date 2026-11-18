@@ -4,7 +4,7 @@
 //                       /{token}/artes/{post}   imagem de cada post (uma por documento, por causa do limite de 1 MB)
 //                       /{token}/respostas/{post} { status: "aprovado" | "ajuste", comentario, nome, em }
 import { el, avisar, abrirModal, fmtData } from "./ui.js";
-import { dados, porId, salvarComId, salvarSub, listarSub, ouvirSub, excluirSub, espacoInfo, identidade, atualizar, registrarAtividade } from "./db.js";
+import { dados, porId, salvarComId, salvarSub, listarSub, ouvirSub, excluirSub, atualizarSub, espacoInfo, identidade, atualizar, registrarAtividade } from "./db.js";
 import { eu, pode } from "./permissoes.js";
 import { postsDoMes, dataPost, nomeMes } from "./exportacao.js";
 import { caminhoArtes } from "./arquivos.js";
@@ -106,7 +106,7 @@ async function aplicarResposta(token, r) {
   const t = porId("tarefas", r.id);
   if (!t) return;
   try {
-    await salvarSub(["aprovacoes", token, "respostas"], { aplicadaEm: Date.now() }, r.id);
+    await atualizarSub(["aprovacoes", token, "respostas"], r.id, { aplicadaEm: Date.now() });
     const quem = r.nome ? `${r.nome} (cliente)` : "O cliente";
     if (r.status === "aprovado") {
       if (["ideia", "producao", "aprovacao"].includes(t.statusConteudo || "ideia")) await atualizar("tarefas", t.id, { statusConteudo: "aprovado", status: statusDaEtapa("aprovado"), ajusteCliente: "" });

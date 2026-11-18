@@ -8,7 +8,7 @@ Menu: **Hoje, Tarefas, Calendário, Clientes, Tráfego pago, Financeiro** e o gr
 
 | Tela | O que faz |
 |---|---|
-| Hoje | Atrasadas, tarefas do dia e da semana, conteúdos programados e valores a receber |
+| Hoje | **Minhas / Equipe**: cada pessoa vê primeiro o que é dela. Atrasadas, tarefas do dia e da semana, conteúdos, valores a receber, **primeiros passos** (administrador) e dicas rápidas |
 | Tarefas | Quadro A fazer / Em andamento / Concluído (arrastar e soltar) ou lista, com busca e filtros. Tipos: Conteúdo, Produção, Vídeo / Roteiro, Tráfego pago, Financeiro / Comercial, Planejamento, Organização e Outro ("Reunião" abre como compromisso). Concluir e excluir têm **Desfazer** |
 | Calendário | Camadas **Tudo / Conteúdo / Compromissos**, filtro por cliente e por marca. Com um cliente filtrado, a aba **Planejar mês** abre o planejamento (grade do mês ou tabela, "Formato \| Tema" no dia, arrastar entre dias). PDF por cliente (ou marca) e mês para aprovação. Compromissos podem ir para a Google Agenda pessoal (posts nunca vão) |
 | Post | Tarefa do tipo **Conteúdo** com marca, formato, rede, data/hora, **etapa** (ideia → publicado; o status de tarefa sai da etapa), copy e criativos. **Criar arte** abre dentro do post: gera a imagem com a OpenAI na identidade da marca e "Levar ao Canva" copia o pedido para o Claude montar o design |
@@ -19,7 +19,9 @@ Menu: **Hoje, Tarefas, Calendário, Clientes, Tráfego pago, Financeiro** e o gr
 | Relatórios | Por cliente ou geral, por mês ou período: posts publicados, outras entregas, manutenções, reuniões e financeiro. Exporta PDF. Meses antigos leem o arquivo de tarefas |
 | Usuários e equipe | **+ Adicionar usuário** por e-mail (convite: a pessoa entra já liberada), pedidos de acesso e de mais acesso para qualquer administrador aprovar, áreas e **clientes que cada um pode ver**, e pessoas da equipe sem conta |
 | Minha conta | Clique no seu nome no menu: foto, nome, seu acesso, pedir mais acesso (áreas ou clientes) e suas conexões (Google Agenda) |
-| Ajustes | E-mails automáticos (Gmail da Hyper via Apps Script), chave da OpenAI, importação de definições de marca (.json, com marcas), importação da planilha e backup |
+| Creators | Em breve: cadastro de influenciadoras (perfil, público, clientes atendidos) |
+| Lixeira | O que foi excluído nos últimos 30 dias, com restaurar (administrador) |
+| Ajustes | E-mails e automações (resumo diário, backup semanal), relatórios da Meta (App ID), modelos de checklist, erros recentes,  (Gmail da Hyper via Apps Script), chave da OpenAI, importação de definições de marca (.json, com marcas), importação da planilha e backup |
 
 ### Marcas
 
@@ -64,6 +66,17 @@ Tudo fica no espaço compartilhado `espacos/hyper/<coleção>` (antes era `users
 - Arquivos da marca ficam na pasta do Drive do cliente (`linkDrive`), não no app.
 - Criativos anexados aos posts ficam em `clientes/{id}/artes` (base64 comprimido, `tarefaId`, `origem: gerada|final`), lidos sob demanda. A tarefa guarda `qtdArtes`. O PDF usa o criativo final quando existe.
 - O banco pode ter id `(default)` ou `default`; o app descobre sozinho.
+
+## Recursos de colaboração
+
+- **Comentários e histórico** em cada tarefa/post (`tarefas/{id}/atividade`), com @menção que avisa por e-mail.
+- **Aprovação do cliente por link** (`aprovar.html?t=<token>`, sem login, 60 dias): o cliente aprova ou pede ajuste em cada post; a resposta muda a etapa do post e entra no histórico (`aprovacoes.js`).
+- **Calendário rápido**: arrastar posts entre dias, avançar a etapa no cartão (›) e trocar a etapa na lista.
+- **Carga da equipe** (Tarefas → Carga da equipe) e **modelos de checklist** por formato e tipo (`MODELOS_PADRAO`, editáveis em Ajustes).
+- **Resultados** (aba do cliente): números do Instagram e do Facebook por marca e por post, pela Graph API da Meta (`meta.js`), com o Facebook de cada pessoa (acesso só no navegador).
+- **Automações** no Apps Script da conta da Hyper (`docs/email`): e-mails, resumo diário às 8h e backup semanal compacto (.json.gz, sem imagens, 8 mais recentes) no Drive da Hyper.
+- **App instalável** (`manifest.webmanifest`, `sw.js`): no celular, "Adicionar à tela de início".
+- **Lixeira** (`lixeira`, 30 dias) e **registro de erros** (`erros`, 30 dias).
 
 ## Testes
 

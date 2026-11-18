@@ -201,3 +201,57 @@ test("configuração de e-mail: só administrador", async () => {
   await assertFails(ler("conteudo", `${E}/config/email`));
   await assertSucceeds(ler("basico", `${E}/config/equipe`));
 });
+
+test("comentários: quem vê a tarefa comenta; quem não vê o cliente, não", async () => {
+  await assertSucceeds(setDoc(doc(como("basico"), `${E}/tarefas/t1/atividade/a1`), { tipo: "comentario", texto: "Oi @Luisa", uid: "basico", nome: "B", em: 1 }));
+  await assertFails(setDoc(doc(como("basico"), `${E}/tarefas/t1/atividade/a2`), { tipo: "comentario", texto: "fingindo", uid: "outro", nome: "B", em: 1 }));
+  await assertSucceeds(getDocs(collection(como("luisa"), `${E}/tarefas/t1/atividade`)));
+  await assertFails(getDocs(collection(como("luisa"), `${E}/tarefas/t2/atividade`)));
+  await assertFails(setDoc(doc(como("luisa"), `${E}/tarefas/t2/atividade/a3`), { tipo: "comentario", texto: "x", uid: "luisa", nome: "L", em: 1 }));
+  await assertFails(deleteDoc(doc(como("luisa"), `${E}/tarefas/t1/atividade/a1`)));
+  await assertSucceeds(deleteDoc(doc(como("basico"), `${E}/tarefas/t1/atividade/a1`)));
+});
+
+test("lixeira: quem exclui guarda a cópia; só o administrador vê", async () => {
+  const item = { colecao: "tarefas", idOriginal: "t1", dados: { titulo: "Tarefa" }, clienteId: "c1", titulo: "Tarefa", excluidoEm: 1, excluidoPor: "B", excluidoPorUid: "basico" };
+  await assertSucceeds(setDoc(doc(como("basico"), `${E}/lixeira/tarefas__t1`), item));
+  await assertFails(setDoc(doc(como("basico"), `${E}/lixeira/tarefas__x`), { ...item, excluidoPorUid: "admin" }));
+  await assertFails(ler("basico", `${E}/lixeira/tarefas__t1`));
+  await assertSucceeds(ler("admin", `${E}/lixeira/tarefas__t1`));
+  await assertSucceeds(deleteDoc(doc(como("basico"), `${E}/lixeira/tarefas__t1`)));
+});
+
+test("registro de erros: grava o próprio, só o administrador lê", async () => {
+  const erro = { msg: "Falhou", detalhe: "pilha", rota: "#/hoje", uid: "pendente", email: "p@x.com", navegador: "Chrome", em: 1 };
+  await assertSucceeds(setDoc(doc(como("pendente"), `${E}/erros/e1`), erro));
+  await assertFails(setDoc(doc(como("pendente"), `${E}/erros/e2`), { ...erro, uid: "outro" }));
+  await assertFails(setDoc(doc(como("pendente"), `${E}/erros/e3`), { ...erro, extra: "x" }));
+  await assertFails(ler("basico", `${E}/erros/e1`));
+  await assertSucceeds(ler("admin", `${E}/erros/e1`));
+});
+
+test("aprovação por link: cliente sem login vê e responde só os posts do link, até expirar", async () => {
+  const futuro = Date.now() + 86400000;
+  await assertSucceeds(setDoc(doc(como("conteudo"), `${E}/aprovacoes/tok1`), { clienteId: "c1", mes: "2026-11", postIds: ["t1"], posts: [], expiraEm: futuro }));
+  await assertFails(setDoc(doc(como("basico"), `${E}/aprovacoes/tok2`), { clienteId: "c1", postIds: [], expiraEm: futuro }));
+  await assertFails(setDoc(doc(como("luisa"), `${E}/aprovacoes/tok3`), { clienteId: "c2", postIds: [], expiraEm: futuro }));
+  await amb.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `${E}/aprovacoes/velho`), { clienteId: "c1", postIds: ["t1"], expiraEm: Date.now() - 1000 }));
+  const anon = como(null);
+  await assertSucceeds(getDoc(doc(anon, `${E}/aprovacoes/tok1`)));
+  await assertFails(getDocs(collection(anon, `${E}/aprovacoes`)));
+  await assertFails(getDoc(doc(anon, `${E}/aprovacoes/velho`)));
+  const resposta = { status: "aprovado", comentario: "", nome: "Cliente", em: 1 };
+  await assertSucceeds(setDoc(doc(anon, `${E}/aprovacoes/tok1/respostas/t1`), resposta));
+  await assertSucceeds(getDocs(collection(anon, `${E}/aprovacoes/tok1/respostas`)));
+  await assertFails(setDoc(doc(anon, `${E}/aprovacoes/tok1/respostas/t2`), resposta));
+  await assertFails(setDoc(doc(anon, `${E}/aprovacoes/tok1/respostas/t1`), { ...resposta, status: "talvez" }));
+  await assertFails(setDoc(doc(anon, `${E}/aprovacoes/tok1/respostas/t1`), { ...resposta, aplicadaEm: 1 }));
+  await assertFails(setDoc(doc(anon, `${E}/aprovacoes/velho/respostas/t1`), resposta));
+  await assertFails(setDoc(doc(anon, `${E}/tarefas/t1`), { titulo: "invadiu" }));
+  await assertSucceeds(updateDoc(doc(como("conteudo"), `${E}/aprovacoes/tok1/respostas/t1`), { aplicadaEm: 2 }));
+  await assertFails(updateDoc(doc(como("basico"), `${E}/aprovacoes/tok1/respostas/t1`), { aplicadaEm: 3 }));
+});
+
+test("resumo diário: a própria pessoa liga e desliga", async () => {
+  await assertSucceeds(updateDoc(doc(como("basico"), `${E}/membros/basico`), { resumoDiario: false }));
+});

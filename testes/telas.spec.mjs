@@ -32,12 +32,20 @@ async function abrir(page, { usuario, membros, semMenu = false } = {}) {
   const erros = [];
   if (usuario) await page.addInitScript((u) => { window.__usuario = u; }, usuario);
   page.on("pageerror", (e) => erros.push(String(e)));
+  await rotearMocks(page);
+  return abrirDepois(page, { membros, semMenu, erros });
+}
+
+async function rotearMocks(page) {
   await page.route("**/*", (route) => {
     const nome = route.request().url().split("/").pop();
     if (MOCKS[nome] && route.request().url().includes("gstatic")) return route.fulfill({ path: pasta + MOCKS[nome], contentType: "application/javascript" });
     if (route.request().url().includes("fonts.g")) return route.abort();
     return route.continue();
   });
+}
+
+async function abrirDepois(page, { membros, semMenu, erros }) {
   const banco = membros ? { ...BANCO, [`${E}/membros`]: membros } : BANCO;
   await page.addInitScript((b) => { if (!localStorage.getItem("fake-fs-store")) localStorage.setItem("fake-fs-store", JSON.stringify(b)); }, banco);
   await page.goto("/");
@@ -53,7 +61,9 @@ test("todas as telas abrem sem erro e o menu agrupa a administração", async ({
     await expect(page.locator("#conteudo h1").first()).toBeVisible();
   }
   await expect(page.locator(".menu-grupo summary")).toHaveText(/Administração/);
-  await expect(page.locator("#menu > a")).toHaveCount(6);
+  await expect(page.locator("#menu > a")).toHaveCount(7);
+  await expect(page.locator("#menu")).toContainText("Creators");
+  for (const rota of ["lixeira", "creators"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
   expect(erros).toEqual([]);
 });
 
@@ -230,4 +240,64 @@ test("primeiro acesso sem convite: pede acesso e o administrador libera", async 
   await cartao.getByRole("button", { name: "Liberar acesso" }).click();
   await expect.poll(() => admin.evaluate(() => window.__store["espacos/hyper/membros"].matheus)).toMatchObject({ status: "ativo", papel: "admin", pedido: null });
   await ctx2.close();
+});
+
+test("Hoje pessoal, primeiros passos e carga da equipe", async ({ page }) => {
+  const erros = await abrir(page);
+  await expect(page.getByRole("tab", { name: "Minhas" })).toBeVisible();
+  await page.getByRole("tab", { name: "Equipe" }).click();
+  await expect(page.locator("#conteudo")).toContainText("Revisar campanhas");
+  await expect(page.locator(".primeiros-passos")).toContainText("Primeiros passos");
+  await page.goto("/#/tarefas");
+  await page.getByRole("tab", { name: "Carga da equipe" }).click();
+  await expect(page.locator(".tabela-carga")).toBeVisible();
+  expect(erros).toEqual([]);
+});
+
+test("excluir vai para a lixeira e o administrador restaura", async ({ page }) => {
+  await abrir(page);
+  await page.evaluate(async () => { const db = await import("/js/db.js"); await db.excluir("tarefas", "t1"); });
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/lixeira"]?.["tarefas__t1"]?.titulo)).toBe("Revisar campanhas");
+  await page.goto("/#/lixeira");
+  await page.locator(".linha-tabela", { hasText: "Revisar campanhas" }).getByRole("button", { name: "Restaurar" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].t1?.titulo)).toBe("Revisar campanhas");
+});
+
+test("comentário com @menção e histórico na tarefa", async ({ page }) => {
+  await abrir(page, { membros: {
+    hyper: { nome: "Hyper", email: "hyper@x.com", papel: "admin", permissoes: [], status: "ativo" },
+    bia: { nome: "Bia Souza", email: "bia@x.com", papel: "basico", permissoes: [], status: "ativo" } } });
+  await page.evaluate(async () => { const c = await import("/js/views/componentes.js"); const db = await import("/js/db.js"); c.abrirTarefa(db.porId("tarefas", "t1")); });
+  await page.locator(".secao-atividade textarea").fill("Pode revisar, @Bia?");
+  await page.getByRole("button", { name: "Comentar" }).click();
+  await expect(page.locator(".comentario")).toContainText("Pode revisar, @Bia?");
+  const ativ = await page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas/t1/atividade"] || {}));
+  expect(ativ[0]).toMatchObject({ tipo: "comentario", mencoes: ["Bia Souza"] });
+  await page.fill("#f-prazo", "2030-01-10");
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas/t1/atividade"]).some((a) => a.tipo === "mudanca" && a.texto.includes("prazo")))).toBe(true);
+});
+
+test("aprovação do cliente por link: o cliente aprova e o post muda de etapa", async ({ page, context }) => {
+  await abrir(page);
+  await page.evaluate(async () => { const db = await import("/js/db.js"); await db.salvarComId("tarefas", "p2", { titulo: "Post para aprovar", tipo: "Conteúdo", clienteId: "grupo", formato: "Reels", rede: "Instagram", dataPublicacao: new Date().toISOString().slice(0, 10), statusConteudo: "producao", status: "andamento", checklist: [] }); });
+  await page.evaluate(async () => { const a = await import("/js/aprovacoes.js"); await a.gerarLinkAprovacao("grupo", new Date().toISOString().slice(0, 7)); });
+  const link = await page.locator(".modal input[readonly]").inputValue();
+  expect(link).toMatch(/aprovar\.html\?t=[a-f0-9]{32}$/);
+  const cliente = await context.newPage();
+  await rotearMocks(cliente);
+  await cliente.goto(link.replace(/^https?:\/\/[^/]+/, ""));
+  await expect(cliente.locator("article.aprov-post", { hasText: "Post para aprovar" })).toBeVisible();
+  await cliente.fill("#aprov-nome", "Dona do Grupo");
+  await cliente.locator("article.aprov-post", { hasText: "Post para aprovar" }).getByRole("button", { name: "Aprovar" }).click();
+  await expect(cliente.locator("article.aprov-post", { hasText: "Post para aprovar" })).toContainText("Aprovado");
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].p2.statusConteudo), { timeout: 10000 }).toBe("aprovado");
+});
+
+test("resultados sem a Meta ligada mostram o caminho", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/clientes/grupo");
+  await page.getByRole("tab", { name: "Resultados" }).click();
+  await expect(page.locator("#conteudo")).toContainText("ainda não foram ligados");
 });

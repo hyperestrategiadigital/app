@@ -17,7 +17,13 @@ Toda interface deste repositório segue `docs/identidade-visual.md`.
 - Acesso por cliente: `acessoClientes: "alguns"` + `clientes` no membro. Para essas pessoas, `db.js` lê as coleções por cliente (`ouvirColecao`, consultas `where("clienteId", "in", …)` em lotes de 30; `clientes`/`contratos` documento a documento). É a única exceção à regra de não usar `where`, porque as regras exigem a consulta filtrada. Todo documento ligado a cliente precisa ter `clienteId` (use `""` quando não tiver cliente).
 - Convites em `convites/{email em minúsculas}`; pedidos em `membros/{uid}.pedido`. A própria pessoa só muda `nome`, `foto` e `pedido` (Minha conta, `views/conta.js`).
 - E-mails: `emails.js` + Apps Script (`docs/email/Codigo.gs`). Só administradores enviam (precisam do segredo em `config/email`); sem segredo o script só avisa os administradores. As cores da marca vão escritas em `emails.js` porque e-mail não aceita variáveis de CSS.
-- Conexões pessoais (Google Agenda e futuras) ficam em Minha conta, não em Ajustes.
+- Conexões pessoais (Google Agenda, Facebook/Instagram) ficam em Minha conta, não em Ajustes. Tokens (Google, Meta) nunca vão para o banco.
+- Excluir sempre por `excluir()` de `db.js`: nas coleções de `COM_LIXEIRA` guarda uma cópia na `lixeira` (30 dias). Para mover dados (não é exclusão de verdade), use `{ lixeira: false }`. O desfazer usa `desfazerExclusao()`.
+- Mudanças relevantes em tarefas entram no histórico (`registrarAtividade`); comentários ficam em `tarefas/{id}/atividade`.
+- Erros mostrados com `avisar(..., "erro")` e erros não tratados vão para `erros` (Ajustes → Erros recentes).
+- Aprovação do cliente: `aprovacoes/{token}` (público por token, expira) e `aprovar.html` + `js/aprovar.js` (sem login). Nunca coloque valores de contrato ou dados internos na fotografia do link.
+- Relatórios da Meta: `meta.js` (Graph API pelo navegador, App ID em `config/meta`). Peça cada métrica separada: a Meta aposenta métricas com frequência.
+- Automações (resumo diário, backup) rodam só no Apps Script da conta da Hyper (`docs/email/Codigo.gs`, lendo o Firestore pela API REST como dona do projeto). Backup sempre compacto e sem imagens.
 - Valores de contrato (mensalidade, dia de vencimento) ficam em `contratos/{clienteId}`, nunca na ficha do cliente. Use `contrato(clienteId)` de `db.js`.
 - Coisas pessoais de cada usuário (Google Agenda conectada) ficam em `espacos/hyper/pessoal/{uid}/...`.
 - Datas são texto `AAAA-MM-DD`; use as funções de data de `ui.js`.

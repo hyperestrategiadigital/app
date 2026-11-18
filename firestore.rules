@@ -62,7 +62,7 @@ service cloud.firestore {
         // A própria pessoa muda nome, foto e pedidos de acesso; papel, áreas, clientes e liberação só o administrador
         allow update: if admin()
                       || (logado() && request.auth.uid == uid
-                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'email', 'foto', 'pedido', 'atualizadoEm']));
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'email', 'foto', 'pedido', 'resumoDiario', 'atualizadoEm']));
         allow delete: if admin();
       }
 
@@ -88,6 +88,15 @@ service cloud.firestore {
         allow delete: if ativo() && doCliente(cli(resource.data));
         allow create: if ativo() && doCliente(cli(request.resource.data));
         allow update: if ativo() && doCliente(cli(resource.data)) && doCliente(cli(request.resource.data));
+
+        // Comentários e histórico: quem vê a tarefa vê e comenta; cada um apaga só o seu (o administrador, qualquer um)
+        function tarefa() { return get(/databases/$(database)/documents/espacos/$(esp)/tarefas/$(id)).data; }
+        match /atividade/{a} {
+          allow read: if ativo() && podeLer(tarefa());
+          allow create: if ativo() && request.resource.data.uid == request.auth.uid && doCliente(cli(tarefa()))
+                        && request.resource.data.texto is string && request.resource.data.texto.size() <= 3000;
+          allow delete: if admin() || (ativo() && resource.data.uid == request.auth.uid);
+        }
       }
       // Tarefas concluídas há mais de 90 dias: leitura como as tarefas; só o administrador arquiva e mexe
       match /tarefasArquivo/{id} {
@@ -135,6 +144,47 @@ service cloud.firestore {
         allow delete: if pode('financeiro') && doClienteEstrito(cli(resource.data));
         allow create: if pode('financeiro') && doClienteEstrito(cli(request.resource.data));
         allow update: if pode('financeiro') && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
+      }
+
+      // Lixeira: quem exclui guarda a cópia; só o administrador vê e restaura. Quem excluiu pode desfazer na hora.
+      match /lixeira/{id} {
+        allow read: if admin();
+        allow create: if ativo() && request.resource.data.excluidoPorUid == request.auth.uid && doCliente(cli(request.resource.data));
+        allow delete: if admin() || (ativo() && resource.data.excluidoPorUid == request.auth.uid);
+      }
+
+      // Registro de erros: qualquer pessoa logada grava o próprio erro; só o administrador lê
+      match /erros/{id} {
+        allow create: if logado() && request.resource.data.uid == request.auth.uid
+                      && request.resource.data.keys().hasOnly(['msg', 'detalhe', 'rota', 'uid', 'email', 'navegador', 'em'])
+                      && request.resource.data.msg.size() <= 200 && request.resource.data.detalhe.size() <= 1500;
+        allow read, delete: if admin();
+      }
+
+      // Aprovação do cliente por link: quem tem o link (token) vê os posts e responde, sem login, até expirar
+      match /aprovacoes/{token} {
+        function aprovacao() { return get(/databases/$(database)/documents/espacos/$(esp)/aprovacoes/$(token)).data; }
+        function linkValido() { return aprovacao().expiraEm > request.time.toMillis(); }
+        allow get: if resource.data.expiraEm > request.time.toMillis() || (pode('conteudo') && doClienteEstrito(cli(resource.data)));
+        allow list: if pode('conteudo') && podeLerEstrito(resource.data);
+        allow create, update: if pode('conteudo') && doClienteEstrito(cli(request.resource.data));
+        allow delete: if pode('conteudo') && doClienteEstrito(cli(resource.data));
+        match /artes/{postId} {
+          allow read: if linkValido() || pode('conteudo');
+          allow write: if pode('conteudo');
+        }
+        match /respostas/{postId} {
+          allow read: if linkValido() || pode('conteudo');
+          // O cliente responde só sobre os posts do link, sem mexer em mais nada
+          allow create, update: if linkValido() && postId in aprovacao().postIds
+                                && request.resource.data.keys().hasOnly(['status', 'comentario', 'nome', 'em'])
+                                && request.resource.data.status in ['aprovado', 'ajuste']
+                                && request.resource.data.comentario.size() <= 2000
+                                && request.resource.data.nome.size() <= 80;
+          // A equipe marca a resposta como aplicada e limpa respostas antigas
+          allow update: if pode('conteudo') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aplicadaEm']);
+          allow delete: if pode('conteudo');
+        }
       }
 
       // Configurações: a chave da OpenAI só para quem cria conteúdo; o envio de e-mails só para administradores;
