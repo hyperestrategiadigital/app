@@ -49,19 +49,15 @@ function inferirTipo(texto) {
   const t = normalizar(texto);
   // Peças com prefixo de formato ("Estático | ...", "VÍDEO | ...") são produção de conteúdo
   if (/^(estatico|carrossel|story|stories|whatsapp|criativos?|comercial \||arte)/.test(t)) return "Conteúdo";
-  if (/^(video|reels?|editar video)/.test(t)) return "Vídeo";
-  if (/^roteiro/.test(t)) return "Roteiro";
+  if (/^(video|reels?|editar video|roteiro)/.test(t)) return "Vídeo / Roteiro";
   const regras = [
     ["Tráfego pago", /manut?en?cao tp|manuntencao|trafego pago|\btp\b|google ads|meta ads|criativos? (novos|ia)|subir (novas pecas|novos criativos)/],
-    ["Financeiro", /cobrar|financeiro|nota\b|pagamento|mei\b/],
-    ["Comercial", /orcamento|contrato|proposta|renovacao|pitch|apresentacao/],
+    ["Financeiro / Comercial", /cobrar|financeiro|nota\b|pagamento|mei\b|orcamento|contrato|proposta|renovacao|pitch|apresentacao/],
     ["Reunião", /reuniao|call\b|alinhar|alinhamento|visita/],
     ["Planejamento", /planejamento|entregaveis|organizar (julho|marco|abril|geral)/],
     ["Organização", /organizar semana|organizar/],
-    ["Aprovação", /aprovar|publicar/],
-    ["Roteiro", /roteiro/],
-    ["Vídeo", /video|reels?\b|gravacao|gravar|editar|corte|thumb/],
-    ["Site / LP", /landing|\blp\b|site|blog|link na bio/],
+    ["Produção", /aprovar|publicar/],
+    ["Vídeo / Roteiro", /roteiro|video|reels?\b|gravacao|gravar|editar|corte|thumb/],
     ["Conteúdo", /estatico|carrossel|story|stories|whatsapp|conteudo|criativo|arte|post|semana/]
   ];
   return regras.find(([, re]) => re.test(t))?.[0] || "Outro";

@@ -56,7 +56,7 @@ export function ocorrencia(r, d) {
   if (r.modelo === "cobranca") {
     const mes = d.slice(0, 7);
     // Sem valor no título: tarefas são vistas pela equipe; o valor fica no Financeiro
-    return { ...base, tipo: "Financeiro", titulo: `Cobrar mensalidade ${MESES[Number(mes.slice(5)) - 1]}${nome ? ` — ${nome}` : ""}`,
+    return { ...base, tipo: "Financeiro / Comercial", titulo: `Cobrar mensalidade ${MESES[Number(mes.slice(5)) - 1]}${nome ? ` — ${nome}` : ""}`,
       atalho: "#/financeiro" };
   }
   return { ...base, tipo: r.tipo || "Outro", titulo: r.titulo };

@@ -364,6 +364,10 @@ a.cartao-cliente:hover { transform: translateY(-2px); }
 }
 .aviso.visivel { opacity: 1; transform: translate(-50%, 0); }
 .aviso-erro { background: var(--cor-alerta); }
+.aviso { display: flex; align-items: center; gap: 16px; }
+.aviso .desfazer {
+  background: none; border: 0; padding: 0; color: var(--cor-destaque); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline;
+}
 
 /* ---------------- Celular ---------------- */
 /* ---------------- Legenda de clientes no calendário ---------------- */

@@ -1,5 +1,5 @@
 // Ajustes: tarefas recorrentes, importação da planilha e backup.
-import { el, formulario, confirmar, avisar, abrirModal, hojeISO, addDias, vazio, normalizar } from "../ui.js";
+import { el, formulario, confirmar, avisar, abrirModal, hojeISO, addDias, vazio, normalizar, baixar } from "../ui.js";
 import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes, nomeCliente, clientesAtivos } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { analisarPlanilha } from "../importacao.js";
@@ -77,9 +77,7 @@ function abrirImportacao() {
 }
 
 function baixarBackup() {
-  const blob = new Blob([JSON.stringify({ exportadoEm: new Date().toISOString(), ...dados }, null, 2)], { type: "application/json" });
-  const a = el("a", { href: URL.createObjectURL(blob), download: `hyper-backup-${hojeISO()}.json` });
-  document.body.append(a); a.click(); a.remove();
+  baixar(new Blob([JSON.stringify({ exportadoEm: new Date().toISOString(), ...dados }, null, 2)], { type: "application/json" }), `hyper-backup-${hojeISO()}.json`);
 }
 
 export function render() {

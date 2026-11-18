@@ -1,6 +1,6 @@
 // Exportação do conteúdo do mês de um cliente: PDF visual para o cliente aprovar.
-import { dados, porId, listarSub } from "./db.js";
-import { fmtData, fmtDiaSemana, avisar } from "./ui.js";
+import { dados, porId, listarSub, todasTarefas, garantirArquivo, carregarArquivo, limiteArquivo } from "./db.js";
+import { fmtData, fmtDiaSemana, avisar, esc } from "./ui.js";
 import { TIPO_CONTEUDO } from "./constantes.js";
 import { caminhoArtes } from "./arquivos.js";
 
@@ -13,7 +13,8 @@ export const temPrefixo = (titulo = "") => /^[^|]{2,24}\|/.test(titulo);
 
 /** Posts (tarefas do tipo Conteúdo) de um cliente num mês "AAAA-MM", em ordem de publicação. */
 export function postsDoMes(clienteId, mes) {
-  return dados.tarefas
+  garantirArquivo(`${mes}-01`);
+  return todasTarefas()
     .filter((t) => t.tipo === TIPO_CONTEUDO && (!clienteId || t.clienteId === clienteId) && dataPost(t).startsWith(mes))
     .sort((a, b) => (dataPost(a) + (a.hora || "")).localeCompare(dataPost(b) + (b.hora || "")));
 }
@@ -22,7 +23,6 @@ const nomeArquivo = (cliente, mes, ext) =>
   `Conteudo ${cliente?.nome || "Hyper"} ${nomeMes(mes)}.${ext}`.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w .-]/g, "");
 
 /* ---------------- PDF visual (página de impressão) ---------------- */
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 const DIAS_CAB = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
 function calendarioMes(posts, mes, artes) {
@@ -43,6 +43,7 @@ function calendarioMes(posts, mes, artes) {
 }
 
 export async function exportarPDF(clienteId, mes) {
+  if (`${mes}-01` < limiteArquivo()) await carregarArquivo();
   const cliente = porId("clientes", clienteId);
   const posts = postsDoMes(clienteId, mes);
   if (!posts.length) { avisar("Nenhum post desse cliente neste mês.", "erro"); return; }

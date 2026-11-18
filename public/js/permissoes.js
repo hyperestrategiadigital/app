@@ -19,9 +19,9 @@ export const pode = (area) => ehAdmin() || (eu.permissoes || []).includes(area);
 
 /** Tipos de tarefa que pertencem a cada área (quem não tem a área não vê essas tarefas). */
 const TIPOS_DA_AREA = {
-  conteudo: ["Conteúdo", "Produção", "Roteiro", "Vídeo", "Institucional", "Planejamento", "Aprovação"],
+  conteudo: ["Conteúdo", "Produção", "Vídeo / Roteiro", "Planejamento"],
   trafego: ["Tráfego pago"],
-  financeiro: ["Financeiro", "Comercial"]
+  financeiro: ["Financeiro / Comercial"]
 };
 export function tarefaVisivel(t) {
   if (ehAdmin()) return true;

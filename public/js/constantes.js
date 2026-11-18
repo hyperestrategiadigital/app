@@ -9,10 +9,16 @@ export const rotuloStatus = (s) => STATUS_TAREFA.find(([v]) => v === s)?.[1] || 
 
 // "Conteúdo" é o único tipo que vira post no calendário
 export const TIPO_CONTEUDO = "Conteúdo";
+// 8 tipos + "Reunião", que não vira tarefa: abre como compromisso
+export const TIPO_FINANCEIRO = "Financeiro / Comercial";
 export const TIPOS_TAREFA = [
-  "Conteúdo", "Produção", "Roteiro", "Vídeo", "Institucional", "Tráfego pago", "Planejamento",
-  "Aprovação", "Reunião", "Comercial", "Financeiro", "Site / LP", "Organização", "Outro"
+  "Conteúdo", "Produção", "Vídeo / Roteiro", "Tráfego pago", TIPO_FINANCEIRO, "Planejamento", "Organização", "Outro", "Reunião"
 ];
+/** Tipos antigos → novos (aplicado uma vez nas tarefas existentes). */
+export const TIPO_ANTIGO = {
+  "Roteiro": "Vídeo / Roteiro", "Vídeo": "Vídeo / Roteiro", "Financeiro": TIPO_FINANCEIRO, "Comercial": TIPO_FINANCEIRO,
+  "Aprovação": "Produção", "Institucional": "Outro", "Site / LP": "Outro"
+};
 export const ehConteudo = (t) => t?.tipo === TIPO_CONTEUDO;
 
 export const SERVICOS = ["Social media", "Meta Ads", "Google Ads", "Vídeo", "Site / LP", "Consultoria"];

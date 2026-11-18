@@ -1,6 +1,6 @@
 // Planejamento do mês de um cliente: uma tabela onde cada linha é um post.
 // Ao salvar, cada linha vira (ou atualiza) uma tarefa do tipo Conteúdo — aparece na lista de tarefas e no calendário.
-import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal, confirmar, formulario, vazio } from "../ui.js";
+import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal, confirmar, formulario, vazio, fecharModais } from "../ui.js";
 import { dados, porId, criar, atualizar, excluir, clientesAtivos } from "../db.js";
 import { cabecalho, abas } from "./componentes.js";
 import { FORMATOS, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo } from "../constantes.js";
@@ -255,11 +255,11 @@ function editarLinha(l, estado, marcar) {
       if (l.id && !(await confirmar(`Remover "${l.titulo}"? O post será excluído quando você salvar o planejamento.`))) return;
       if (l.id) estado.removidas.push(l.id);
       estado.linhas = estado.linhas.filter((x) => x !== l);
-      document.querySelector(".modal-fundo")?.remove();
+      fecharModais();
       marcar();
     } }, "Remover"), el("button", { type: "button", class: "secundario", onClick: () => {
       estado.linhas.push({ ...l, chave: novaChave(), id: null });
-      document.querySelector(".modal-fundo")?.remove();
+      fecharModais();
       marcar();
     } }, "Duplicar")],
     aoSalvar: (v) => { Object.assign(l, v); marcar(); }

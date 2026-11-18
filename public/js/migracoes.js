@@ -1,29 +1,8 @@
 // Ajustes automáticos de dados antigos, rodados uma vez ao entrar.
 import { dados, gravarEmLote, excluir, salvarComId } from "./db.js";
 import { hojeISO, addDias } from "./ui.js";
-import { TIPO_CONTEUDO } from "./constantes.js";
+import { TIPO_CONTEUDO, TIPO_ANTIGO } from "./constantes.js";
 
-const FORMATO_ANTIGO = { "Estático": "Feed estático", "Vídeo": "Reels", "Anúncio": "Anúncio estático" };
-
-// Antes, posts ficavam na coleção "conteudos". Agora cada post é uma tarefa do tipo Conteúdo.
-export async function migrarConteudos() {
-  if (!dados.conteudos.length) return 0;
-  const itens = dados.conteudos.map((c) => ({
-    id: `cont-${c.id}`,
-    titulo: c.titulo, clienteId: c.clienteId || "", tipo: TIPO_CONTEUDO,
-    formato: FORMATO_ANTIGO[c.formato] || c.formato || "Feed estático", rede: c.rede || "Instagram",
-    dataPublicacao: c.data, hora: c.hora || "", statusConteudo: c.status || "ideia",
-    objetivo: c.objetivo || "", roteiro: c.roteiro || "", copy: c.copy || "",
-    linkCanva: c.linkCanva || "", linkDrive: c.linkDrive || "",
-    status: c.status === "publicado" ? "concluido" : "a_fazer", prazo: c.data,
-    concluidoEm: c.status === "publicado" ? c.data : null, checklist: [], notas: "", criadoEm: c.criadoEm || Date.now()
-  }));
-  await gravarEmLote("tarefas", itens);
-  for (const c of [...dados.conteudos]) await excluir("conteudos", c.id);
-  return itens.length;
-}
-
-// Tarefas de conteúdo sem formato (vindas da planilha) recebem formato e data de publicação deduzidos do título.
 export async function completarPostsSemFormato() {
   const faltando = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && !t.formato);
   if (!faltando.length) return 0;
@@ -60,4 +39,12 @@ export async function migrarReunioes() {
     await excluir("tarefas", t.id);
   }
   return reunioes.length;
+}
+
+// Tipos de tarefa antigos (13) → os 8 atuais. Só mexe nas tarefas que ainda têm tipo antigo.
+export async function migrarTipos() {
+  const antigas = dados.tarefas.filter((t) => TIPO_ANTIGO[t.tipo]);
+  if (!antigas.length) return 0;
+  await gravarEmLote("tarefas", antigas.map(({ id, ...t }) => ({ id, ...t, tipo: TIPO_ANTIGO[t.tipo] })));
+  return antigas.length;
 }

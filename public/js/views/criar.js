@@ -1,7 +1,7 @@
 // Menu Criar: escolhe cliente e post, gera a imagem com a OpenAI seguindo a marca do cliente
 // e manda para o Canva: baixa a imagem e copia o pedido de arte para o Claude montar o design
 // no Canva e devolver o link de edição. O link e o criativo final ficam anexados no post.
-import { el, avisar, fmtData, vazio, linkExterno } from "../ui.js";
+import { el, avisar, fmtData, vazio, linkExterno, baixar } from "../ui.js";
 import { dados, porId, opcoesClientes, atualizar } from "../db.js";
 import { cabecalho, abrirTarefa } from "./componentes.js";
 import { FORMATOS, PROPORCAO_FORMATO, TIPO_CONTEUDO, rotuloStatusConteudo } from "../constantes.js";
@@ -166,7 +166,3 @@ export function render({ params, estado, renderizar }) {
     el("div", { class: "criar-grade" }, etapaImagem, etapaCanva));
 }
 
-function baixar(src, nome) {
-  const a = el("a", { href: src, download: nome });
-  document.body.append(a); a.click(); a.remove();
-}

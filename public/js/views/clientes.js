@@ -1,5 +1,5 @@
 // Clientes: lista com indicadores e ficha completa de cada cliente.
-import { el, formulario, confirmar, avisar, fmtMoeda, fmtData, linkExterno, vazio, hojeISO } from "../ui.js";
+import { el, formulario, confirmar, avisar, fmtMoeda, fmtData, linkExterno, vazio, hojeISO, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, porId, contrato, salvarComId } from "../db.js";
 import { pode, ehAdmin, tarefaVisivel } from "../permissoes.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas, corCliente } from "./componentes.js";
@@ -46,7 +46,7 @@ export function abrirCliente(cliente = {}) {
       type: "button", class: "perigo-texto", onClick: async () => {
         if (await confirmar(`Excluir o cliente "${cliente.nome}"? As tarefas e conteúdos dele continuam salvos, mas ficam sem cliente. Para só esconder, desmarque "Cliente ativo".`)) {
           await excluir("clientes", cliente.id);
-          document.querySelector(".modal-fundo")?.remove();
+          fecharModais();
           location.hash = "#/clientes";
         }
       }

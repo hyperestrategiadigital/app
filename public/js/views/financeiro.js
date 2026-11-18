@@ -1,5 +1,5 @@
 // Financeiro: receitas e despesas do mês, mensalidades automáticas e orçamentos.
-import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, vazio } from "../ui.js";
+import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, vazio, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, salvarComId, nomeCliente, opcoesClientes, clientesAtivos, contrato } from "../db.js";
 import { cabecalho, abas, seloCliente } from "./componentes.js";
 import { CATEGORIAS_FIN, STATUS_ORCAMENTO } from "../constantes.js";
@@ -9,7 +9,7 @@ const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julh
 function botaoExcluir(col, item, msg) {
   return el("button", {
     type: "button", class: "perigo-texto", onClick: async () => {
-      if (await confirmar(msg)) { await excluir(col, item.id); document.querySelector(".modal-fundo")?.remove(); }
+      if (await confirmar(msg)) { await excluir(col, item.id); fecharModais(); }
     }
   }, "Excluir");
 }

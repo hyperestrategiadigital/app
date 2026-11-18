@@ -1,6 +1,6 @@
 // Peças reutilizadas entre telas: cartão e formulário de tarefa, selo de cliente.
-import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno } from "../ui.js";
-import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId } from "../db.js";
+import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
+import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId } from "../db.js";
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo } from "../constantes.js";
 import { promptCopy } from "../prompts.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
@@ -78,9 +78,10 @@ export function abrirTarefa(tarefa = {}) {
       type: "button", class: "perigo-texto",
       onClick: async () => {
         if (await confirmar(`Excluir "${tarefa.titulo}"?`)) {
-          await excluir("tarefas", tarefa.id);
-          document.querySelector(".modal-fundo")?.remove();
-          avisar("Tarefa excluída.");
+          const { id, ...copia } = porId("tarefas", tarefa.id) || tarefa;
+          await excluir("tarefas", id);
+          fecharModais();
+          avisar("Tarefa excluída.", "ok", { desfazer: () => salvarComId("tarefas", id, copia) });
         }
       }
     }, "Excluir") : null
@@ -95,12 +96,12 @@ export function abrirTarefa(tarefa = {}) {
   if (form) form.querySelector(".acoes").before(secaoCriativos(tarefa));
   // Rotina "Produzir semana": mostra ao vivo os posts da semana seguinte do cliente
   if (form && tarefa.semanaInicio) form.querySelector(".acoes").before(secaoSemana(tarefa));
-  if (form && tarefa.atalho) form.querySelector(".acoes").prepend(el("a", { class: "botao-link secundario mini", href: tarefa.atalho, onClick: () => document.querySelector(".modal-fundo")?.remove() },
+  if (form && tarefa.atalho) form.querySelector(".acoes").prepend(el("a", { class: "botao-link secundario mini", href: tarefa.atalho, onClick: () => fecharModais() },
     tarefa.rotina === "planejamento" ? "☷ Abrir planejamento" : tarefa.rotina === "cobranca" ? "$ Abrir financeiro" : "▦ Abrir calendário"));
   // Reunião não é tarefa: vira compromisso (calendário de compromissos + Google Agenda)
   const virarCompromisso = async () => {
     const v = form.lerValores();
-    document.querySelector(".modal-fundo")?.remove();
+    fecharModais();
     const salvo = await abrirCompromisso({ titulo: v.titulo, clienteId: v.clienteId, data: v.prazo || hojeISO(), descricao: v.notas, tipo: "Reunião" });
     if (salvo && tarefa.id) await excluir("tarefas", tarefa.id);
   };
@@ -124,7 +125,7 @@ function secaoSemana(tarefa) {
     .sort((a, b) => a.d.localeCompare(b.d));
   return el("div", { class: "semana-producao" },
     el("h3", { class: "form-secao" }, `Posts de ${fmtData(tarefa.semanaInicio, true)} a ${fmtData(fim, true)} (${posts.length})`),
-    posts.length ? posts.map(({ t, d }) => el("button", { type: "button", class: "linha-tabela", onClick: () => { document.querySelector(".modal-fundo")?.remove(); abrirTarefa(t); } },
+    posts.length ? posts.map(({ t, d }) => el("button", { type: "button", class: "linha-tabela", onClick: () => { fecharModais(); abrirTarefa(t); } },
       el("span", { class: "data-mini" }, fmtData(d, true)), el("strong", {}, `${t.formato || "Post"} | ${t.titulo}`),
       el("span", { class: `etiqueta st-${t.statusConteudo || "ideia"}` }, rotuloStatusConteudo(t.statusConteudo || "ideia")),
       t.qtdArtes ? el("span", { class: "progresso-mini" }, `🖼 ${t.qtdArtes}`) : null))
@@ -160,7 +161,7 @@ function secaoCriativos(tarefa) {
   carregar();
   caixa.append(lista, el("div", { class: "acoes-criativos" },
     el("label", { class: "botao-link secundario mini" }, "📎 Anexar criativo final", entrada),
-    el("a", { class: "botao-link secundario mini", href: `#/criar/${tarefa.id}`, onClick: () => document.querySelector(".modal-fundo")?.remove() }, "🎨 Gerar imagem no Criar")));
+    el("a", { class: "botao-link secundario mini", href: `#/criar/${tarefa.id}`, onClick: () => fecharModais() }, "🎨 Gerar imagem no Criar")));
   return caixa;
 }
 
@@ -186,7 +187,9 @@ export async function alternarConcluida(t) {
     concluidoEm: concluir ? hojeISO() : null,
     checklist: concluir && t.checklist?.length ? t.checklist.map((i) => ({ ...i, feito: true })) : (t.checklist || [])
   });
-  if (concluir) avisar("Concluída! ✓");
+  if (concluir) avisar("Concluída! ✓", "ok", {
+    desfazer: () => atualizar("tarefas", t.id, { status: t.status, concluidoEm: t.concluidoEm || null, checklist: t.checklist || [] })
+  });
 }
 
 export function cartaoTarefa(t, { mostrarCliente = true } = {}) {

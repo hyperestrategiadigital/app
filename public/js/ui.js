@@ -60,11 +60,30 @@ export const fmtMoeda = (v) =>
   (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 /* ---------------- Avisos ---------------- */
-export function avisar(msg, tipo = "ok") {
-  const t = el("div", { class: `aviso aviso-${tipo}`, role: "status" }, msg);
+/** Aviso no rodapé. Com { desfazer: fn }, mostra o botão "Desfazer" por 7 segundos. */
+export function avisar(msg, tipo = "ok", { desfazer } = {}) {
+  document.querySelectorAll(".aviso").forEach((a) => a.remove());
+  let fechar;
+  const botao = desfazer ? el("button", { class: "link-claro desfazer", onClick: async () => { fechar(); try { await desfazer(); avisar("Desfeito."); } catch (e) { avisar("Não deu para desfazer: " + e.message, "erro"); } } }, "Desfazer") : null;
+  const t = el("div", { class: `aviso aviso-${tipo}`, role: "status" }, msg, botao);
+  fechar = () => { t.classList.remove("visivel"); setTimeout(() => t.remove(), 300); };
   document.body.append(t);
   requestAnimationFrame(() => t.classList.add("visivel"));
-  setTimeout(() => { t.classList.remove("visivel"); setTimeout(() => t.remove(), 300); }, 3500);
+  setTimeout(fechar, desfazer ? 7000 : 3500);
+}
+
+/** Fecha todos os modais abertos. */
+export const fecharModais = () => document.querySelectorAll(".modal-fundo").forEach((m) => m.remove());
+
+/** Escapa texto para montar HTML (exportações em PDF). */
+export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/** Baixa um arquivo (URL, data: URL ou Blob). */
+export function baixar(origem, nome) {
+  const href = origem instanceof Blob ? URL.createObjectURL(origem) : origem;
+  const a = el("a", { href, download: nome });
+  document.body.append(a); a.click(); a.remove();
+  if (origem instanceof Blob) setTimeout(() => URL.revokeObjectURL(href), 2000);
 }
 
 /* ---------------- Modal ---------------- */

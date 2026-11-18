@@ -3,11 +3,11 @@ import { auth } from "./firebase.js";
 import {
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso } from "./db.js";
+import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas } from "./db.js";
 import { el, avisar } from "./ui.js";
 import { eu, pode, ehAdmin, AREAS } from "./permissoes.js";
 import { gerarRecorrencias } from "./recorrencias.js";
-import { migrarConteudos, completarPostsSemFormato, migrarReunioes } from "./migracoes.js";
+import { completarPostsSemFormato, migrarReunioes, migrarTipos } from "./migracoes.js";
 
 import * as hoje from "./views/hoje.js";
 import * as tarefas from "./views/tarefas.js";
@@ -158,7 +158,7 @@ async function entrar(usuario) {
   // Rotinas automáticas e ajustes de dados antigos: só o administrador roda
   if (ehAdmin()) {
     gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
-    migrarConteudos().then(completarPostsSemFormato).then(migrarReunioes).catch((e) => console.error("Migração:", e));
+    completarPostsSemFormato().then(migrarReunioes).then(migrarTipos).then(arquivarAntigas).catch((e) => console.error("Migração:", e));
   }
 }
 
