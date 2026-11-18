@@ -460,7 +460,7 @@ test("orçamento: monta com os serviços do catálogo e calcula o total com desc
   await page.getByRole("button", { name: "+ Orçamento" }).click();
   await page.locator(".modal input[placeholder='Nome da empresa ou pessoa']").fill("Padaria Exemplo");
   await page.locator(".item-orcamento input[aria-label='Preço (R$)']").fill("1000");
-  await page.locator(".modal label", { hasText: "Desconto (%)" }).locator("input").fill("10");
+  await page.locator(".modal label", { hasText: "Desconto sobre a tabela (%)" }).locator("input").fill("10");
   await expect(page.locator(".totais-orcamento")).toContainText("900,00/mês");
   await page.locator(".modal").getByRole("button", { name: "Salvar", exact: true }).click();
   await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/orcamentos"] || {})[0]?.valorMensal)).toBe(900);
@@ -487,5 +487,48 @@ test("importar financeiro: contratos, despesas fixas e mês fechado no zero a ze
   expect(s["espacos/hyper/financeiro"][`mens-grupo-${MES}`].status).toBe("pago");
   await page.getByRole("tab", { name: "Contratos" }).click();
   await expect(page.locator(".resumo")).toContainText("Reserva (30%)");
+});
+
+
+test("contrato puxa o preço da tabela dos serviços e aplica o desconto", async ({ page }) => {
+  await abrir(page);
+  await page.evaluate(async () => {
+    const db = await import("/js/db.js");
+    const c = await import("/js/comercial.js");
+    await db.salvarComId("config", "comercial", { servicos: c.SERVICOS_PADRAO.map((s) => ({ ...s, preco: s.id === "trafego" ? 800 : s.id === "landing" ? 1200 : 0 })) });
+    (await import("/js/views/comercial.js")).abrirGeradorContrato("loja");
+  });
+  await page.locator(".chip-check", { hasText: "Gestão de tráfego pago" }).locator("input").check();
+  await expect(page.locator("#f-mensalidade")).toHaveValue("800");
+  await page.locator(".chip-check", { hasText: "Criação de landing page" }).locator("input").check();
+  await expect(page.locator("#f-valorUnico")).toHaveValue("1200");
+  await page.fill("#f-desconto", "10");
+  await expect(page.locator("#f-mensalidade")).toHaveValue("720");
+  await expect(page.locator("#f-valorUnico")).toHaveValue("1080");
+  await page.fill("#f-mensalidade", "700");
+  await expect(page.locator(".tabela-precos")).toContainText("12,5% de desconto");
+  await page.fill("#f-contratante", "Loja Exemplo LTDA");
+  await page.getByRole("button", { name: "Ver contrato" }).click();
+  const texto = (await page.locator(".previa-contrato").inputValue()).replace(/ /g, " ");
+  expect(texto).toContain("R$ 700,00 (setecentos reais)");
+  expect(texto).toContain("R$ 1.080,00 (mil e oitenta reais)");
+  expect(await page.evaluate(() => window.__store["espacos/hyper/contratos"].loja.mensalidade)).toBe(700);
+});
+
+
+test("proposta: condições de pagamento e escopo no formato da Hyper", async ({ page }) => {
+  await abrir(page);
+  const r = await page.evaluate(async () => {
+    const c = await import("/js/comercial.js");
+    const o = { para: "Academia Exemplo", titulo: "Aniversário", parcelas: 2, descontoAvista: 5,
+      itens: [{ nome: "Criação gráfica", preco: 750, qtd: 1, tipo: "unico", detalhes: ["Carrosséis", "Convites"], nota: "Um total de 14 criativos." },
+        { nome: "Produção de 2 vídeos", preco: 250, qtd: 2, tipo: "unico", detalhes: [] }] };
+    return { pag: c.textoPagamento(o), html: await c.documentoOrcamento(o) };
+  });
+  expect(r.pag.replace(/ /g, " ")).toBe("Pagamento em 2x de R$ 625,00 ou desconto de 5% para pagamento à vista (R$ 1.187,50)!");
+  expect(r.html).toContain("1. CRIAÇÃO GRÁFICA");
+  expect(r.html).toContain("<li>Convites</li>");
+  expect(r.html).toContain("Um total de 14 criativos.");
+  expect(r.html.replace(/ /g, " ")).toContain("Valor total do projeto: R$ 1.250,00");
 });
 
