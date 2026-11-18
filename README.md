@@ -42,6 +42,7 @@ public/
   js/constantes.js      listas fixas (status, tipos, formatos...)
   js/recorrencias.js    geração automática das tarefas recorrentes
   js/importacao.js      leitura do CSV da planilha Fluxo de Trabalho
+  js/comercial.js       catálogo de serviços, modelo de contrato, valores por extenso e documentos (contrato e proposta)
   js/busca.js           busca rápida (Ctrl+K)
   js/views/*.js         uma tela por arquivo
 firestore.rules         permissões por área (ver "Usuários e permissões")
@@ -53,6 +54,8 @@ Não precisa de build: o SDK do Firebase vem do CDN.
 ## Usuários e permissões
 
 Duas formas de entrar: o administrador adiciona o e-mail em Usuários (vira `convites/{email}`; no primeiro login a pessoa entra liberada com aquele acesso) ou a pessoa entra e pede acesso (fica `pendente` com o `pedido`, e qualquer administrador aprova). Cada membro pode ter `acessoClientes: "alguns"` com a lista `clientes`: as regras só deixam ler os itens desses clientes (e os sem cliente), e o app lê essas coleções com consultas por `clienteId`.
+
+Comercial: `config/comercial` guarda os dados da Hyper nos contratos, os serviços com preços, as despesas fixas, a reserva (%) e o modelo do contrato (só quem tem Financeiro e vê todos os clientes lê; só administradores gravam). Contrato e orçamento são gerados por administradores (Financeiro → Contratos / Orçamentos); os dados usados no contrato ficam em `contratos/{clienteId}.dadosContrato`. Mensalidades (`mens-<cliente>-<mês>`) e despesas fixas (`fixa-<id>-<mês>`) entram sozinhas do mês atual em diante.
 
 E-mails: `docs/email/Codigo.gs` roda no Google Apps Script da conta da Hyper (instruções em Ajustes). O app guarda `config/email` (URL e segredo, só administradores) e a URL em `espacos/hyper.emailUrl` (para quem ainda não tem acesso avisar os administradores).
 

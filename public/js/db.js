@@ -220,7 +220,7 @@ function ouvirTudo(aoErro) {
     }, (erro) => { aoErro?.(traduzirErro(erro)); if (primeira) { primeira = false; pronto(); } }));
   }));
   // Documentos de configuração (lidos um a um, porque cada um tem uma regra)
-  const docs = ["equipe", "agendaHyper", "clientes", "meta", "modelos", ...(pode("conteudo") ? ["openai"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
+  const docs = ["equipe", "agendaHyper", "clientes", "meta", "modelos", ...(pode("conteudo") ? ["openai"] : []), ...(pode("financeiro") && !clientesRestritos() ? ["comercial"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
     let primeira = true;
     cancelamentos.push(onSnapshot(docConfig(id), (snap) => {
       dados.config = [...dados.config.filter((c) => c.id !== id), ...(snap.exists() ? [{ id, ...snap.data() }] : [])];

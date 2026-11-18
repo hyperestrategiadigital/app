@@ -188,9 +188,12 @@ service cloud.firestore {
       }
 
       // Configurações: a chave da OpenAI só para quem cria conteúdo; o envio de e-mails só para administradores;
+      // o comercial (preços, despesas fixas, modelo de contrato) só para quem tem Financeiro e vê todos os clientes;
       // o resto (equipe, lista de nomes de clientes), todos leem
       match /config/{doc} {
-        allow read: if (doc == 'openai' && pode('conteudo')) || (doc == 'email' && admin()) || (!(doc in ['openai', 'email']) && ativo());
+        allow read: if (doc == 'openai' && pode('conteudo')) || (doc == 'email' && admin())
+          || (doc == 'comercial' && pode('financeiro') && todosClientes())
+          || (!(doc in ['openai', 'email', 'comercial']) && ativo());
         allow write: if admin();
       }
 

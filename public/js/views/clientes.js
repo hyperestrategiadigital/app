@@ -1,4 +1,5 @@
 // Clientes: lista com indicadores e ficha completa de cada cliente.
+import { textoVencimento } from "../comercial.js";
 import { linkPlano } from "./planejamento.js";
 import { el, formulario, confirmar, avisar, fmtMoeda, fmtData, linkExterno, vazio, hojeISO, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, porId, contrato, salvarComId, marcasDo } from "../db.js";
@@ -33,7 +34,10 @@ export function abrirCliente(cliente = {}) {
     ...(fin ? [
       { tipo: "secao", rotulo: "Contrato (só quem tem acesso ao financeiro vê)" },
       { nome: "mensalidade", rotulo: "Mensalidade (R$)", tipo: "number", largura: "metade" },
-      { nome: "diaVencimento", rotulo: "Dia de vencimento", tipo: "number", dica: "10", largura: "metade" }] : []),
+      { nome: "diaVencimento", rotulo: "Dia de vencimento", tipo: "number", dica: "10", largura: "metade" },
+      { nome: "vencimentoUtil", rotulo: "Contar em dias úteis (ex.: 5º dia útil)", tipo: "checkbox", largura: "metade" },
+      { nome: "pagamento", rotulo: "Pagamento", tipo: "select", opcoes: [["", "—"], ["pos", "Pós-pago"], ["pre", "Pré-pago"]], largura: "metade" },
+      { nome: "verbaAnuncios", rotulo: "Verba de anúncios (anotação)", dica: "Ex.: R$ 600/mês", largura: "metade" }] : []),
     { tipo: "secao", rotulo: "Outros" },
     { nome: "observacoes", rotulo: "Observações", tipo: "textarea", linhas: 3 },
     { nome: "ativo", rotulo: "Cliente ativo", tipo: "checkbox", padrao: true }
@@ -53,8 +57,9 @@ export function abrirCliente(cliente = {}) {
       if (!editando) { const cor = CORES[dados.clientes.length % CORES.length]; v.cor = cor; v.paleta = [cor]; }
       delete v.id;
       // Valores do contrato ficam em "contratos" (protegidos), nunca na ficha
-      const dadosContrato = fin ? { mensalidade: v.mensalidade, diaVencimento: v.diaVencimento } : null;
-      delete v.mensalidade; delete v.diaVencimento;
+      const CAMPOS = ["mensalidade", "diaVencimento", "vencimentoUtil", "pagamento", "verbaAnuncios"];
+      const dadosContrato = fin ? Object.fromEntries(CAMPOS.map((k) => [k, v[k] ?? null])) : null;
+      for (const k of CAMPOS) delete v[k];
       let id = cliente.id;
       if (editando) await atualizar("clientes", cliente.id, v);
       else id = (await criar("clientes", v)).id;
@@ -184,7 +189,7 @@ function ficha(id, estado, renderizar, resto = []) {
         info("Contato", c.contato), c.whatsapp ? el("div", { class: "info" }, el("span", {}, "WhatsApp"), zap) : null,
         info("E-mail", c.email), c.instagram ? el("div", { class: "info" }, el("span", {}, "Instagram"), insta) : null,
         el("div", { class: "links-cliente" }, linkExterno(c.linkDrive, "📁 Drive"), linkExterno(c.linkCanva, "🎨 Canva")),
-        info("Mensalidade", contrato(c.id).mensalidade ? `${fmtMoeda(contrato(c.id).mensalidade)} · dia ${contrato(c.id).diaVencimento || "—"}` : null),
+        info("Mensalidade", contrato(c.id).mensalidade ? `${fmtMoeda(contrato(c.id).mensalidade)} · ${textoVencimento(contrato(c.id)).replace(" de cada mês", "")}` : null),
         info("Segmento", c.segmento), info("Observações", c.observacoes),
         !c.contato ? el("p", { class: "subtitulo" }, "Complete o contato em Editar. Cores, fontes e tom de voz ficam na aba Marca.") : null),
       el("section", { class: "bloco" },
