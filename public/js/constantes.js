@@ -45,6 +45,15 @@ export const STATUS_CONTEUDO = [
 ];
 export const rotuloStatusConteudo = (s) => STATUS_CONTEUDO.find(([v]) => v === s)?.[1] || s;
 
+// Post tem um status só: a etapa. O status de tarefa (quadro A fazer/Em andamento/Concluído) sai dela.
+/** Etapa do post → status da tarefa. */
+export const statusDaEtapa = (etapa = "ideia") => etapa === "publicado" ? "concluido" : etapa === "ideia" || !etapa ? "a_fazer" : "andamento";
+/** Status da tarefa (ex.: arrastado no quadro) → etapa do post, mantendo a etapa atual quando ela já combina. */
+export function etapaDoStatus(status, atual = "ideia") {
+  if (statusDaEtapa(atual) === status) return atual;
+  return status === "concluido" ? "publicado" : status === "a_fazer" ? "ideia" : "producao";
+}
+
 export const CATEGORIAS_FIN = {
   receita: ["Mensalidade", "Projeto", "Avulso", "Outro"],
   despesa: ["Ferramentas", "Impostos", "Equipe", "Equipamentos", "Anúncios", "Outro"]

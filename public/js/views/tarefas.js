@@ -1,9 +1,10 @@
 // Tarefas: quadro por status (A fazer / Em andamento / Concluído) ou lista, com filtros.
+import { quitarCobranca } from "../recorrencias.js";
 import { el, hojeISO, addDias, normalizar, vazio } from "../ui.js";
 import { dados, atualizar, opcoesClientes } from "../db.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas, opcoesResponsaveis } from "./componentes.js";
 import { eu, ehAdmin, tarefaVisivel } from "../permissoes.js";
-import { STATUS_TAREFA, TIPOS_TAREFA } from "../constantes.js";
+import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, etapaDoStatus } from "../constantes.js";
 
 export function render({ estado, renderizar }) {
   estado.modo ??= "quadro";
@@ -55,7 +56,11 @@ export function render({ estado, renderizar }) {
           e.currentTarget.classList.remove("alvo");
           const id = e.dataTransfer.getData("text/plain");
           const t = dados.tarefas.find((x) => x.id === id);
-          if (t && t.status !== st) await atualizar("tarefas", id, { status: st, concluidoEm: st === "concluido" ? hojeISO() : null });
+          if (t && t.status !== st) await atualizar("tarefas", id, {
+            status: st, concluidoEm: st === "concluido" ? hojeISO() : null,
+            ...(t.tipo === TIPO_CONTEUDO ? { statusConteudo: etapaDoStatus(st, t.statusConteudo) } : {})
+          });
+          if (t && (st === "concluido") !== (t.status === "concluido")) quitarCobranca(t, st === "concluido");
         }
       },
       el("header", {}, el("h2", {}, rotulo, el("span", { class: "contador" }, colunas[st].length)),

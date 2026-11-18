@@ -1,7 +1,7 @@
 // Ajustes automáticos de dados antigos, rodados uma vez ao entrar.
 import { dados, gravarEmLote, excluir, salvarComId } from "./db.js";
 import { hojeISO, addDias } from "./ui.js";
-import { TIPO_CONTEUDO, TIPO_ANTIGO } from "./constantes.js";
+import { TIPO_CONTEUDO, TIPO_ANTIGO, statusDaEtapa } from "./constantes.js";
 
 export async function completarPostsSemFormato() {
   const faltando = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && !t.formato);
@@ -47,4 +47,21 @@ export async function migrarTipos() {
   if (!antigas.length) return 0;
   await gravarEmLote("tarefas", antigas.map(({ id, ...t }) => ({ id, ...t, tipo: TIPO_ANTIGO[t.tipo] })));
   return antigas.length;
+}
+
+// Post tem um status só (a etapa). Acerta posts antigos em que status e etapa não combinam:
+// concluído vira "publicado"; nos demais, o status passa a seguir a etapa.
+export async function alinharStatusPosts() {
+  const itens = [];
+  for (const t of dados.tarefas) {
+    if (t.tipo !== TIPO_CONTEUDO) continue;
+    const etapa = t.status === "concluido" ? "publicado" : t.statusConteudo || "ideia";
+    const status = statusDaEtapa(etapa);
+    if (etapa !== t.statusConteudo || status !== (t.status || "a_fazer")) {
+      const { id, ...resto } = t;
+      itens.push({ id, ...resto, statusConteudo: etapa, status, concluidoEm: status === "concluido" ? t.concluidoEm || t.dataPublicacao || hojeISO() : null });
+    }
+  }
+  if (itens.length) await gravarEmLote("tarefas", itens);
+  return itens.length;
 }

@@ -1,7 +1,9 @@
 // Peças reutilizadas entre telas: cartão e formulário de tarefa, selo de cliente.
+import { pode } from "../permissoes.js";
+import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId } from "../db.js";
-import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo } from "../constantes.js";
+import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
 import { promptCopy } from "../prompts.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
 import { abrirCompromisso } from "../compromissos.js";
@@ -51,7 +53,7 @@ export function abrirTarefa(tarefa = {}) {
 
     { tipo: "secao", rotulo: "Tarefa" },
     { nome: "responsavel", rotulo: "Responsável", tipo: "select", opcoes: opcoesResponsaveis(tarefa.responsavel), padrao: opcoesResponsaveis()[0], largura: "metade" },
-    { nome: "status", rotulo: "Status", tipo: "select", opcoes: STATUS_TAREFA, padrao: "a_fazer", largura: "metade" },
+    { nome: "status", rotulo: "Status", tipo: "select", opcoes: STATUS_TAREFA, padrao: "a_fazer", largura: "metade", mostrarSe: (v) => !conteudo(v) },
     { nome: "prazo", rotulo: "Prazo de entrega", tipo: "date", padrao: hojeISO(), largura: "metade" },
     { nome: "checklist", rotulo: "Checklist", tipo: "checklist" },
     { nome: "linkCanva", rotulo: "Link do Canva (criativo)", dica: "https://www.canva.com/design/...", largura: "metade" },
@@ -171,24 +173,32 @@ export async function salvarTarefa(original, v) {
     for (const k of ["formato", "rede", "dataPublicacao", "hora", "statusConteudo", "objetivo", "roteiro", "copy"]) delete v[k];
   } else {
     if (!v.prazo) v.prazo = v.dataPublicacao;
-    if (v.statusConteudo === "publicado" && v.status !== "concluido") v.status = "concluido";
+    v.statusConteudo ||= "ideia";
+    v.status = statusDaEtapa(v.statusConteudo);
   }
   if (v.status === "concluido" && original.status !== "concluido") v.concluidoEm = hojeISO();
   if (v.status !== "concluido") v.concluidoEm = null;
   if (original.id) await atualizar("tarefas", original.id, v);
   else await criar("tarefas", v);
+  if (original.id && (v.status === "concluido") !== (original.status === "concluido")) await quitarCobranca(original, v.status === "concluido");
   avisar(original.id ? "Salvo." : v.tipo === TIPO_CONTEUDO ? "Post criado e adicionado ao calendário." : "Tarefa criada.");
 }
 
 export async function alternarConcluida(t) {
   const concluir = t.status !== "concluido";
+  const post = ehConteudo(t);
   await atualizar("tarefas", t.id, {
-    status: concluir ? "concluido" : "a_fazer",
+    status: concluir ? "concluido" : post ? "andamento" : "a_fazer",
+    ...(post ? { statusConteudo: concluir ? "publicado" : "agendado" } : {}),
     concluidoEm: concluir ? hojeISO() : null,
     checklist: concluir && t.checklist?.length ? t.checklist.map((i) => ({ ...i, feito: true })) : (t.checklist || [])
   });
-  if (concluir) avisar("Concluída! ✓", "ok", {
-    desfazer: () => atualizar("tarefas", t.id, { status: t.status, concluidoEm: t.concluidoEm || null, checklist: t.checklist || [] })
+  await quitarCobranca(t, concluir);
+  if (concluir) avisar(lancamentoDe(t) && pode("financeiro") ? "Concluída! Mensalidade marcada como paga ✓" : "Concluída! ✓", "ok", {
+    desfazer: async () => {
+      await quitarCobranca(t, false);
+      await atualizar("tarefas", t.id, { status: t.status || "a_fazer", concluidoEm: t.concluidoEm || null, checklist: t.checklist || [], ...(post ? { statusConteudo: t.statusConteudo || "ideia" } : {}) });
+    }
   });
 }
 

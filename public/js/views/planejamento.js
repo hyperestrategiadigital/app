@@ -3,7 +3,7 @@
 import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal, confirmar, formulario, vazio, fecharModais } from "../ui.js";
 import { dados, porId, criar, atualizar, excluir, clientesAtivos } from "../db.js";
 import { cabecalho, abas } from "./componentes.js";
-import { FORMATOS, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo } from "../constantes.js";
+import { FORMATOS, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
 import { postsDoMes, dataPost, exportarPDF, nomeMes, temPrefixo } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
 
@@ -102,11 +102,15 @@ export function render({ params, estado, renderizar }) {
         const v = {};
         for (const c of CAMPOS) v[c] = typeof l[c] === "string" ? l[c].trim() : l[c];
         if (!v.prazo) v.prazo = addDias(v.dataPublicacao, -2) < hojeISO() ? hojeISO() : addDias(v.dataPublicacao, -2);
+        const status = statusDaEtapa(v.statusConteudo);
         if (l.id) {
           const atual = porId("tarefas", l.id);
-          if (atual && CAMPOS.some((c) => (atual[c] ?? "") !== v[c])) { await atualizar("tarefas", l.id, v); atualizados++; }
+          if (atual && CAMPOS.some((c) => (atual[c] ?? "") !== v[c])) {
+            await atualizar("tarefas", l.id, { ...v, status, ...(status !== atual.status ? { concluidoEm: status === "concluido" ? hojeISO() : null } : {}) });
+            atualizados++;
+          }
         } else {
-          const ref = await criar("tarefas", { ...v, tipo: TIPO_CONTEUDO, clienteId, status: "a_fazer", checklist: [], notas: "", linkCanva: "", linkDrive: "", copy: "" });
+          const ref = await criar("tarefas", { ...v, tipo: TIPO_CONTEUDO, clienteId, status, concluidoEm: status === "concluido" ? hojeISO() : null, checklist: [], notas: "", linkCanva: "", linkDrive: "", copy: "" });
           l.id = ref.id; l.chave = ref.id; criados++;
         }
       }

@@ -123,7 +123,7 @@ export function render({ params, estado, renderizar }) {
     if (post) {
       try {
         await salvarArte(cliente.id, post.id, await comprimirImagem(imagem), { origem: "gerada", nome: "Imagem gerada" });
-        if (["ideia", ""].includes(post.statusConteudo || "")) await atualizar("tarefas", post.id, { statusConteudo: "producao" });
+        if (["ideia", ""].includes(post.statusConteudo || "")) await atualizar("tarefas", post.id, { statusConteudo: "producao", status: "andamento" });
       } catch (e) { console.warn("Não salvou a imagem no post:", e); }
     }
     window.open("https://claude.ai/new", "_blank", "noopener");

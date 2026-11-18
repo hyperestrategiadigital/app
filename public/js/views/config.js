@@ -82,10 +82,9 @@ function baixarBackup() {
 
 export function render() {
   return el("div", { class: "tela" },
-    cabecalho("Ajustes", ehAdmin() ? "Agenda, equipe, OpenAI, importação e backup" : "Sua Google Agenda"),
+    cabecalho("Ajustes", ehAdmin() ? "Agenda, OpenAI, importação e backup" : "Sua Google Agenda"),
 
     blocoAgenda(),
-    ehAdmin() ? blocoEquipe() : null,
     ehAdmin() ? blocoOpenAI() : null,
 
     ehAdmin() ? blocoImportarMarcas() : null,
@@ -160,27 +159,6 @@ function blocoAgenda() {
         if (ok) avisar(`${ok} compromisso(s) enviado(s) para a agenda.`);
       } }, `Enviar ${pendentes.length} pendente(s)`) : null),
     el("p", { class: "subtitulo" }, "O Google libera o acesso por cerca de 1 hora. Depois disso, ao salvar um compromisso, o app pede para conectar de novo."));
-}
-
-function blocoEquipe() {
-  const pessoas = (dados.config.find((c) => c.id === "equipe")?.pessoas || []).map((p) => ({ ...p }));
-  const lista = el("div", { class: "lista-equipe" });
-  const desenhar = () => lista.replaceChildren(...pessoas.map((p, i) => el("div", { class: "pessoa" },
-    (() => { const n = el("input", { type: "text", value: p.nome, placeholder: "Nome", "aria-label": "Nome" }); n.addEventListener("input", () => (p.nome = n.value)); return n; })(),
-    (() => { const e = el("input", { type: "email", value: p.email, placeholder: "email@gmail.com", "aria-label": "E-mail" }); e.addEventListener("input", () => (p.email = e.value)); return e; })(),
-    el("button", { class: "icone", "aria-label": "Remover", onClick: () => { pessoas.splice(i, 1); desenhar(); } }, "✕"))));
-  desenhar();
-  return el("section", { class: "bloco" },
-    el("h2", {}, "Equipe sem conta no app"),
-    el("p", { class: "subtitulo" }, "Quem tem conta no app já entra na equipe sozinho (menu Usuários). Aqui ficam pessoas sem conta que participam de reuniões ou recebem tarefas — o convite da agenda vai pelo e-mail daqui."),
-    lista,
-    el("div", { class: "acoes" },
-      el("button", { class: "secundario mini", onClick: () => { pessoas.push({ nome: "", email: "" }); desenhar(); } }, "+ Pessoa"),
-      el("button", { onClick: async () => {
-        const validas = pessoas.map((p) => ({ nome: p.nome.trim(), email: p.email.trim() })).filter((p) => p.nome);
-        await salvarComId("config", "equipe", { pessoas: validas });
-        avisar("Equipe salva.");
-      } }, "Salvar equipe")));
 }
 
 const CAMPOS_MARCA = ["tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "fontes", "observacoes", "instagram", "linkDrive", "paleta"];

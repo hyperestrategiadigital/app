@@ -1,9 +1,8 @@
-// Aba "Contas" da ficha do cliente: redes sociais e contas de anúncio, com atalhos para agendar
-// (Meta Business Suite, LinkedIn) e para os gerenciadores de anúncios.
+// Aba "Contas" da ficha do cliente: redes sociais, com atalhos para agendar (Meta Business Suite, LinkedIn).
+// Contas de anúncio ficam só na aba Tráfego pago.
 // A publicação/leitura automática pela API fica para uma etapa futura (exige app aprovado e servidor).
-import { el, formulario, avisar, linkExterno, fmtMoeda, vazio } from "../ui.js";
-import { dados, atualizar } from "../db.js";
-import { abrirConta } from "./trafego.js";
+import { el, formulario, avisar, linkExterno } from "../ui.js";
+import { atualizar } from "../db.js";
 
 const soNumeros = (s) => String(s || "").replace(/\D/g, "");
 const comHttp = (u) => (!u ? "" : /^https?:\/\//i.test(u) ? u : `https://${u}`);
@@ -36,7 +35,6 @@ export function editarContas(c) {
 }
 
 export function abaContas(c) {
-  const contasAds = dados.contasAds.filter((x) => x.clienteId === c.id);
   const linha = (rotulo, valor, link, extra) => el("div", { class: "linha-conta-cliente" },
     el("span", { class: "rotulo-conta" }, rotulo),
     valor ? el("strong", {}, valor) : el("span", { class: "subtitulo" }, "não cadastrado"),
@@ -57,13 +55,6 @@ export function abaContas(c) {
       c.linkedin ? el("a", { class: "botao-link secundario", href: linkLinkedinAdmin(c), target: "_blank", rel: "noopener" }, "LinkedIn · página ↗") : null),
     !c.facebookPageId ? el("p", { class: "subtitulo" }, "Cadastre o ID da página do Facebook para o atalho abrir direto no planejador deste cliente.") : null,
 
-    el("div", { class: "com-acao" }, el("h3", {}, "Contas de anúncio"), el("button", { class: "mini", onClick: () => abrirConta({ clienteId: c.id }) }, "+ Conta de anúncio")),
-    contasAds.length ? contasAds.map((x) => el("div", { class: "linha-conta-cliente" },
-      el("span", { class: "rotulo-conta" }, x.plataforma),
-      el("strong", {}, x.idConta || "sem ID"),
-      x.verbaMensal ? el("span", {}, `${fmtMoeda(x.verbaMensal)}/mês`) : null,
-      linkExterno(x.plataforma === "Google Ads" ? linkGoogleAds() : linkGerenciadorMeta(x), "gerenciador ↗"),
-      el("button", { class: "link", onClick: () => abrirConta(x) }, "editar")))
-      : vazio("Nenhuma conta de anúncio cadastrada."),
+    el("p", { class: "nota" }, "As contas de anúncio (Meta Ads, Google Ads) ficam na aba Tráfego pago."),
     el("p", { class: "nota" }, "Publicar e puxar resultados automaticamente pelas APIs da Meta, LinkedIn e Google exige um app aprovado por eles e um servidor (plano Blaze). Por enquanto o app guarda as contas e abre cada ferramenta no lugar certo."));
 }

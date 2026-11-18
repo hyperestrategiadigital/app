@@ -152,6 +152,37 @@ body.logado #app { display: flex; }
 #menu a:hover { background: rgba(255, 255, 255, 0.10); opacity: 1; }
 #menu a.ativo { background: var(--hyper-branco); color: var(--hyper-roxo); opacity: 1; font-weight: 700; }
 .menu-icone { width: 18px; text-align: center; }
+.menu-busca {
+  display: flex; align-items: center; gap: 12px; width: 100%; margin-bottom: 6px;
+  padding: 9px 12px; border-radius: var(--raio-pequeno); border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08); color: var(--hyper-branco); font: inherit; cursor: pointer; text-align: left;
+}
+.menu-busca:hover { background: rgba(255, 255, 255, 0.16); }
+.menu-busca kbd { margin-left: auto; font-family: var(--fonte-texto); font-size: 11px; opacity: 0.7; }
+.menu-grupo { margin-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.15); padding-top: 6px; }
+.menu-grupo summary {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--raio-pequeno);
+  color: var(--hyper-branco); font-weight: 500; opacity: 0.85; cursor: pointer; list-style: none;
+}
+.menu-grupo summary::-webkit-details-marker { display: none; }
+.menu-grupo summary::after { content: "▾"; margin-left: auto; transition: transform 0.2s ease; }
+.menu-grupo:not([open]) summary::after { transform: rotate(-90deg); }
+.menu-grupo summary:hover { background: rgba(255, 255, 255, 0.10); opacity: 1; }
+.menu-grupo summary.ativo-grupo { opacity: 1; font-weight: 700; }
+.menu-grupo a { padding-left: 24px !important; }
+#menu .menu-grupo a { display: flex; }
+
+/* ---------------- Busca rápida ---------------- */
+.busca-rapida input { width: 100%; font-size: 16px; }
+.busca-lista { list-style: none; margin: 12px 0 0; padding: 0; max-height: 55vh; overflow-y: auto; }
+.busca-grupo { font-family: var(--fonte-titulo); text-transform: uppercase; letter-spacing: 0.04em; font-size: 13px; color: var(--cor-texto-suave); padding: 10px 8px 4px; }
+.busca-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--raio-pequeno); cursor: pointer; }
+.busca-item.ativo { background: var(--cor-primaria-clara); }
+.busca-icone { width: 18px; text-align: center; color: var(--cor-primaria); }
+.busca-titulo { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.busca-detalhe { margin-left: auto; font-size: 12px; color: var(--cor-texto-suave); white-space: nowrap; }
+.busca-nota { margin-top: 10px; }
+.busca-vazio { padding: 12px 8px; color: var(--cor-texto-suave); }
 .usuario { padding: 16px 22px; border-top: 1px solid rgba(255, 255, 255, 0.15); font-size: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .usuario span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--hyper-gelo); }
 .principal { flex: 1; min-width: 0; display: flex; flex-direction: column; }
