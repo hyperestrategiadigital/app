@@ -460,7 +460,7 @@ test("orçamento: monta com os serviços do catálogo e calcula o total com desc
   await page.getByRole("button", { name: "+ Orçamento" }).click();
   await page.locator(".modal input[placeholder='Nome da empresa ou pessoa']").fill("Padaria Exemplo");
   await page.locator(".item-orcamento input[aria-label='Preço (R$)']").fill("1000");
-  await page.locator(".modal label", { hasText: "Desconto (%)" }).locator("input").fill("10");
+  await page.locator(".modal label", { hasText: "Desconto sobre a tabela (%)" }).locator("input").fill("10");
   await expect(page.locator(".totais-orcamento")).toContainText("900,00/mês");
   await page.locator(".modal").getByRole("button", { name: "Salvar", exact: true }).click();
   await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/orcamentos"] || {})[0]?.valorMensal)).toBe(900);
@@ -513,5 +513,22 @@ test("contrato puxa o preço da tabela dos serviços e aplica o desconto", async
   expect(texto).toContain("R$ 700,00 (setecentos reais)");
   expect(texto).toContain("R$ 1.080,00 (mil e oitenta reais)");
   expect(await page.evaluate(() => window.__store["espacos/hyper/contratos"].loja.mensalidade)).toBe(700);
+});
+
+
+test("proposta: condições de pagamento e escopo no formato da Hyper", async ({ page }) => {
+  await abrir(page);
+  const r = await page.evaluate(async () => {
+    const c = await import("/js/comercial.js");
+    const o = { para: "Academia Exemplo", titulo: "Aniversário", parcelas: 2, descontoAvista: 5,
+      itens: [{ nome: "Criação gráfica", preco: 750, qtd: 1, tipo: "unico", detalhes: ["Carrosséis", "Convites"], nota: "Um total de 14 criativos." },
+        { nome: "Produção de 2 vídeos", preco: 250, qtd: 2, tipo: "unico", detalhes: [] }] };
+    return { pag: c.textoPagamento(o), html: await c.documentoOrcamento(o) };
+  });
+  expect(r.pag.replace(/ /g, " ")).toBe("Pagamento em 2x de R$ 625,00 ou desconto de 5% para pagamento à vista (R$ 1.187,50)!");
+  expect(r.html).toContain("1. CRIAÇÃO GRÁFICA");
+  expect(r.html).toContain("<li>Convites</li>");
+  expect(r.html).toContain("Um total de 14 criativos.");
+  expect(r.html.replace(/ /g, " ")).toContain("Valor total do projeto: R$ 1.250,00");
 });
 

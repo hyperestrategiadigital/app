@@ -10,6 +10,7 @@ export const configComercial = () => dados.config.find((c) => c.id === "comercia
 export const SERVICOS_PADRAO = [
   { id: "trafego", nome: "Gestão de tráfego pago (Meta Ads e Google Ads)", tipo: "mensal", preco: 0, trafego: true,
     descricao: "Criação, acompanhamento e otimização das campanhas, com relatório mensal de resultados.",
+    entregas: ["Configuração e organização das contas (Meta Ads e Google Ads);", "Criação, acompanhamento e otimização das campanhas;", "Textos e orientações para os criativos dos anúncios;", "Relatório mensal simples com os resultados."],
     itens: [
       "Manutenção e organização das informações específicas dos canais (Meta Ads e Google Ads) e manutenção do investimento em anúncios;",
       "Acompanhamento do desempenho de cada campanha, assegurando a melhor cobertura dos públicos e/ou dos mercados objetivados, sendo de responsabilidade da CONTRATANTE o pagamento do valor de mídia a ser utilizado;",
@@ -18,6 +19,7 @@ export const SERVICOS_PADRAO = [
     ] },
   { id: "social", nome: "Gestão de redes sociais (social media)", tipo: "mensal", preco: 0,
     descricao: "Planejamento mensal, criação de artes e textos, publicação e relatório.",
+    entregas: ["Planejamento mensal com calendário para aprovação;", "Conteúdos estáticos, carrosséis e stories;", "Textos (copy) seguindo o tom de voz da marca;", "Publicação e agendamento dos posts aprovados;", "Relatório mensal simples dos perfis."],
     itens: [
       "Planejamento mensal de conteúdo, com calendário de publicações enviado para aprovação da CONTRATANTE;",
       "Criação de artes e textos (copy) para as publicações, seguindo a identidade visual e o tom de voz da marca;",
@@ -302,32 +304,67 @@ export function totaisOrcamento(o) {
   return { mensalBruto, unicoBruto, mensal: Math.round(mensalBruto * fator * 100) / 100, unico: Math.round(unicoBruto * fator * 100) / 100 };
 }
 
+/** Condições de pagamento sugeridas: "Pagamento em 2x de R$ 625,00 ou desconto de 5% para pagamento à vista (R$ 1.187,50)". */
+export function textoPagamento(o) {
+  const t = totaisOrcamento(o);
+  const partes = [];
+  if (t.unico) {
+    const n = Number(o.parcelas) || 1, d = Number(o.descontoAvista) || 0;
+    const opcoes = [];
+    if (n > 1) opcoes.push(`Pagamento em ${n}x de ${fmtMoeda(t.unico / n)}`);
+    if (d > 0) opcoes.push(`${opcoes.length ? "desconto" : "Desconto"} de ${String(d).replace(".", ",")}% para pagamento à vista (${fmtMoeda(t.unico * (1 - d / 100))})`);
+    if (opcoes.length) partes.push(opcoes.join(" ou ") + "!");
+  }
+  if (t.mensal) partes.push(`Mensalidade de ${fmtMoeda(t.mensal)}, a partir do início dos serviços.`);
+  return partes.join(" ");
+}
+
+/** Entregas de um serviço na proposta (as do catálogo ou a descrição). */
+export const entregasDe = (s) => (s?.entregas?.length ? s.entregas : s?.descricao ? [s.descricao] : []);
+
+const paragrafos = (texto) => String(texto || "").split(/\n{2,}|\n/).map((l) => l.trim()).filter(Boolean).map((l) => `<p>${esc(l)}</p>`).join("");
+
+/** Proposta no formato da Hyper: apresentação, sobre, escopo numerado, organização, investimento e condições. */
 export async function documentoOrcamento(o) {
   const t = totaisOrcamento(o);
-  const hyper = configComercial().contratada || {};
-  let css = "";
-  try { css = await (await fetch(`${base()}css/exportacao.css`)).text(); } catch {}
-  const linhas = (o.itens || []).map((i) => `<tr><td><strong>${esc(i.nome)}</strong>${i.descricao ? `<br><small>${esc(i.descricao)}</small>` : ""}</td>
-    <td class="num">${Number(i.qtd) > 1 ? `${i.qtd} × ` : ""}${fmtMoeda(i.preco)}${i.tipo === "unico" ? "" : "/mês"}</td></tr>`).join("");
+  const cfg = configComercial();
+  const hyper = cfg.contratada || {};
+  const itens = (o.itens || []).filter((i) => i.nome);
+  const escopo = itens.map((i, n) => `<section class="bloco-escopo"><h3>${n + 1}. ${esc(i.nome.toUpperCase())}</h3>
+    ${(i.detalhes || []).length ? `<ul>${i.detalhes.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>` : ""}
+    ${i.nota ? `<p class="nota">${esc(i.nota)}</p>` : ""}</section>`).join("");
+  const investimento = itens.map((i) => `<li><span>${esc(i.nome)}${Number(i.qtd) > 1 ? ` (${i.qtd}x)` : ""}</span><strong>${fmtMoeda((Number(i.preco) || 0) * (Number(i.qtd) || 1))}${i.tipo === "unico" ? "" : "/mês"}</strong></li>`).join("");
+  const totais = [t.unico ? `Valor total do projeto: ${fmtMoeda(t.unico)}` : "", t.mensal ? `Mensalidade: ${fmtMoeda(t.mensal)}` : ""].filter(Boolean);
+  const pagamento = o.condicoes || textoPagamento(o);
   const validade = o.validade ? dataCurta(addDias(o.data || hojeISO(), Number(o.validade))) : "";
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Proposta Hyper - ${esc(o.para)}</title>
+  const contato = [hyper.instagram, hyper.email, hyper.whatsapp, hyper.contato].filter(Boolean).map(esc).join(" | ");
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Orçamento ${esc(o.titulo || "")} - ${esc(o.para || "")}</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,800&family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
-<style>${css}
-.topo p{text-transform:none}.proposta{padding:24px 32px}.proposta td.num{font-weight:700;color:var(--hyper-roxo);font-size:13px}.proposta table{width:100%;border-collapse:collapse;margin:12px 0}.proposta td{padding:10px 8px;border-bottom:1px solid var(--hyper-gelo);vertical-align:top}
-.proposta small{color:var(--hyper-cinza)}.num{text-align:right;white-space:nowrap}.totais{margin-left:auto;width:320px}.totais td{border:0;padding:4px 8px}
-.totais .grande td{font:italic 800 22px "Barlow Condensed",sans-serif;color:var(--hyper-roxo)}.obs{white-space:pre-wrap;background:var(--cor-fundo);padding:12px 16px;border-radius:8px}</style></head><body>
-<header class="topo"><img src="${base()}img/logo-branco.png" alt="Hyper"><div><span class="tagline">Proposta comercial</span>
-<h1>${esc(o.para)}</h1><p>${dataExtenso(o.data || hojeISO())}${validade ? ` · válida até ${validade}` : ""}</p></div></header>
-<section class="proposta">
-<table>${linhas}</table>
-<table class="totais">
-${t.mensal ? `<tr class="grande"><td>Mensal</td><td class="num">${fmtMoeda(t.mensal)}</td></tr>` : ""}
-${t.unico ? `<tr class="grande"><td>Investimento único</td><td class="num">${fmtMoeda(t.unico)}</td></tr>` : ""}
-${Number(o.desconto) ? `<tr><td colspan="2"><small>Já com ${o.desconto}% de desconto (de ${[t.mensalBruto && fmtMoeda(t.mensalBruto) + "/mês", t.unicoBruto && fmtMoeda(t.unicoBruto)].filter(Boolean).join(" e ")})</small></td></tr>` : ""}
-</table>
-${o.observacoes ? `<p class="obs">${esc(o.observacoes)}</p>` : ""}
-<p><small>A verba de anúncios (mídia) não está incluída e é paga pelo cliente diretamente às plataformas ou conforme combinado.</small></p>
-</section>
-<footer>Hyper Estratégia Digital${hyper.nome ? ` · ${esc(hyper.nome)}` : ""}${hyper.contato ? ` · ${esc(hyper.contato)}` : ""}</footer>
+<style>
+body{font-family:Montserrat,Arial,sans-serif;color:#1A1A1A;font-size:11.5pt;line-height:1.55;max-width:780px;margin:0 auto;padding:0 28px 28px}
+.capa{background:#4E2CA3;color:#fff;padding:28px 32px;margin:0 -28px 24px;display:flex;gap:24px;align-items:center}
+.capa img{height:44px}.capa small{letter-spacing:.3em;text-transform:uppercase;font-size:9pt;color:#C9D5E3}
+.capa h1{font:italic 800 30pt "Barlow Condensed",Arial,sans-serif;margin:2px 0;line-height:1}.capa p{margin:2px 0;color:#C9D5E3}
+h2{font:italic 800 16pt "Barlow Condensed",Arial,sans-serif;color:#4E2CA3;margin:22px 0 6px;text-transform:uppercase}
+h3{font-size:11.5pt;margin:14px 0 4px}ul{margin:4px 0 6px;padding-left:20px}li{margin:2px 0}p{margin:0 0 8px;text-align:justify}
+.nota{font-style:italic;color:#444}.investimento{list-style:none;padding:0}.investimento li{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid #C9D5E3;padding:6px 0}
+.total{font:italic 800 18pt "Barlow Condensed",Arial,sans-serif;color:#4E2CA3;margin:12px 0 4px}.pagamento{font-style:italic}
+.desconto{font-size:9.5pt;color:#606060}footer{margin-top:28px;padding-top:12px;border-top:2px solid #4E2CA3;font-size:9.5pt}
+footer strong{color:#4E2CA3}@media print{@page{size:A4;margin:12mm}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.capa{margin:0 0 20px;border-radius:8px}}
+</style></head><body>
+<header class="capa"><img src="${base()}img/logo-branco.png" alt="Hyper"><div><small>Orçamento</small>
+<h1>${esc((o.titulo || o.para || "").toUpperCase())}</h1><p><strong>${esc(o.para || "")}</strong> · Desenvolvido por Hyper</p>
+<p>${dataExtenso(o.data || hojeISO())}${validade ? ` · válido até ${validade}` : ""}</p></div></header>
+${paragrafos(o.apresentacao)}
+${o.sobre ? `<h2>Sobre a proposta</h2>${paragrafos(o.sobre)}` : ""}
+${escopo ? `<h2>Escopo das entregas</h2>${escopo}` : ""}
+${o.organizacao ? `<h2>Organização do projeto</h2>${paragrafos(o.organizacao)}` : ""}
+<h2>Investimento</h2>
+<ul class="investimento">${investimento}</ul>
+${totais.map((x) => `<p class="total">${x}</p>`).join("")}
+${Number(o.desconto) ? `<p class="desconto">Já com ${String(o.desconto).replace(".", ",")}% de desconto sobre a tabela (de ${[t.unicoBruto && fmtMoeda(t.unicoBruto), t.mensalBruto && fmtMoeda(t.mensalBruto) + "/mês"].filter(Boolean).join(" e ")}).</p>` : ""}
+${pagamento ? `<p class="pagamento">${esc(pagamento)}</p>` : ""}
+${t.mensal && itens.some((i) => /tráfego/i.test(i.nome)) ? `<p class="desconto">A verba de anúncios (mídia) não está incluída e é paga pelo cliente.</p>` : ""}
+<footer><strong>Hyper - Estratégia Digital</strong><br><em>${esc(hyper.slogan || "Conteúdo e estratégia digital para pequenos e grandes negócios!")}</em>${contato ? `<br>${contato}` : ""}</footer>
 </body></html>`;
 }
