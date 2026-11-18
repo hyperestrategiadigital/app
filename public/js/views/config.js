@@ -3,6 +3,7 @@ import { el, formulario, confirmar, avisar, abrirModal, hojeISO, addDias, vazio,
 import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes, nomeCliente, clientesAtivos } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { analisarPlanilha } from "../importacao.js";
+import { abrirImportarPlanejamento } from "./importarPlanejamento.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
 import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
@@ -99,6 +100,11 @@ export function render() {
       el("h2", {}, "Importar planilha"),
       el("p", {}, "Traga o histórico da planilha Fluxo de Trabalho: clientes, tarefas e entregas."),
       el("button", { onClick: abrirImportacao }, "Importar CSV da planilha")) : null,
+
+    ehAdmin() ? el("section", { class: "bloco" },
+      el("h2", {}, "Importar planejamento de posts"),
+      el("p", {}, "Posts de um ou mais meses de um cliente (com as marcas), a partir do arquivo .json que o Claude monta dos seus prints ou planilhas. Não duplica e não mexe no que já existe."),
+      el("button", { onClick: abrirImportarPlanejamento }, "Importar planejamento (.json)")) : null,
 
     ehAdmin() ? el("section", { class: "bloco" },
       el("h2", {}, "Backup"),

@@ -251,7 +251,8 @@ function telaEscolha() {
 const PREFIXOS = [
   [/^est[aá]tico/i, "Feed estático"], [/^feed/i, "Feed estático"], [/^carrossel/i, "Carrossel"],
   [/^reels?/i, "Reels"], [/^v[ií]deo/i, "Reels"], [/^stor(y|ies)/i, "Story"], [/^whats/i, "WhatsApp"],
-  [/^tiktok/i, "TikTok"], [/^tr[aá]fego/i, "Anúncio estático"], [/^an[uú]ncio/i, "Anúncio estático"], [/^blog/i, "Blog"]
+  [/^tiktok/i, "TikTok"], [/^tr[aá]fego/i, "Anúncio estático"], [/^an[uú]ncio/i, "Anúncio estático"], [/^blog/i, "Blog"],
+  [/^artigo/i, "Artigo"], [/^e-?mail/i, "E-mail marketing"]
 ];
 export function lerTextoRapido(texto, formatoPadrao = "Feed estático") {
   return texto.split(";").map((parte) => parte.trim()).filter(Boolean).map((parte) => {

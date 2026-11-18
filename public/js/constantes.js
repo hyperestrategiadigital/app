@@ -25,15 +25,15 @@ export const SERVICOS = ["Social media", "Meta Ads", "Google Ads", "Vídeo", "Si
 
 export const FORMATOS = [
   "Feed estático", "Carrossel", "Reels", "Story", "Sequência de stories", "Vídeo (YouTube)",
-  "TikTok", "Anúncio estático", "Anúncio em vídeo", "WhatsApp", "Blog", "Outro"
+  "TikTok", "Anúncio estático", "Anúncio em vídeo", "Artigo", "E-mail marketing", "WhatsApp", "Blog", "Outro"
 ];
 // Proporção da arte por formato (largura x altura) usada no menu Criar
 export const PROPORCAO_FORMATO = {
   "Feed estático": [1080, 1350], "Carrossel": [1080, 1350], "Anúncio estático": [1080, 1350],
   "Story": [1080, 1920], "Sequência de stories": [1080, 1920], "Reels": [1080, 1920], "TikTok": [1080, 1920], "Anúncio em vídeo": [1080, 1920],
-  "Vídeo (YouTube)": [1920, 1080], "Blog": [1600, 900], "WhatsApp": [1080, 1080], "Outro": [1080, 1080]
+  "Vídeo (YouTube)": [1920, 1080], "Blog": [1600, 900], "Artigo": [1600, 900], "E-mail marketing": [1200, 628], "WhatsApp": [1080, 1080], "Outro": [1080, 1080]
 };
-export const REDES = ["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn", "WhatsApp", "Site"];
+export const REDES = ["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn", "WhatsApp", "E-mail", "Site"];
 
 export const STATUS_CONTEUDO = [
   ["ideia", "Ideia"],
@@ -80,6 +80,8 @@ export const MODELOS_PADRAO = {
   "Carrossel": ["Roteiro das lâminas", "Copy", "Arte no Canva", "Aprovação do cliente", "Agendar"],
   "Reels": ["Roteiro", "Gravação", "Edição", "Capa", "Legenda", "Aprovação do cliente", "Agendar"],
   "Story": ["Roteiro", "Arte ou gravação", "Publicar"],
+  "Artigo": ["Pauta com o autor", "Texto", "Revisão", "Imagem de capa", "Aprovação do cliente", "Publicar"],
+  "E-mail marketing": ["Texto", "Layout do e-mail", "Lista de envio", "Aprovação do cliente", "Agendar envio"],
   "Sequência de stories": ["Roteiro", "Artes ou gravações", "Aprovação do cliente", "Publicar"],
   "Anúncio estático": ["Briefing", "Copy", "Arte", "Aprovação do cliente", "Subir no gerenciador"],
   "Anúncio em vídeo": ["Roteiro", "Gravação", "Edição", "Aprovação do cliente", "Subir no gerenciador"],
