@@ -1,10 +1,10 @@
 // Minha conta (clique no seu nome no menu): foto, nome, o que você pode ver, pedido de mais acesso
 // e as suas conexões pessoais (Google Agenda). Vale para todos, administradores ou não.
-import { el, avisar, confirmar } from "../ui.js";
+import { el, avisar, confirmar, hojeISO } from "../ui.js";
 import { dados, porId, atualizarMeuCadastro } from "../db.js";
 import { cabecalho, avatar } from "./componentes.js";
 import { eu, ehAdmin, AREAS, rotuloArea, clientesRestritos } from "../permissoes.js";
-import { configAgenda, conectarAgenda, desconectarAgenda, sincronizar } from "../agenda.js";
+import { configAgenda, agendaConectada } from "../agenda.js";
 import { comprimirImagem } from "../arquivos.js";
 import { avisarAdmins } from "../emails.js";
 import { metaDisponivel, metaConectada, conectarMeta, desconectarMeta, contaMeta } from "../meta.js";
@@ -103,35 +103,26 @@ function blocoPedido(m, restrito) {
     } }, "Enviar pedido")));
 }
 
-function blocoAgenda() {
-  const cfg = configAgenda();
-  const pendentes = dados.compromissos.filter((c) => c.sincronizar && !c.googleEventId);
-  const conectar = async (botao) => {
-    botao.disabled = true;
-    try { const email = await conectarAgenda(); avisar(`Google Agenda conectada: ${email}`); }
-    catch (e) { avisar("Não conectou: " + (e.code === "auth/popup-closed-by-user" ? "janela fechada." : e.message), "erro"); botao.disabled = false; }
-  };
+function blocoAgenda(m) {
+  const status = configAgenda();
+  const email = el("input", { id: "conta-email-agenda", type: "email", value: m.emailAgenda || "", placeholder: m.email || eu.email });
+  const meus = dados.compromissos.filter((c) => c.sincronizar && (c.participantes || []).includes(m.nome) && (c.data || "") >= hojeISO()).length;
   return el("div", { class: "conexao" },
-    el("div", { class: "com-acao" }, el("h3", {}, "Google Agenda"), cfg.email ? el("span", { class: "etiqueta ok" }, "Conectada") : el("span", { class: "etiqueta" }, "Não conectada")),
-    el("p", {}, cfg.email
-      ? ["Conectada à agenda de ", el("strong", {}, cfg.email), ". Os compromissos de que você participa e marca \"Enviar para a Google Agenda\" vão para lá, com lembretes no celular. Posts de conteúdo nunca vão."]
-      : "Conecte a sua conta Google pessoal (pode ser outra, como a do celular) para os compromissos aparecerem na sua agenda e você receber os lembretes. Posts de conteúdo nunca vão para lá."),
-    el("details", { class: "prompt-final" }, el("summary", {}, "Não conecta? (só na primeira vez da Hyper)"),
-      el("ol", { class: "passos" },
-        el("li", {}, "O administrador ativa a ", el("a", { href: "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=hyper-9e023", target: "_blank", rel: "noopener" }, "Google Calendar API do projeto hyper-9e023"), " (uma vez só)."),
-        el("li", {}, "Se aparecer \"O Google não verificou este app\", clique em Avançado → Acessar hyper-9e023. É o app da Hyper."))),
-    el("div", { class: "acoes" },
-      cfg.email
-        ? [el("button", { class: "secundario", onClick: (e) => conectar(e.currentTarget) }, "Trocar de conta"),
-          el("button", { class: "perigo-texto", onClick: async () => { await desconectarAgenda(); avisar("Agenda desconectada."); } }, "Desconectar")]
-        : el("button", { onClick: (e) => conectar(e.currentTarget) }, "Conectar Google Agenda"),
-      cfg.email && pendentes.length ? el("button", { class: "destaque", onClick: async (e) => {
-        e.currentTarget.disabled = true;
-        let ok = 0;
-        for (const c of pendentes) { try { await sincronizar(c); ok++; } catch (erro) { avisar(erro.message, "erro"); break; } }
-        if (ok) avisar(`${ok} compromisso(s) enviado(s) para a agenda.`);
-      } }, `Enviar ${pendentes.length} pendente(s)`) : null),
-    el("p", { class: "subtitulo" }, "O Google libera o acesso por cerca de 1 hora. Depois disso, ao salvar um compromisso, o app pede para conectar de novo."));
+    el("div", { class: "com-acao" }, el("h3", {}, "Google Agenda"),
+      agendaConectada() ? el("span", { class: "etiqueta ok" }, "Automática") : el("span", { class: "etiqueta" }, "Aguardando as automações")),
+    el("p", {}, "Os compromissos em que você participa chegam como convite na sua agenda, com lembretes no celular. Não precisa conectar nada: o app da Hyper manda o convite para o e-mail abaixo. Posts de conteúdo nunca vão para a agenda."),
+    el("label", { class: "campo", for: "conta-email-agenda" }, el("span", {}, "E-mail da agenda que recebe os convites (deixe vazio para usar o do login)"), email),
+    el("div", { class: "acoes" }, el("button", { onClick: async () => {
+      const v = email.value.trim().toLowerCase();
+      if (v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { avisar("Esse e-mail não parece certo.", "erro"); return; }
+      await atualizarMeuCadastro({ emailAgenda: v });
+      avisar(`Convites vão para ${v || m.email || eu.email}.`);
+    } }, "Salvar e-mail da agenda")),
+    el("p", { class: "subtitulo" }, agendaConectada()
+      ? `${meus} compromisso(s) seus marcados para a agenda. Última sincronização: ${new Date(status.ultimo).toLocaleString("pt-BR")}.`
+      : "A sincronização começa quando um administrador ligar as automações em Ajustes → E-mails e automações."),
+    el("details", { class: "prompt-final" }, el("summary", {}, "Usa iPhone com iCloud?"),
+      el("p", {}, "Se a agenda do seu iPhone é a do Google, os convites aparecem sozinhos. Se for a do iCloud, coloque aqui o e-mail do iCloud: o convite chega por e-mail e você toca em Aceitar.")));
 }
 
 function blocoMeta() {
@@ -158,6 +149,6 @@ export function render() {
     el("section", { class: "bloco" },
       el("h2", {}, "Suas conexões"),
       el("p", { class: "subtitulo" }, "Contas que são só suas. Cada pessoa da equipe conecta as próprias."),
-      blocoAgenda(),
+      blocoAgenda(m),
       blocoMeta()));
 }

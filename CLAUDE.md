@@ -17,7 +17,7 @@ Toda interface deste repositório segue `docs/identidade-visual.md`.
 - Acesso por cliente: `acessoClientes: "alguns"` + `clientes` no membro. Para essas pessoas, `db.js` lê as coleções por cliente (`ouvirColecao`, consultas `where("clienteId", "in", …)` em lotes de 30; `clientes`/`contratos` documento a documento). É a única exceção à regra de não usar `where`, porque as regras exigem a consulta filtrada. Todo documento ligado a cliente precisa ter `clienteId` (use `""` quando não tiver cliente).
 - Convites em `convites/{email em minúsculas}`; pedidos em `membros/{uid}.pedido`. A própria pessoa só muda `nome`, `foto` e `pedido` (Minha conta, `views/conta.js`).
 - E-mails: `emails.js` + Apps Script (`docs/email/Codigo.gs`). Só administradores enviam (precisam do segredo em `config/email`); sem segredo o script só avisa os administradores. As cores da marca vão escritas em `emails.js` porque e-mail não aceita variáveis de CSS.
-- Conexões pessoais (Google Agenda, Facebook/Instagram) ficam em Minha conta, não em Ajustes. Tokens (Google, Meta) nunca vão para o banco.
+- Conexões pessoais (e-mail da agenda, Facebook/Instagram) ficam em Minha conta, não em Ajustes. Tokens (Google, Meta) nunca vão para o banco.
 - Excluir sempre por `excluir()` de `db.js`: nas coleções de `COM_LIXEIRA` guarda uma cópia na `lixeira` (30 dias). Para mover dados (não é exclusão de verdade), use `{ lixeira: false }`. O desfazer usa `desfazerExclusao()`.
 - Mudanças relevantes em tarefas entram no histórico (`registrarAtividade`); comentários ficam em `tarefas/{id}/atividade`.
 - Erros mostrados com `avisar(..., "erro")` e erros não tratados vão para `erros` (Ajustes → Erros recentes).
@@ -37,7 +37,7 @@ Toda interface deste repositório segue `docs/identidade-visual.md`.
 - Rotina de cobrança cria a receita `mens-<cliente>-<mês>` (`garantirMensalidade`) e concluir a tarefa marca como paga (`quitarCobranca`).
 - Arquivos da marca (logos, fontes, referências) ficam na pasta do Drive do cliente (`linkDrive`). Criativos dos posts ficam em base64 em `clientes/{id}/artes` (`arquivos.js`), não no Firebase Storage (plano Spark).
 - Rotinas (`recorrencias`) têm `modelo`: `livre`, `producao` (semana seguinte), `planejamento` (mês seguinte) ou `cobranca` (vencimento do cliente). A lógica fica em `recorrencias.js`.
-- Compromissos (`compromissos`, `agenda.js`, `compromissos.js`) são a única coisa que vai para a Google Agenda. A conexão usa um app Firebase secundário ("agenda") para permitir outra conta Google; o token dura ~1 h e não é salvo no banco. Posts nunca vão para a agenda.
+- Compromissos (`compromissos`, `agenda.js`, `compromissos.js`) são a única coisa que vai para a Google Agenda. Quem cria os eventos é o Apps Script da Hyper (`sincronizarAgenda` em `docs/email/Codigo.gs`, a cada 5 min ou quando o app pede `agenda-agora`): agenda "Hyper · Compromissos" da conta da Hyper, com convite para `emailAgenda || email` de cada participante. O app não chama a API do Google Calendar. Posts nunca vão para a agenda.
 - Cor principal do cliente = `paleta[0]` (também gravada em `cor`); use `corCliente()` de `views/componentes.js`. Campos de cor usam `campoCor()` de `ui.js` (sempre mostram a cor, não só o código).
 - Tarefas têm `responsavel` (equipe = membros do espaço + pessoas sem conta em `config/equipe`). Tarefa do tipo "Reunião" vira compromisso.
 - Exportação para o cliente é só PDF. Arte final é feita no Canva (pedido para o Claude em `promptCanva`), não dentro do app.

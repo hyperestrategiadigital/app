@@ -74,7 +74,7 @@ Tudo fica no espaço compartilhado `espacos/hyper/<coleção>` (antes era `users
 - **Calendário rápido**: arrastar posts entre dias, avançar a etapa no cartão (›) e trocar a etapa na lista.
 - **Carga da equipe** (Tarefas → Carga da equipe) e **modelos de checklist** por formato e tipo (`MODELOS_PADRAO`, editáveis em Ajustes).
 - **Resultados** (aba do cliente): números do Instagram e do Facebook por marca e por post, pela Graph API da Meta (`meta.js`), com o Facebook de cada pessoa (acesso só no navegador).
-- **Automações** no Apps Script da conta da Hyper (`docs/email`): e-mails, resumo diário às 8h e backup semanal compacto (.json.gz, sem imagens, 8 mais recentes) no Drive da Hyper.
+- **Automações** no Apps Script da conta da Hyper (`docs/email`): e-mails, resumo diário às 8h, backup semanal compacto (.json.gz, sem imagens, 8 mais recentes) no Drive da Hyper e **Google Agenda**: a cada 5 minutos o script põe os compromissos marcados na agenda "Hyper · Compromissos" da conta da Hyper e convida os participantes (no e-mail de agenda de cada um, em Minha conta). Não usa o Google Cloud Console nem login no navegador.
 - **App instalável** (`manifest.webmanifest`, `sw.js`): no celular, "Adicionar à tela de início".
 - **Lixeira** (`lixeira`, 30 dias) e **registro de erros** (`erros`, 30 dias).
 

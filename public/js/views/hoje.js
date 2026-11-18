@@ -4,7 +4,7 @@ import { dados, nomeCliente } from "../db.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, seloCliente, abas } from "./componentes.js";
 import { emailAtivo } from "../emails.js";
 import { configOpenAI } from "../openai.js";
-import { configAgenda } from "../agenda.js";
+import { agendaConectada } from "../agenda.js";
 import { rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
 import { pode, tarefaVisivel, eu, ehAdmin } from "../permissoes.js";
@@ -23,7 +23,7 @@ function primeirosPassos(renderizar) {
   const passos = [
     ["Ligar os e-mails automáticos (convites, avisos, resumo diário)", emailAtivo(), "#/config"],
     ["Cadastrar a chave da OpenAI (imagens e sugestões)", !!configOpenAI().chave, "#/config"],
-    ["Conectar a sua Google Agenda", !!configAgenda().email, "#/conta"],
+    ["Google Agenda automática funcionando", agendaConectada(), "#/config"],
     [`Preencher a identidade das marcas (${comMarca} de ${ativos.length} clientes)`, ativos.length > 0 && comMarca >= ativos.length, "#/clientes"],
     ["Convidar a equipe", dados.membros.length > 1, "#/usuarios"],
     ["Criar as rotinas (produção, planejamento, cobrança)", dados.recorrencias.length > 0, "#/rotinas"],
