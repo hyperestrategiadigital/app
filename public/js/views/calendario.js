@@ -145,7 +145,7 @@ export function render({ params, estado, renderizar }) {
     el("select", { onChange: (e) => { estado.cliente = e.target.value; estado.marca = null; renderizar(); }, "aria-label": "Cliente" },
       opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (estado.cliente || "") }, v ? r : "Todos os clientes"))),
     marcas.length ? el("select", { "aria-label": "Marca", onChange: (e) => { estado.marca = e.target.value === "*" ? null : e.target.value; renderizar(); } },
-      [["*", "Todas as marcas"], ["", "Marca principal"], ...marcas.map((m) => [m.id, m.nome])]
+      [["*", "Todas as marcas"], ...marcas.map((m) => [m.id, m.nome]), ["", "Institucional do grupo"]]
         .map(([v, r]) => el("option", { value: v, selected: v === (estado.marca ?? "*") }, r))) : null,
     !pode("conteudo") ? null : el("select", { onChange: set("status"), "aria-label": "Etapa" },
       el("option", { value: "" }, "Todas as etapas"), STATUS_CONTEUDO.map(([v, r]) => el("option", { value: v, selected: v === estado.status }, r))),

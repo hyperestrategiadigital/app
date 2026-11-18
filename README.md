@@ -23,7 +23,9 @@ Menu: **Hoje, Tarefas, Calendário, Clientes, Tráfego pago, Financeiro** e o gr
 | Lixeira | O que foi excluído nos últimos 30 dias, com restaurar (administrador) |
 | Ajustes | E-mails e automações (resumo diário, backup semanal), relatórios da Meta (App ID), modelos de checklist, erros recentes,  (Gmail da Hyper via Apps Script), chave da OpenAI, importação de definições de marca (.json, com marcas), importação da planilha e backup |
 
-### Marcas
+### Marcas e grupos
+
+Clientes com várias marcas funcionam como grupo (ex.: Grupo Comportamento → Comportamento, MeuCPTO, IntegraCulture, CuidaTech; Body in Shape → Body in Shape, Body Ride, Body Run; Castelari → Castelari, Achadinhos da Castelari). Cada marca tem logo, cores, fontes, tom de voz, persona, público e estilo próprios; o grupo tem só a identidade institucional. Em Ajustes → Organizar grupos (.json) dá para transformar clientes soltos em marcas de um grupo de uma vez.
 
 Um cliente pode ter várias marcas com identidades diferentes (ex.: um grupo com várias empresas). A identidade do próprio cliente é a "marca principal"; cada marca extra fica em `marcas` com `clienteId`, nome e os mesmos campos de identidade (campo vazio = usa o do cliente). O post guarda `marcaId`; a copy, a imagem, o pedido do Canva e o PDF usam a identidade da marca (`identidade()` em `db.js`).
 

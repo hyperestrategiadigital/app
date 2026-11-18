@@ -25,14 +25,14 @@ function periodo(chave) {
 const cache = new Map(); // chave → { carregando, dados, erro }
 
 export function abaResultados(c, estado, renderizar) {
-  estado.resMarca ??= "";
-  estado.resPeriodo ??= "30";
   const marcas = marcasDo(c.id);
+  estado.resMarca ??= marcas[0]?.id || "";
+  estado.resPeriodo ??= "30";
   const marca = estado.resMarca ? porId("marcas", estado.resMarca) : null;
   const alvo = marca || c;
   const pageId = alvo.facebookPageId || "";
   const seletorMarca = marcas.length ? el("div", { class: "marcas-seletor" },
-    [["", `${c.nome} (principal)`, c], ...marcas.map((m) => [m.id, m.nome, m])].map(([id, nome, obj]) =>
+    [...marcas.map((m) => [m.id, m.nome, m]), ["", `${c.nome} (institucional)`, c]].map(([id, nome, obj]) =>
       el("button", { class: `legenda-item ${estado.resMarca === id ? "ativo" : ""}`, style: { "--selo": corCliente(obj) }, onClick: () => { estado.resMarca = id; renderizar(); } },
         el("span", { class: "bolinha" }), nome))) : null;
 

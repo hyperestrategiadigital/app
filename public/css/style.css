@@ -756,3 +756,11 @@ img.avatar { object-fit: cover; padding: 0; }
 .post-ig-info { padding: 10px; display: grid; gap: 6px; }
 .post-ig-legenda { margin: 0; font-size: 13px; }
 .bloco-vazio { padding: 16px 0; display: grid; gap: 10px; justify-items: start; }
+
+/* ---------------- Logos das marcas ---------------- */
+.logo-marca { max-width: 180px; max-height: 90px; object-fit: contain; display: block; background: var(--cor-fundo); padding: 8px; border-radius: var(--raio-pequeno); }
+.logo-chip { width: 16px; height: 16px; object-fit: contain; border-radius: 3px; background: var(--hyper-branco); }
+.ficha-titulo { display: flex; align-items: center; gap: 14px; }
+.logo-ficha { width: 56px; height: 56px; object-fit: contain; border-radius: var(--raio-pequeno); background: var(--cor-superficie); }
+.marca-etiqueta { border-left: 3px solid var(--selo); display: inline-flex; align-items: center; gap: 4px; }
+.legenda-grupo { opacity: 0.8; border-style: dashed; }

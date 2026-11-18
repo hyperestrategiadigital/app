@@ -14,10 +14,21 @@ export const configAgenda = () => dados.config.find((c) => c.id === "agendaHyper
 export const agendaConectada = () => (configAgenda().ultimo || 0) > Date.now() - 24 * 3600 * 1000;
 
 let ultimoPedido = 0;
-/** Pede ao script para sincronizar agora (sem esperar os 5 minutos). Não precisa de login nem de segredo. */
+let pedidoAgendado = null;
+/**
+ * Pede ao script para sincronizar agora (sem esperar os 5 minutos). Não precisa de login nem de segredo.
+ * Chamado sozinho ao salvar ou excluir um compromisso. Pedidos muito seguidos viram um só, logo em seguida.
+ */
 export async function sincronizar() {
-  const url = espacoInfo.emailUrl;
-  if (!url || Date.now() - ultimoPedido < 20000) return false;
+  // A URL do script fica no documento do espaço; administradores também a têm em config/email
+  const url = espacoInfo.emailUrl || dados.config.find((c) => c.id === "email")?.url;
+  if (!url) return false;
+  const espera = 25000 - (Date.now() - ultimoPedido);
+  if (espera > 0) {
+    clearTimeout(pedidoAgendado);
+    pedidoAgendado = setTimeout(sincronizar, espera);
+    return true;
+  }
   ultimoPedido = Date.now();
   try {
     const r = await fetch(url, { method: "POST", body: JSON.stringify({ tipo: "agenda-agora" }) });

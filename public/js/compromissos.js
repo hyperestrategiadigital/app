@@ -11,8 +11,9 @@ export function abrirCompromisso(comp = {}) {
   const editando = !!comp.id;
   const equipe = configEquipe();
   const valores = {
-    tipo: "Reunião", data: hojeISO(), duracao: 60, sincronizar: true, repetir: "",
-    participantes: equipe.length ? [equipe[0].nome] : [], ...comp
+    tipo: "Reunião", data: hojeISO(), duracao: 60, repetir: "",
+    participantes: equipe.length ? [equipe[0].nome] : [], ...comp,
+    sincronizar: comp.naoSincronizar ? false : comp.sincronizar !== false || !editando
   };
   const campos = [
     { nome: "titulo", rotulo: "Compromisso", obrigatorio: true, dica: "Ex.: Reunião mensal Body in Shape" },
@@ -53,18 +54,24 @@ export function abrirCompromisso(comp = {}) {
     }, "Excluir"));
   }
 
+  if (editando && (comp.sincronizar || comp.googleEventId)) extras.unshift(el("span", { class: `etiqueta ${comp.erroSync ? "alerta" : comp.googleEventId ? "ok" : ""}`, title: comp.erroSync || "" },
+    comp.erroSync ? "Google Agenda: erro (passe o mouse)" : comp.googleEventId ? `Na Google Agenda ✓${comp.sincronizadoEm ? ` · ${new Date(comp.sincronizadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}` : "Indo para a Google Agenda…"));
   return formulario(editando ? "Editar compromisso" : "Novo compromisso", campos, valores, {
     largo: true, extras,
     aoSalvar: async (v) => {
       v.duracao = Number(v.duracao) || 60;
+      v.naoSincronizar = !v.sincronizar; // desmarcado de propósito: o app não volta a marcar sozinho
       if (v.diaInteiro) v.hora = "";
       let salvo;
       if (editando) { await atualizar("compromissos", comp.id, v); salvo = { ...comp, ...v }; }
       else { const ref = await criar("compromissos", v); salvo = { id: ref.id, ...v }; }
-      // A agenda é atualizada pelo script da Hyper (cria, muda ou tira o evento e avisa os convidados)
+      // A agenda é atualizada sozinha pelo script da Hyper: cria, muda o mesmo evento ou tira, e avisa os convidados
       if (v.sincronizar || salvo.googleEventId) sincronizar();
       const convidados = emailsParticipantes(salvo).length;
-      avisar(`${editando ? "Compromisso atualizado" : "Compromisso criado"}.${v.sincronizar && agendaConectada() ? ` Vai para a Google Agenda${convidados ? ` com convite para ${convidados} pessoa(s)` : ""} em instantes.` : ""}`);
+      const naAgenda = v.sincronizar && agendaConectada();
+      avisar(`${editando ? "Compromisso atualizado" : "Compromisso criado"}.${naAgenda
+        ? (editando && salvo.googleEventId ? ` A Google Agenda${convidados ? ` de todos os ${convidados} participantes` : ""} é atualizada em instantes.` : ` Vai para a Google Agenda${convidados ? ` com convite para ${convidados} pessoa(s)` : ""} em instantes.`)
+        : ""}`);
     }
   });
 }

@@ -6,10 +6,11 @@ import { el, avisar, linkExterno, campoCor, abrirModal, confirmar, formulario, f
 import { dados, atualizar, criar, excluir, porId, marcasDo, salvarComId, gravarEmLote, contrato, listarSub, salvarSub, identidade, carregarArquivo } from "../db.js";
 import { gerarTexto, temChave } from "../openai.js";
 import { ehAdmin, pode } from "../permissoes.js";
-import { caminhoArtes } from "../arquivos.js";
+import { caminhoArtes, comprimirImagem } from "../arquivos.js";
 
 // Texto digitado e ainda não salvo sobrevive às atualizações de tela
 const rascunhos = new Map();
+const GRUPO = "__grupo"; // no seletor: a identidade institucional do próprio grupo
 
 /** Onde gravar: o próprio cliente (marca principal) ou um documento de `marcas`. */
 const alvoDe = (c, marca) => marca
@@ -17,7 +18,7 @@ const alvoDe = (c, marca) => marca
   : { col: "clientes", id: c.id, obj: c, herda: null, nome: c.nome };
 const gravar = (alvo, valores) => atualizar(alvo.col, alvo.id, valores);
 const herdado = (alvo, campo, dica) => alvo.herda && alvo.herda[campo]
-  ? `Vazio: usa o do cliente (${String(alvo.herda[campo]).slice(0, 80)}${String(alvo.herda[campo]).length > 80 ? "…" : ""})` : dica;
+  ? `Vazio: usa o do grupo (${String(alvo.herda[campo]).slice(0, 80)}${String(alvo.herda[campo]).length > 80 ? "…" : ""})` : dica;
 
 function editorCores(alvo) {
   const base = alvo.obj.paleta?.length ? alvo.obj.paleta : alvo.obj.cor ? [alvo.obj.cor] : (alvo.herda?.paleta || ["#4E2CA3"]);
@@ -94,6 +95,28 @@ function campoTexto(alvo, campo, rotulo, dica, linhas = 4, { sugestao = false } 
         sugestao ? el("button", { class: "secundario mini", onClick: () => sugerirMelhoria(alvo, campo, rotulo, area.value, (texto) => { area.value = texto; marcar(); }) }, "✨ Sugerir melhoria") : null,
         botao)),
     area);
+}
+
+/** Logo da marca (imagem pequena guardada na própria marca; os arquivos originais ficam na pasta do Drive). */
+function campoLogo(alvo) {
+  const arquivo = el("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/svg+xml", hidden: true });
+  arquivo.addEventListener("change", async () => {
+    const f = arquivo.files[0];
+    if (!f) return;
+    try {
+      const logo = await comprimirImagem(f, { maxLado: 400, png: true });
+      await gravar(alvo, { logo });
+      avisar("Logo salvo.");
+    } catch (e) { avisar("Não consegui usar essa imagem: " + e.message, "erro"); }
+  });
+  const atual = alvo.obj.logo;
+  return el("div", { class: "campo-marca campo-logo" },
+    el("div", { class: "com-acao" }, el("h3", {}, "Logo"),
+      el("div", { class: "tela-acoes" },
+        el("label", { class: "botao-link secundario mini" }, atual ? "Trocar logo" : "Enviar logo", arquivo),
+        atual ? el("button", { class: "link", onClick: async () => { await gravar(alvo, { logo: "" }); avisar("Logo removido."); } }, "Remover") : null)),
+    atual ? el("img", { class: "logo-marca", src: atual, alt: `Logo ${alvo.nome}` })
+      : el("p", { class: "subtitulo" }, alvo.herda?.logo ? "Sem logo próprio: usa o do grupo." : "PNG com fundo transparente fica melhor. O arquivo original (vetor) fica na pasta do Drive."));
 }
 
 function campoLink(alvo, campo, titulo, explicacao, dica, rotuloAbrir) {
@@ -176,7 +199,7 @@ export function juntarClientes(c) {
       } }, "Juntar"))), { largo: true });
 }
 
-async function juntarUm(destino, origem, progresso) {
+export async function juntarUm(destino, origem, progresso) {
   const marcaId = `m-${origem.id}`;
   progresso(`${origem.nome}: criando a marca…`);
   const marca = { clienteId: destino.id, nome: origem.nome, origemClienteId: origem.id, ativo: true, criadoEm: Date.now(), descricao: origem.observacoes || "" };
@@ -217,31 +240,40 @@ async function juntarUm(destino, origem, progresso) {
 export function abaMarca(c, estado = {}, renderizar = () => {}) {
   const marcas = marcasDo(c.id);
   const inativas = (dados.marcas || []).filter((m) => m.clienteId === c.id && m.ativo === false);
-  if (estado.marcaSel && !porId("marcas", estado.marcaSel)) estado.marcaSel = "";
-  const marca = estado.marcaSel ? porId("marcas", estado.marcaSel) : null;
+  // Cliente com marcas = grupo (guarda-chuva): a identidade se configura em cada marca.
+  // A identidade do próprio grupo é só para os posts institucionais dele (ex.: avisos, datas comemorativas).
+  const grupo = marcas.length > 0;
+  if (estado.marcaSel && estado.marcaSel !== GRUPO && !porId("marcas", estado.marcaSel)) estado.marcaSel = "";
+  if (grupo && !estado.marcaSel) estado.marcaSel = marcas[0].id;
+  if (!grupo) estado.marcaSel = "";
+  const marca = estado.marcaSel && estado.marcaSel !== GRUPO ? porId("marcas", estado.marcaSel) : null;
   const alvo = alvoDe(c, marca);
   const contar = (mid) => dados.tarefas.filter((t) => t.clienteId === c.id && (t.marcaId || "") === mid).length;
   const escolher = (id) => { estado.marcaSel = id; renderizar(); };
   const podeGerir = ehAdmin() || pode("conteudo");
 
   const seletor = el("div", { class: "marcas-seletor" },
-    el("button", { class: `legenda-item ${!marca ? "ativo" : ""}`, style: { "--selo": c.paleta?.[0] || c.cor || "#4E2CA3" }, onClick: () => escolher("") },
-      el("span", { class: "bolinha" }), marcas.length ? `${c.nome} (principal)` : c.nome, el("small", {}, contar(""))),
+    ...(grupo ? [] : [el("button", { class: "legenda-item ativo", style: { "--selo": c.paleta?.[0] || c.cor || "#4E2CA3" } },
+      el("span", { class: "bolinha" }), c.nome, el("small", {}, contar("")))]),
     ...[...marcas, ...inativas].map((m) => el("button", {
       class: `legenda-item ${marca?.id === m.id ? "ativo" : ""}`, style: { "--selo": m.paleta?.[0] || m.cor || "#606060" }, onClick: () => escolher(m.id),
       title: m.ativo === false ? "Marca inativa" : ""
-    }, el("span", { class: "bolinha" }), m.nome, m.ativo === false ? " (inativa)" : "", el("small", {}, contar(m.id)))),
+    }, m.logo ? el("img", { class: "logo-chip", src: m.logo, alt: "" }) : el("span", { class: "bolinha" }), m.nome, m.ativo === false ? " (inativa)" : "", el("small", {}, contar(m.id)))),
+    grupo ? el("button", { class: `legenda-item legenda-grupo ${estado.marcaSel === GRUPO ? "ativo" : ""}`, style: { "--selo": c.paleta?.[0] || c.cor || "#606060" }, onClick: () => escolher(GRUPO),
+      title: "Identidade dos posts do próprio grupo" }, el("span", { class: "bolinha" }), `${c.nome} (institucional)`, el("small", {}, contar(""))) : null,
     podeGerir ? el("button", { class: "secundario mini", onClick: async () => { await abrirMarca(c.id); } }, "+ Marca") : null,
     ehAdmin() ? el("button", { class: "link", onClick: () => juntarClientes(c) }, "Juntar outros clientes como marcas…") : null);
 
   return el("div", { class: "aba-marca" },
     seletor,
-    !marcas.length ? el("p", { class: "subtitulo" }, "Este cliente tem uma marca só. Se ele tiver marcas com identidades diferentes (ex.: um grupo com várias empresas), crie cada uma em \"+ Marca\": os posts passam a escolher a marca, e a copy, a imagem e o pedido do Canva usam a identidade dela.") : null,
+    !grupo ? el("p", { class: "subtitulo" }, "Este cliente tem uma marca só: a identidade é configurada aqui. Se ele tiver outras marcas com identidades diferentes (ex.: Achadinhos da Castelari), crie cada uma em \"+ Marca\" e ele vira um grupo: aí cada marca tem a sua identidade.") : null,
+    grupo && !marca ? el("p", { class: "faixa-aviso" }, `${c.nome} é um grupo: a identidade de cada marca fica na própria marca. Esta aqui só vale para os posts institucionais do grupo (sem marca) e completa o que estiver vazio nas marcas.`) : null,
     marca ? el("div", { class: "marca-cabeca" },
       el("div", {},
-        el("h3", {}, marca.nome),
-        el("p", { class: "subtitulo" }, [marca.instagram, marca.descricao].filter(Boolean).join(" · ") || "Campos vazios usam a identidade do cliente.")),
+        el("h3", {}, `${c.nome} · ${marca.nome}`),
+        el("p", { class: "subtitulo" }, [marca.instagram, marca.descricao].filter(Boolean).join(" · ") || "Campos vazios usam o que estiver no grupo (institucional).")),
       podeGerir ? el("button", { class: "secundario mini", onClick: () => abrirMarca(c.id, marca) }, "Editar nome, Instagram e status") : null) : null,
+    campoLogo(alvo),
     campoLink(alvo, "linkDrive", "Pasta da marca no Drive",
       "Logos, fontes, manual e criativos de referência ficam nesta pasta. O link vai junto no pedido de arte do Canva.",
       "https://drive.google.com/drive/folders/...", "Abrir pasta ↗"),
