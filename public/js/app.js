@@ -3,7 +3,8 @@ import { auth } from "./firebase.js";
 import {
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes, registrarErro, limparAntigos, porId } from "./db.js";
+import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes, registrarErro, limparAntigos, porId, notificar } from "./db.js";
+import { acompanharRespostas } from "./aprovacoes.js";
 import { avisarAdmins, sincronizarAdmins } from "./emails.js";
 import { avatar, abrirTarefa } from "./views/componentes.js";
 import { el, avisar, hojeISO, quandoErro } from "./ui.js";
@@ -239,7 +240,8 @@ async function entrar(usuario) {
   }
 
   document.body.classList.remove("carregando");
-  pararDeOuvir = aoMudar(() => { montarUsuario(); renderizar(); if (ehAdmin()) tarefasDeAdmin(); });
+  pararDeOuvir = aoMudar(() => { montarUsuario(); renderizar(); if (ehAdmin()) tarefasDeAdmin(); acompanharRespostas(notificar); });
+  acompanharRespostas(notificar);
   renderizar();
   if (espacoInfo.boasVindas) avisar("Bem-vindo! Seu acesso já estava liberado pelo convite.");
   // Foto do Google como foto inicial (dá para trocar em Minha conta)

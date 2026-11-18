@@ -36,5 +36,6 @@ export function colecoesPermitidas() {
   const base = ["clientes", "marcas", "tarefas", "compromissos", "recorrencias", "membros"];
   if (pode("financeiro")) base.push("financeiro", "orcamentos", "contratos");
   if (pode("trafego")) base.push("contasAds", "manutencoes");
+  if (pode("conteudo")) base.push("aprovacoes");
   return base;
 }

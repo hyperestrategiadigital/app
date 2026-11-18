@@ -1,6 +1,7 @@
 // Peças reutilizadas entre telas: cartão e formulário de tarefa, selo de cliente.
 import { pode, eu, ehAdmin } from "../permissoes.js";
 import { abrirCriarArte } from "./criar.js";
+import { seloResposta } from "../aprovacoes.js";
 import { avisarMencao } from "../emails.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, normalizar, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
@@ -129,6 +130,8 @@ export function abrirTarefa(tarefa = {}) {
   const form = ultimoForm();
   // Criativos anexados ao post (imagens guardadas no banco)
   if (form) form.querySelector(".acoes").before(secaoCriativos(tarefa));
+  // Ajuste pedido pelo cliente no link de aprovação
+  if (form && tarefa.ajusteCliente) form.querySelector(".form-grade").before(el("p", { class: "faixa-alerta" }, el("strong", {}, "Ajuste pedido pelo cliente: "), tarefa.ajusteCliente));
   // Comentários (com @menção) e histórico de mudanças
   if (form && tarefa.id) form.querySelector(".acoes").before(secaoAtividade(tarefa));
   // Rotina "Produzir semana": mostra ao vivo os posts da semana seguinte do cliente
@@ -340,6 +343,7 @@ export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
         t.status === "andamento" ? el("span", { class: "etiqueta andamento" }, "Em andamento") : null,
         total ? el("span", { class: "progresso-mini" }, `☑ ${feitos}/${total}`) : null,
         t.qtdComentarios ? el("span", { class: "progresso-mini", title: "Comentários" }, `💬 ${t.qtdComentarios}`) : null,
+        ehConteudo(t) ? seloResposta(t) : null,
         ehConteudo(t) && t.qtdArtes ? el("span", { class: "progresso-mini", title: "Criativos anexados" }, `🖼 ${t.qtdArtes}`) : null,
         ehConteudo(t) && t.copy ? el("span", { class: "progresso-mini", title: "Copy salva" }, "✎ copy") : null,
         linkExterno(t.linkCanva, "Canva"), linkExterno(t.linkDrive, "Drive"),

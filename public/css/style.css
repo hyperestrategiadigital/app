@@ -731,3 +731,17 @@ img.avatar { object-fit: cover; padding: 0; }
 .menu-selo { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--cor-destaque); color: var(--hyper-preto); padding: 1px 6px; border-radius: 99px; font-weight: 700; }
 .em-breve h2 { margin-top: 10px; }
 .lista-em-breve { display: grid; gap: 8px; padding-left: 18px; }
+
+/* ---------------- Página de aprovação do cliente ---------------- */
+.pagina-aprovacao { background: var(--cor-fundo); }
+.aprovacao-topo { background: var(--hyper-roxo); padding: 14px 20px; }
+.aprovacao-topo img { height: 30px; display: block; }
+.pagina-aprovacao .tela { margin: 0 auto; }
+.aprov-post { margin-bottom: 16px; }
+.aprov-post.respondido.aprovado { border-left: 6px solid var(--cor-ok); }
+.aprov-post.respondido.ajuste { border-left: 6px solid var(--cor-alerta); }
+.aprov-data { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.aprov-imagem { width: 100%; max-height: 520px; object-fit: contain; background: var(--cor-fundo); border-radius: var(--raio-pequeno); margin-bottom: 10px; }
+.aprov-copy { background: var(--cor-fundo); border-radius: var(--raio-pequeno); padding: 10px 14px; margin: 8px 0; }
+.aprov-copy p { margin: 4px 0 0; white-space: pre-wrap; }
+.aprov-ajuste { margin-top: 10px; }

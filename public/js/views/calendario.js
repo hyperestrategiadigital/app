@@ -1,6 +1,7 @@
 // Calendário de conteúdo: cada post é uma tarefa do tipo Conteúdo. Mostra o mês com a cor e o nome
 // do cliente em cada post, filtros, planejamento e exportação para aprovação do cliente.
 import * as planejamento from "./planejamento.js";
+import { gerarLinkAprovacao, seloResposta } from "../aprovacoes.js";
 import { el, hojeISO, addDias, fmtData, vazio, formulario, dataDe, avisar } from "../ui.js";
 import { dados, marcasDo, porId, opcoesClientes, nomeCliente, atualizar, registrarAtividade } from "../db.js";
 import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca, mudarEtapa, proximaEtapa } from "./componentes.js";
@@ -71,6 +72,7 @@ function chip(t) {
     el("span", { class: "chip-icone", "aria-hidden": "true" }, ICONE_FORMATO[t.formato] || "•"),
     t.hora ? el("small", {}, t.hora) : null,
     t.qtdArtes ? el("span", { class: "chip-arte", title: "Tem criativo" }, "🖼 ") : null,
+    dados.respostasCliente?.[t.id] ? el("span", { class: "chip-arte", title: dados.respostasCliente[t.id].status === "aprovado" ? "Cliente aprovou" : `Cliente pediu ajuste: ${dados.respostasCliente[t.id].comentario || ""}` }, dados.respostasCliente[t.id].status === "aprovado" ? "✓ " : "✎ ") : null,
     t.titulo),
   prox ? el("span", { class: "chip-avancar", role: "button", tabindex: "0", title: `Avançar para: ${rotuloStatusConteudo(prox)}`,
     onClick: (e) => { e.stopPropagation(); mudarEtapa(t, prox); } }, "›") : null);
@@ -193,6 +195,7 @@ export function render({ params, estado, renderizar }) {
         el("select", { class: `seletor-etapa st-${t.statusConteudo || "ideia"}`, "aria-label": "Etapa", onClick: (e) => e.stopPropagation(),
           onChange: (e) => mudarEtapa(t, e.target.value) },
           STATUS_CONTEUDO.map(([v, r]) => el("option", { value: v, selected: v === (t.statusConteudo || "ideia") }, r))),
+        seloResposta(t),
         t.copy ? el("span", { class: "etiqueta ok" }, "copy ✓") : el("span", { class: "etiqueta" }, "sem copy")))
       : vazio("Nada neste mês."));
   }
@@ -201,7 +204,8 @@ export function render({ params, estado, renderizar }) {
     cabecalho("Calendário",
       !pode("conteudo") ? "Seus compromissos e reuniões" : contagem.length ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para criar um post",
       pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = planejamento.linkPlano(c, m)), "Planejar mês") }, "☷ Planejar mês") : null,
-      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => exportarPDF(c, m, estado.cliente === c ? estado.marca ?? undefined : undefined), "Exportar PDF") }, "⬇ PDF para o cliente") : null,
+      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => gerarLinkAprovacao(c, m, estado.cliente === c ? estado.marca ?? undefined : undefined), "Link de aprovação") }, "🔗 Link de aprovação") : null,
+      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => exportarPDF(c, m, estado.cliente === c ? estado.marca ?? undefined : undefined), "Exportar PDF") }, "⬇ PDF") : null,
       el("button", { class: "secundario", onClick: () => abrirCompromisso({ clienteId: estado.cliente || "" }) }, "+ Compromisso"),
       pode("conteudo") ? el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "", marcaId: estado.marca || "" }) }, "+ Novo post") : null),
     verCompromissos ? avisoPendentes() : null,

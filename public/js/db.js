@@ -28,7 +28,7 @@ function abrirBanco(id) {
 
 const TODAS = [
   "clientes", "marcas", "tarefas", "recorrencias", "compromissos", "membros",
-  "financeiro", "orcamentos", "contratos", "contasAds", "manutencoes", "config"
+  "financeiro", "orcamentos", "contratos", "contasAds", "manutencoes", "aprovacoes", "config"
 ];
 
 /** Dados em memória: dados.clientes = [{ id, ...campos }]. `config` reúne documentos avulsos (openai, equipe, agenda). */
@@ -41,7 +41,7 @@ let cancelamentos = [];
 const ouvintes = new Set();
 export function aoMudar(fn) { ouvintes.add(fn); return () => ouvintes.delete(fn); }
 let agendado = false;
-function notificar() {
+export function notificar() {
   if (agendado) return;
   agendado = true;
   queueMicrotask(() => { agendado = false; ouvintes.forEach((fn) => fn()); });
@@ -422,6 +422,10 @@ export async function salvarSub(caminho, valores, id) {
   const r = id ? doc(refSub(caminho), id) : doc(refSub(caminho));
   await comPrazo(setDoc(r, { ...valores, criadoEm: Date.now() }, { merge: true }), 60);
   return r.id;
+}
+/** Ouve uma subcoleção (ex.: respostas de um link de aprovação). Devolve a função para parar. */
+export function ouvirSub(caminho, aoMudar) {
+  return onSnapshot(refSub(caminho), (s) => aoMudar(s.docs.map((d) => ({ id: d.id, ...d.data() }))), (e) => console.warn(caminho.join("/"), e.code));
 }
 export const excluirSub = (caminho, id) => comPrazo(deleteDoc(doc(refSub(caminho), id)));
 
