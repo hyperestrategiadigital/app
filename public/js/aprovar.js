@@ -60,8 +60,8 @@ async function iniciar() {
     const comentario = el("textarea", { rows: 3, placeholder: "O que você quer mudar? (texto, imagem, data…)" });
     const caixaAjuste = el("div", { class: "aprov-ajuste", hidden: true }, comentario,
       el("div", { class: "acoes" },
-        el("button", { class: "secundario", onClick: () => (caixaAjuste.hidden = true) }, "Cancelar"),
-        el("button", { class: "destaque", onClick: async (e) => {
+        el("button", { class: "negar", onClick: () => (caixaAjuste.hidden = true) }, "Cancelar"),
+        el("button", { class: "confirmar", onClick: async (e) => {
           if (!comentario.value.trim()) { avisar("Conte o que você quer mudar.", "erro"); return; }
           e.currentTarget.disabled = true;
           if (!(await responder(post, "ajuste", comentario.value.trim(), cartao))) e.currentTarget.disabled = false;
@@ -77,7 +77,7 @@ async function iniciar() {
         : post.roteiro ? el("div", { class: "aprov-copy" }, el("span", { class: "subtitulo" }, "Ideia"), el("p", {}, post.roteiro)) : null,
       r?.comentario ? el("p", { class: "faixa-aviso" }, `Seu comentário: ${r.comentario}`) : null,
       el("div", { class: "acoes" },
-        el("button", { class: r?.status === "aprovado" ? "secundario" : "destaque", onClick: (e) => { e.currentTarget.disabled = true; responder(post, "aprovado", "", cartao); } }, r?.status === "aprovado" ? "Aprovado ✓" : "Aprovar"),
+        el("button", { class: r?.status === "aprovado" ? "secundario" : "confirmar", onClick: (e) => { e.currentTarget.disabled = true; responder(post, "aprovado", "", cartao); } }, r?.status === "aprovado" ? "Aprovado ✓" : "Aprovar"),
         el("button", { class: "secundario", onClick: () => { caixaAjuste.hidden = false; comentario.focus(); } }, r?.status === "ajuste" ? "Mudar o pedido de ajuste" : "Pedir ajuste")),
       caixaAjuste);
     cartao.dataset.post = post.id;

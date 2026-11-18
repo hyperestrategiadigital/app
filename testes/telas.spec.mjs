@@ -314,8 +314,7 @@ test("importar planejamento: cria marcas e posts sem duplicar", async ({ page })
   const arquivo = { name: "plano.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(plano)) };
   for (let vez = 0; vez < 2; vez++) {
     await page.goto("/#/config");
-    await page.getByRole("button", { name: "Importar planejamento (.json)" }).click();
-    await page.setInputFiles(".modal input[type=file]", arquivo);
+    await page.setInputFiles("#importar-arquivo", arquivo);
     await expect(page.locator(".modal #imp-cliente")).toHaveValue("grupo");
     await page.locator(".modal").getByRole("button", { name: "Importar planejamento" }).click();
     await expect(page).toHaveURL(/#\/calendario\/grupo\/2030-03/);
@@ -327,25 +326,6 @@ test("importar planejamento: cria marcas e posts sem duplicar", async ({ page })
   expect(posts.find((t) => t.titulo === "Tema A")).toMatchObject({ marcaId: expect.any(String), formato: "Carrossel", statusConteudo: "ideia", prazo: "2030-03-01" });
   expect(posts.find((t) => t.titulo === "Tema A").checklist.length).toBeGreaterThan(0);
   expect(marca.paleta).toEqual(["#2D6CDF"]);
-});
-
-test("organizar grupos: cliente separado vira marca e posts soltos vão para a principal", async ({ page }) => {
-  await abrir(page);
-  const estrutura = { tipo: "estrutura-hyper", grupos: [{ cliente: "Grupo Exemplo", moverPostsSemMarca: true, marcas: [
-    { nome: "Exemplo Principal", principal: true, cor: "#14A37F" }, { nome: "Loja Exemplo", juntarCliente: ["Loja Exemplo"] }, { nome: "Nova Marca" }] }] };
-  await page.goto("/#/config");
-  await page.getByRole("button", { name: "Organizar grupos (.json)" }).click();
-  await page.setInputFiles(".modal input[type=file]", { name: "g.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(estrutura)) });
-  await expect(page.locator(".modal")).toContainText('o cliente "Loja Exemplo" vira esta marca');
-  await page.locator(".modal").getByRole("button", { name: "Organizar" }).click();
-  await expect(page).toHaveURL(/#\/clientes\/grupo/);
-  const s = await page.evaluate(() => window.__store);
-  const marcas = Object.values(s["espacos/hyper/marcas"]).filter((m) => m.clienteId === "grupo").map((m) => m.nome).sort();
-  expect(marcas).toEqual(["Exemplo Principal", "Loja Exemplo", "Nova Marca"]);
-  expect(s["espacos/hyper/clientes"].loja.ativo).toBe(false);
-  await page.getByRole("tab", { name: "Marca" }).click();
-  await expect(page.locator(".marcas-seletor")).toContainText("Grupo Exemplo (institucional)");
-  await expect(page.locator(".marca-cabeca h3")).toHaveText("Grupo Exemplo · Exemplo Principal");
 });
 
 test("juntar cliente solto numa marca de mesmo nome não duplica a marca", async ({ page }) => {
@@ -471,13 +451,11 @@ test("orçamento: monta com os serviços do catálogo e calcula o total com desc
 
 test("importar financeiro: contratos, despesas fixas e mês fechado no zero a zero", async ({ page }) => {
   await abrir(page);
-  await page.goto("/#/financeiro/configurar");
-  await page.evaluate(async (mes) => {
-    const v = await import("/js/views/comercial.js");
-    v.previaImportacao({ tipo: "financeiro-hyper", reserva: 30,
-      contratos: [{ cliente: "loja exemplo", mensalidade: 500, diaVencimento: 5, vencimentoUtil: true, pagamento: "pre" }],
-      despesasFixas: [{ id: "canva", descricao: "Canva", valor: 34.9, dia: 10, categoria: "Ferramentas" }], quitarAte: mes });
-  }, MES);
+  await page.goto("/#/config");
+  const fin = { tipo: "financeiro-hyper", reserva: 30,
+    contratos: [{ cliente: "loja exemplo", mensalidade: 500, diaVencimento: 5, vencimentoUtil: true, pagamento: "pre" }],
+    despesasFixas: [{ id: "canva", descricao: "Canva", valor: 34.9, dia: 10, categoria: "Ferramentas" }], quitarAte: MES };
+  await page.setInputFiles("#importar-arquivo", { name: "fin.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(fin)) });
   await expect(page.locator(".linha-importar select")).toHaveValue("loja");
   await page.locator(".modal").getByRole("button", { name: "Importar" }).click();
   await expect.poll(() => page.evaluate((m) => window.__store["espacos/hyper/financeiro"]?.[`fixa-canva-${m}`]?.status, MES)).toBe("pago");
@@ -485,7 +463,7 @@ test("importar financeiro: contratos, despesas fixas e mês fechado no zero a ze
   expect(s["espacos/hyper/contratos"].loja).toMatchObject({ mensalidade: 500, vencimentoUtil: true, pagamento: "pre" });
   expect(s["espacos/hyper/financeiro"][`mens-loja-${MES}`].status).toBe("pago");
   expect(s["espacos/hyper/financeiro"][`mens-grupo-${MES}`].status).toBe("pago");
-  await page.getByRole("tab", { name: "Contratos" }).click();
+  await page.goto("/#/financeiro/contratos");
   await expect(page.locator(".resumo")).toContainText("Reserva (30%)");
 });
 
@@ -530,5 +508,27 @@ test("proposta: condições de pagamento e escopo no formato da Hyper", async ({
   expect(r.html).toContain("<li>Convites</li>");
   expect(r.html).toContain("Um total de 14 criativos.");
   expect(r.html.replace(/ /g, " ")).toContain("Valor total do projeto: R$ 1.250,00");
+});
+
+
+test("importar arquivo do Claude: definições de marca e arquivo desconhecido", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/config");
+  await expect(page.locator("#conteudo h2", { hasText: "Importar" })).toHaveCount(1);
+  const marcas = [{ cliente: "Loja Exemplo", tomDeVoz: "Próximo e animado", persona: "Ana, 30 anos" }];
+  await page.setInputFiles("#importar-arquivo", { name: "marcas.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(marcas)) });
+  await expect(page.locator(".modal")).toContainText("Loja Exemplo");
+  await page.locator(".modal").getByRole("button", { name: "Importar definições" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.persona)).toBe("Ana, 30 anos");
+  await page.setInputFiles("#importar-arquivo", { name: "x.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ tipo: "outro" })) });
+  await expect(page.locator("body")).toContainText("Não reconheci esse arquivo");
+});
+
+test("confirmar é verde e cancelar é vermelho", async ({ page }) => {
+  await abrir(page);
+  await page.evaluate(async () => { (await import("/js/ui.js")).confirmar("Tudo certo?"); });
+  const cor = (nome) => page.locator(".modal").getByRole("button", { name: nome, exact: true }).evaluate((b) => getComputedStyle(b).backgroundColor);
+  expect(await cor("Confirmar")).toBe("rgb(30, 142, 78)");
+  expect(await page.locator(".modal").getByRole("button", { name: "Cancelar" }).evaluate((b) => getComputedStyle(b).color)).toBe("rgb(179, 38, 30)");
 });
 

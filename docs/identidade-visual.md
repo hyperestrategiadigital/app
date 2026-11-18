@@ -32,10 +32,18 @@ Regras:
 | Preto | `#000000` | `--hyper-preto` | Texto sobre amarelo e versões monocromáticas |
 | Branco | `#FFFFFF` | `--hyper-branco` | Fundos e texto sobre cores escuras |
 
+Cores de função (não fazem parte da marca, servem para deixar as ações claras):
+
+| Nome | Hex | Variável CSS | Uso |
+|---|---|---|---|
+| Verde confirmar | `#1E8E4E` | `--cor-confirmar` | Botões de confirmar, salvar e aprovar (classe `confirmar`) |
+| Vermelho | `#B3261E` | `--cor-alerta` | Cancelar, excluir, desligar e avisos de erro (classes `negar`, `perigo-texto`) |
+
 Combinações de contraste:
 - Texto branco sobre roxo, roxo escuro, petróleo ou preto.
 - Texto preto sobre amarelo ou gelo. Nunca texto branco sobre amarelo ou gelo.
 - O amarelo é o botão principal da página (uma chamada por tela). O roxo é o botão padrão.
+- Em janelas e formulários: confirmar/salvar em verde, cancelar em vermelho (contorno).
 
 ## Tipografia
 

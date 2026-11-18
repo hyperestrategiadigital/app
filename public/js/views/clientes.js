@@ -103,8 +103,7 @@ export function render({ params, estado, renderizar }) {
           atrasadas ? el("span", { class: "alerta" }, el("strong", {}, atrasadas), " atrasadas") : null,
           el("span", {}, el("strong", {}, total), " no total")),
         contrato(c.id).mensalidade ? el("div", { class: "mensalidade" }, `${fmtMoeda(contrato(c.id).mensalidade)}/mês`) : null)))
-      : vazio("Nenhum cliente ainda. Cadastre os clientes ou importe sua planilha em Ajustes.",
-        el("a", { href: "#/config", class: "link" }, "Importar planilha →")));
+      : vazio("Nenhum cliente ainda. Clique em + Novo cliente para cadastrar."));
 }
 
 function ficha(id, estado, renderizar, resto = []) {

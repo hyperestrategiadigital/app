@@ -89,7 +89,7 @@ function blocoPedido(m, restrito) {
     el("div", { class: "campo" }, el("span", {}, "Áreas"), areas),
     restrito ? el("div", { class: "campo" }, el("span", {}, "Clientes"), outros.length ? clientes : el("p", { class: "subtitulo" }, "Você já tem todos os clientes cadastrados.")) : null,
     el("label", { class: "campo", for: "pedido-mensagem" }, el("span", {}, "Mensagem para o administrador (opcional)"), mensagem),
-    el("div", { class: "acoes" }, el("button", { class: "destaque", onClick: async (e) => {
+    el("div", { class: "acoes" }, el("button", { class: "confirmar", onClick: async (e) => {
       const marcados = (caixa) => [...caixa.querySelectorAll("input:checked")].map((i) => i.value);
       const escolhidas = marcados(areas);
       const pedido = { areas: escolhidas.filter((a) => a !== "admin"), admin: escolhidas.includes("admin"), clientes: marcados(clientes), mensagem: mensagem.value.trim(), em: Date.now() };

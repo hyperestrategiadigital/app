@@ -12,7 +12,7 @@ import { responsavelPadrao } from "../agenda.js";
 const semEspaco = (s) => normalizar(s).replace(/[^a-z0-9]/g, "");
 function hash(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); }
 
-/** Melhor cliente para o nome do arquivo (ex.: "Grupo Comportamento" acha "Comportamento"). */
+/** Melhor cliente para o nome do arquivo (ex.: "Grupo Exemplo" acha "Exemplo"). */
 function clienteProvavel(nome) {
   const alvo = semEspaco(nome);
   const ativos = dados.clientes.filter((c) => c.ativo !== false);
@@ -21,18 +21,10 @@ function clienteProvavel(nome) {
     || null;
 }
 
-export function abrirImportarPlanejamento() {
-  const entrada = el("input", { type: "file", accept: ".json,application/json" });
+/** Mostra o que o arquivo de planejamento vai criar e importa (chamado por Ajustes → Importar arquivo do Claude). */
+export function previaPlanejamento(plano) {
+  if (!Array.isArray(plano.posts)) { avisar("Arquivo de planejamento sem posts.", "erro"); return; }
   const area = el("div", { class: "importacao-previa" });
-  let plano = null;
-
-  entrada.addEventListener("change", async () => {
-    try {
-      plano = JSON.parse(await entrada.files[0].text());
-      if (plano.tipo !== "planejamento-hyper" || !Array.isArray(plano.posts)) throw new Error("formato");
-    } catch { area.replaceChildren(el("p", { class: "erro" }, "Arquivo inválido. Use o .json de planejamento que o Claude preparou.")); return; }
-    desenhar();
-  });
 
   function desenhar() {
     const provavel = clienteProvavel(plano.cliente);
@@ -67,7 +59,8 @@ export function abrirImportarPlanejamento() {
     area.replaceChildren(
       el("label", { class: "campo", for: "imp-cliente" }, el("span", {}, "Cliente"), seletor),
       linhaRenomear, resumo,
-      el("div", { class: "acoes" }, el("button", { class: "destaque", onClick: (e) => importar(e.currentTarget, seletor.value, renomear.checked) }, "Importar planejamento")));
+      el("div", { class: "acoes" }, el("button", { class: "secundario negar", onClick: () => fechar() }, "Cancelar"),
+        el("button", { class: "confirmar", onClick: (e) => importar(e.currentTarget, seletor.value, renomear.checked) }, "Importar planejamento")));
     atualizarResumo();
   }
 
@@ -117,7 +110,6 @@ export function abrirImportarPlanejamento() {
     }
   }
 
-  const fechar = abrirModal("Importar planejamento de posts", el("div", {},
-    el("p", {}, "Escolha o arquivo .json de planejamento (o Claude prepara a partir dos prints ou da planilha do cliente)."),
-    entrada, area), { largo: true });
+  const fechar = abrirModal("Importar planejamento de posts", area, { largo: true });
+  desenhar();
 }

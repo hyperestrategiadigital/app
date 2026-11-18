@@ -25,7 +25,7 @@ Menu: **Hoje, Tarefas, Calendário, Clientes, Tráfego pago, Financeiro** e o gr
 
 ### Marcas e grupos
 
-Clientes com várias marcas funcionam como grupo (ex.: Grupo Comportamento → Comportamento, MeuCPTO, IntegraCulture, CuidaTech; Body in Shape → Body in Shape, Body Ride, Body Run; Castelari → Castelari, Achadinhos da Castelari). Cada marca tem logo, cores, fontes, tom de voz, persona, público e estilo próprios; o grupo tem só a identidade institucional. Em Ajustes → Organizar grupos (.json) dá para transformar clientes soltos em marcas de um grupo de uma vez.
+Clientes com várias marcas funcionam como grupo (ex.: um grupo de academias com uma marca para cada modalidade). Cada marca tem logo, cores, fontes, tom de voz, persona, público e estilo próprios; o grupo tem só a identidade institucional. Na aba Marca do cliente, "Juntar outros clientes como marcas" transforma clientes soltos em marcas do grupo, e "Separar em cliente próprio" faz o contrário.
 
 Um cliente pode ter várias marcas com identidades diferentes (ex.: um grupo com várias empresas). A identidade do próprio cliente é a "marca principal"; cada marca extra fica em `marcas` com `clienteId`, nome e os mesmos campos de identidade (campo vazio = usa o do cliente). O post guarda `marcaId`; a copy, a imagem, o pedido do Canva e o PDF usam a identidade da marca (`identidade()` em `db.js`).
 
@@ -41,7 +41,6 @@ public/
   js/ui.js              elementos, modais, formulários, datas e moeda
   js/constantes.js      listas fixas (status, tipos, formatos...)
   js/recorrencias.js    geração automática das tarefas recorrentes
-  js/importacao.js      leitura do CSV da planilha Fluxo de Trabalho
   js/comercial.js       catálogo de serviços, modelo de contrato, valores por extenso e documentos (contrato e proposta)
   js/busca.js           busca rápida (Ctrl+K)
   js/views/*.js         uma tela por arquivo

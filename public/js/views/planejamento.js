@@ -197,7 +197,7 @@ export function render({ params, estado, renderizar }) {
         el("span", { class: "espaco" }),
         estado.alterado ? el("button", { class: "link", onClick: () => { estado.chave = null; renderizar(); } }, "Descartar alterações") : null));
 
-  const botaoSalvar = el("button", { class: "destaque", disabled: !estado.alterado, onClick: (e) => salvar(e.currentTarget) }, "Salvar planejamento");
+  const botaoSalvar = el("button", { class: "confirmar", disabled: !estado.alterado, onClick: (e) => salvar(e.currentTarget) }, "Salvar planejamento");
 
   return el("div", { class: "tela tela-larga" },
     el("div", { class: "filtros" },

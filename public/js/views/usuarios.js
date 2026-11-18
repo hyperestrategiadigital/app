@@ -101,15 +101,15 @@ function cartaoMembro(m) {
     ehDono ? el("p", { class: "subtitulo" }, "O dono do espaço é sempre administrador.") : editor.elemento,
     el("div", { class: "acoes" },
       ehDono ? null : pendente
-        ? el("button", { class: "destaque", onClick: (e) => salvar(e.currentTarget) }, "Liberar acesso")
+        ? el("button", { class: "confirmar", onClick: (e) => salvar(e.currentTarget) }, "Liberar acesso")
         : temPedido
-          ? [el("button", { class: "destaque", onClick: (e) => salvar(e.currentTarget, { aprovarPedido: true }) }, "Aprovar pedido"),
-            el("button", { class: "secundario", onClick: async () => {
+          ? [el("button", { class: "confirmar", onClick: (e) => salvar(e.currentTarget, { aprovarPedido: true }) }, "Aprovar pedido"),
+            el("button", { class: "negar", onClick: async () => {
               await atualizar("membros", m.id, { pedido: null });
               await emailMaisAcesso(m, false).catch(() => {});
               avisar("Pedido recusado.");
             } }, "Recusar pedido")]
-          : el("button", { onClick: (e) => salvar(e.currentTarget) }, "Salvar acessos"),
+          : el("button", { class: "confirmar", onClick: (e) => salvar(e.currentTarget) }, "Salvar acessos"),
       el("span", { class: "espaco" }),
       !ehDono && !souEu ? el("button", { class: "perigo-texto", onClick: async () => {
         if (await confirmar(pendente ? `Recusar o pedido de ${m.nome || m.email}?` : `Remover ${m.nome || m.email} do espaço? A pessoa perde o acesso na hora (os dados continuam).`)) {
