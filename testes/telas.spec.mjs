@@ -328,3 +328,22 @@ test("importar planejamento: cria marcas e posts sem duplicar", async ({ page })
   expect(posts.find((t) => t.titulo === "Tema A").checklist.length).toBeGreaterThan(0);
   expect(marca.paleta).toEqual(["#2D6CDF"]);
 });
+
+test("organizar grupos: cliente separado vira marca e posts soltos vão para a principal", async ({ page }) => {
+  await abrir(page);
+  const estrutura = { tipo: "estrutura-hyper", grupos: [{ cliente: "Grupo Exemplo", moverPostsSemMarca: true, marcas: [
+    { nome: "Exemplo Principal", principal: true, cor: "#14A37F" }, { nome: "Loja Exemplo", juntarCliente: ["Loja Exemplo"] }, { nome: "Nova Marca" }] }] };
+  await page.goto("/#/config");
+  await page.getByRole("button", { name: "Organizar grupos (.json)" }).click();
+  await page.setInputFiles(".modal input[type=file]", { name: "g.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(estrutura)) });
+  await expect(page.locator(".modal")).toContainText('o cliente "Loja Exemplo" vira esta marca');
+  await page.locator(".modal").getByRole("button", { name: "Organizar" }).click();
+  await expect(page).toHaveURL(/#\/clientes\/grupo/);
+  const s = await page.evaluate(() => window.__store);
+  const marcas = Object.values(s["espacos/hyper/marcas"]).filter((m) => m.clienteId === "grupo").map((m) => m.nome).sort();
+  expect(marcas).toEqual(["Exemplo Principal", "Loja Exemplo", "Nova Marca"]);
+  expect(s["espacos/hyper/clientes"].loja.ativo).toBe(false);
+  await page.getByRole("tab", { name: "Marca" }).click();
+  await expect(page.locator(".marcas-seletor")).toContainText("Grupo Exemplo (institucional)");
+  await expect(page.locator(".marca-cabeca h3")).toHaveText("Grupo Exemplo · Exemplo Principal");
+});

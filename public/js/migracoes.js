@@ -65,3 +65,12 @@ export async function alinharStatusPosts() {
   if (itens.length) await gravarEmLote("tarefas", itens);
   return itens.length;
 }
+
+// Agenda automática: compromissos futuros que ficaram sem marcar (do tempo em que era preciso conectar a agenda)
+// passam a ir para a Google Agenda. Os que alguém desmarcou de propósito (naoSincronizar) ficam como estão.
+export async function marcarCompromissosParaAgenda() {
+  const hoje = hojeISO();
+  const itens = dados.compromissos.filter((c) => !c.sincronizar && !c.naoSincronizar && (c.data >= hoje || (c.repetir && (!c.repetirAte || c.repetirAte >= hoje))));
+  if (itens.length) await gravarEmLote("compromissos", itens.map(({ id, ...c }) => ({ id, ...c, sincronizar: true })));
+  return itens.length;
+}

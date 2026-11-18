@@ -4,6 +4,7 @@ import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes,
 import { cabecalho } from "./componentes.js";
 import { analisarPlanilha } from "../importacao.js";
 import { abrirImportarPlanejamento } from "./importarPlanejamento.js";
+import { abrirOrganizarGrupos } from "./organizarGrupos.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
 import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
@@ -100,6 +101,11 @@ export function render() {
       el("h2", {}, "Importar planilha"),
       el("p", {}, "Traga o histórico da planilha Fluxo de Trabalho: clientes, tarefas e entregas."),
       el("button", { onClick: abrirImportacao }, "Importar CSV da planilha")) : null,
+
+    ehAdmin() ? el("section", { class: "bloco" },
+      el("h2", {}, "Organizar grupos e marcas"),
+      el("p", {}, "Transforma clientes em grupos com as marcas certas (ex.: Grupo Comportamento → Comportamento, MeuCPTO, IntegraCulture, CuidaTech), juntando clientes que estavam separados, a partir do arquivo .json que o Claude prepara. Mostra tudo antes de fazer."),
+      el("button", { onClick: abrirOrganizarGrupos }, "Organizar grupos (.json)")) : null,
 
     ehAdmin() ? el("section", { class: "bloco" },
       el("h2", {}, "Importar planejamento de posts"),

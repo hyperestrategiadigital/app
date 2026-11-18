@@ -51,7 +51,7 @@ export const carregarImagem = (src) => new Promise((ok, erro) => {
 });
 
 /** Reduz a imagem (JPEG) até caber no banco. */
-export async function comprimirImagem(origem, { maxLado = 1600, qualidade = 0.85 } = {}) {
+export async function comprimirImagem(origem, { maxLado = 1600, qualidade = 0.85, png = false } = {}) {
   const src = typeof origem === "string" ? origem : await lerComoDataURL(origem);
   const img = await carregarImagem(src);
   let lado = maxLado;
@@ -61,10 +61,10 @@ export async function comprimirImagem(origem, { maxLado = 1600, qualidade = 0.85
     c.width = Math.round(img.naturalWidth * escala);
     c.height = Math.round(img.naturalHeight * escala);
     const ctx = c.getContext("2d");
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillRect(0, 0, c.width, c.height);
+    // PNG mantém o fundo transparente (logos); JPEG vai com fundo branco (fotos e criativos)
+    if (!png) { ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, c.width, c.height); }
     ctx.drawImage(img, 0, 0, c.width, c.height);
-    const url = c.toDataURL("image/jpeg", qualidade);
+    const url = png ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", qualidade);
     if ((url.length * 3) / 4 <= LIMITE_BYTES) return url;
     lado = Math.round(lado * 0.8);
     qualidade = Math.max(0.6, qualidade - 0.05);

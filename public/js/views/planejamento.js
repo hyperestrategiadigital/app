@@ -60,7 +60,7 @@ export function render({ params, estado, renderizar }) {
   }
   const marcar = () => { if (!estado.alterado) { estado.alterado = true; renderizar(); } };
   const marcas = marcasDo(clienteId);
-  const opcoesMarca = [["", "Principal"], ...marcas.map((m) => [m.id, m.nome])];
+  const opcoesMarca = [...marcas.map((m) => [m.id, m.nome]), ["", "Institucional do grupo"]];
   const ordenar = () => estado.linhas.sort((a, b) => (a.dataPublicacao + a.hora).localeCompare(b.dataPublicacao + b.hora));
 
   const irMes = (n) => {
@@ -269,7 +269,7 @@ export function lerTextoRapido(texto, formatoPadrao = "Feed estático") {
 function editarLinha(l, estado, marcar) {
   formulario("Post do planejamento", [
     { nome: "titulo", rotulo: "Tema", obrigatorio: true },
-    ...(marcasDo(estado.clienteId).length ? [{ nome: "marcaId", rotulo: "Marca", tipo: "select", opcoes: [["", "Principal"], ...marcasDo(estado.clienteId).map((m) => [m.id, m.nome])] }] : []),
+    ...(marcasDo(estado.clienteId).length ? [{ nome: "marcaId", rotulo: "Marca", tipo: "select", opcoes: [...marcasDo(estado.clienteId).map((m) => [m.id, m.nome]), ["", "Institucional do grupo"]] }] : []),
     { nome: "dataPublicacao", rotulo: "Publicação", tipo: "date", obrigatorio: true, largura: "metade" },
     { nome: "hora", rotulo: "Horário", tipo: "time", largura: "metade" },
     { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, largura: "metade" },

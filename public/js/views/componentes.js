@@ -72,7 +72,7 @@ export function abrirTarefa(tarefa = {}) {
     { nome: "clienteId", rotulo: "Cliente", tipo: "select", opcoes: opcoesClientes(), largura: "metade" },
     { nome: "tipo", rotulo: "Tipo", tipo: "select", opcoes: TIPOS_TAREFA, largura: "metade" },
     { nome: "marcaId", rotulo: "Marca", tipo: "select", largura: "metade",
-      opcoesDe: (v) => [["", "Marca principal do cliente"], ...marcasDo(v.clienteId).map((m) => [m.id, m.nome])],
+      opcoesDe: (v) => [...marcasDo(v.clienteId).map((m) => [m.id, m.nome]), ["", `${porId("clientes", v.clienteId)?.nome || "Grupo"} (institucional)`]],
       mostrarSe: (v) => marcasDo(v.clienteId).length > 0 },
 
     { tipo: "secao", rotulo: "Post (aparece no calendário de conteúdo)", mostrarSe: conteudo },

@@ -497,9 +497,12 @@ export const opcoesClientes = (incluirVazio = true) => [
 export const contrato = (clienteId) => porId("contratos", clienteId) || {};
 
 /** Campos de identidade (aba Marca), que existem no cliente e em cada marca dele. */
-export const CAMPOS_IDENTIDADE = ["paleta", "cor", "fontes", "tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva"];
+export const CAMPOS_IDENTIDADE = ["logo", "paleta", "cor", "fontes", "tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva"];
+/** Marcas ativas do cliente; a marca principal (ex.: a que leva o nome do grupo) vem primeiro. */
 export const marcasDo = (clienteId) => (dados.marcas || []).filter((m) => m.clienteId === clienteId && m.ativo !== false)
-  .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+  .sort((a, b) => (b.principal ? 1 : 0) - (a.principal ? 1 : 0) || (a.ordem ?? 99) - (b.ordem ?? 99) || (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+/** Cliente com marcas funciona como grupo (guarda-chuva). */
+export const ehGrupo = (clienteId) => marcasDo(clienteId).length > 0;
 /**
  * Identidade usada na copy, na imagem e no pedido do Canva: a da marca (quando o post é de uma marca),
  * completando o que faltar com a do cliente. `nome` vira o da marca e `clienteNome` guarda o do cliente.
