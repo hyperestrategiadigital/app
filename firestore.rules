@@ -18,6 +18,24 @@ service cloud.firestore {
       function admin() { return dono() || (membro() && get(caminhoMembro()).data.papel == 'admin'); }
       function pode(area) { return admin() || (membro() && area in get(caminhoMembro()).data.permissoes); }
       function ativo() { return dono() || membro(); }
+      function eu() { return get(caminhoMembro()).data; }
+      // Acesso por cliente: "todos" (padrão) ou "alguns" (só os ids em membros/{uid}.clientes).
+      // Itens sem cliente ("") ficam visíveis para todos; no financeiro, só para quem vê todos.
+      function todosClientes() { return admin() || eu().get('acessoClientes', 'todos') != 'alguns'; }
+      function doCliente(cid) { return todosClientes() || cid == '' || cid in eu().get('clientes', []); }
+      function doClienteEstrito(cid) { return todosClientes() || (cid != '' && cid in eu().get('clientes', [])); }
+      function cli(d) { return d.get('clienteId', ''); }
+      // Convite: o administrador cadastra o e-mail antes; no primeiro acesso a pessoa já entra liberada
+      function emailLogado() { return request.auth.token.email.lower(); }
+      function caminhoConvite() { return /databases/$(database)/documents/espacos/$(esp)/convites/$(emailLogado()); }
+      function conviteValido(novo) {
+        return logado() && request.auth.token.email_verified == true && exists(caminhoConvite())
+          && novo.status == 'ativo'
+          && novo.papel == get(caminhoConvite()).data.papel
+          && novo.permissoes == get(caminhoConvite()).data.permissoes
+          && novo.get('acessoClientes', 'todos') == get(caminhoConvite()).data.get('acessoClientes', 'todos')
+          && novo.get('clientes', []) == get(caminhoConvite()).data.get('clientes', []);
+      }
 
       // O documento do espaço: qualquer pessoa logada lê (para saber se existe e pedir acesso).
       // Só pode ser criado uma vez, por quem vira o dono.
@@ -27,58 +45,91 @@ service cloud.firestore {
 
       match /membros/{uid} {
         allow read: if ativo() || (logado() && request.auth.uid == uid);
-        // Pedido de acesso: a pessoa cria o próprio cadastro, sempre pendente, básica e sem áreas
+        // Pedido de acesso: a pessoa cria o próprio cadastro, sempre pendente, básica e sem áreas.
+        // Com convite: entra direto com o que o administrador definiu.
         allow create: if (logado() && request.auth.uid == uid
                           && request.resource.data.papel == 'basico'
                           && request.resource.data.permissoes.size() == 0
-                          && request.resource.data.status == 'pendente')
-                      || dono();
-        // A própria pessoa pode mudar nome/e-mail, mas não o papel, as áreas nem a liberação
+                          && request.resource.data.status == 'pendente'
+                          && !('clientes' in request.resource.data))
+                      || (request.auth.uid == uid && conviteValido(request.resource.data))
+                      || admin();
+        // A própria pessoa muda nome, foto e pedidos de acesso; papel, áreas, clientes e liberação só o administrador
         allow update: if admin()
                       || (logado() && request.auth.uid == uid
-                          && request.resource.data.papel == resource.data.papel
-                          && request.resource.data.permissoes == resource.data.permissoes
-                          && request.resource.data.status == resource.data.status);
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'email', 'foto', 'pedido', 'atualizadoEm']));
         allow delete: if admin();
       }
 
-      // Todos os membros
+      match /convites/{email} {
+        allow read: if admin() || (logado() && emailLogado() == email);
+        allow create, update: if admin();
+        allow delete: if admin() || (logado() && emailLogado() == email);
+      }
+
+      // Dados por cliente (quem tem acesso só a alguns clientes vê só os deles)
       match /clientes/{id} {
-        allow read: if ativo();
-        allow write: if admin() || pode('conteudo') || pode('trafego');
+        allow read: if ativo() && doCliente(id);
+        allow write: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(id);
       }
-      // Marcas dentro do cliente (identidade de cada marca de um grupo)
       match /marcas/{id} {
-        allow read: if ativo();
-        allow write: if admin() || pode('conteudo') || pode('trafego');
+        allow read: if ativo() && doCliente(cli(resource.data));
+        allow create: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(request.resource.data));
+        allow update: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
+        allow delete: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(resource.data));
       }
-      match /tarefas/{id} { allow read, write: if ativo(); }
-      // Tarefas concluídas há mais de 90 dias: todos leem; só o administrador arquiva e mexe
+      match /tarefas/{id} {
+        allow read, delete: if ativo() && doCliente(cli(resource.data));
+        allow create: if ativo() && doCliente(cli(request.resource.data));
+        allow update: if ativo() && doCliente(cli(resource.data)) && doCliente(cli(request.resource.data));
+      }
+      // Tarefas concluídas há mais de 90 dias: leitura como as tarefas; só o administrador arquiva e mexe
       match /tarefasArquivo/{id} {
-        allow read: if ativo();
+        allow read: if ativo() && doCliente(cli(resource.data));
         allow write: if admin();
       }
-      match /compromissos/{id} { allow read, write: if ativo(); }
+      match /compromissos/{id} {
+        allow read, delete: if ativo() && doCliente(cli(resource.data));
+        allow create: if ativo() && doCliente(cli(request.resource.data));
+        allow update: if ativo() && doCliente(cli(resource.data)) && doCliente(cli(request.resource.data));
+      }
       match /recorrencias/{id} {
-        allow read: if ativo();
+        allow read: if ativo() && doCliente(cli(resource.data));
         allow write: if admin();
       }
 
       // Conteúdo
-      match /clientes/{id}/artes/{arte} { allow read, write: if pode('conteudo'); }
+      match /clientes/{id}/artes/{arte} { allow read, write: if pode('conteudo') && doCliente(id); }
 
       // Tráfego pago
-      match /contasAds/{id} { allow read, write: if pode('trafego'); }
-      match /manutencoes/{id} { allow read, write: if pode('trafego'); }
+      match /contasAds/{id} {
+        allow read, delete: if pode('trafego') && doClienteEstrito(cli(resource.data));
+        allow create: if pode('trafego') && doClienteEstrito(cli(request.resource.data));
+        allow update: if pode('trafego') && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
+      }
+      match /manutencoes/{id} {
+        allow read, delete: if pode('trafego') && doClienteEstrito(cli(resource.data));
+        allow create: if pode('trafego') && doClienteEstrito(cli(request.resource.data));
+        allow update: if pode('trafego') && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
+      }
 
       // Financeiro (valores dos clientes)
-      match /contratos/{id} { allow read, write: if pode('financeiro'); }
-      match /financeiro/{id} { allow read, write: if pode('financeiro'); }
-      match /orcamentos/{id} { allow read, write: if pode('financeiro'); }
+      match /contratos/{id} { allow read, write: if pode('financeiro') && doClienteEstrito(id); }
+      match /financeiro/{id} {
+        allow read, delete: if pode('financeiro') && doClienteEstrito(cli(resource.data));
+        allow create: if pode('financeiro') && doClienteEstrito(cli(request.resource.data));
+        allow update: if pode('financeiro') && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
+      }
+      match /orcamentos/{id} {
+        allow read, delete: if pode('financeiro') && doClienteEstrito(cli(resource.data));
+        allow create: if pode('financeiro') && doClienteEstrito(cli(request.resource.data));
+        allow update: if pode('financeiro') && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
+      }
 
-      // Configurações: a chave da OpenAI só para quem cria conteúdo; o resto, todos leem
+      // Configurações: a chave da OpenAI só para quem cria conteúdo; o envio de e-mails só para administradores;
+      // o resto (equipe, lista de nomes de clientes), todos leem
       match /config/{doc} {
-        allow read: if (doc == 'openai' && pode('conteudo')) || (doc != 'openai' && ativo());
+        allow read: if (doc == 'openai' && pode('conteudo')) || (doc == 'email' && admin()) || (!(doc in ['openai', 'email']) && ativo());
         allow write: if admin();
       }
 
