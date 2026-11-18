@@ -58,7 +58,7 @@ async function sugerirMelhoria(alvo, campo, rotulo, textoAtual, aplicar) {
   ].filter(Boolean).join("\n");
   try {
     const sugestao = await gerarTexto({
-      sistema: "Você é estrategista de marca e social media sênior de uma agência brasileira de tráfego pago (Hyper). Responda em português do Brasil, de forma prática e aplicável. Devolva SOMENTE o texto melhorado do campo pedido, pronto para colar, sem introdução nem comentários. Use tópicos curtos quando ajudar.",
+      sistema: "Você é estrategista de marca e social media sênior da Hyper Estratégia Digital, agência brasileira de estratégia digital. Responda em português do Brasil, de forma prática e aplicável. Devolva SOMENTE o texto melhorado do campo pedido, pronto para colar, sem introdução nem comentários. Use tópicos curtos quando ajudar.",
       pedido: `${contexto}\n\nCampo: ${rotulo}\nTexto atual: ${textoAtual || "(vazio)"}\n\nReescreva e melhore esse campo: deixe mais específico, útil para quem cria conteúdo e anúncios, com exemplos concretos (palavras e expressões a usar e a evitar, quando fizer sentido). Mantenha o que já está certo.`
     });
     fechar();

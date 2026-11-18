@@ -27,7 +27,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 export function modelo(titulo, paragrafos, { link = LINK_APP, botao = "Abrir o app da Hyper" } = {}) {
   return `<div style="font-family:Montserrat,Arial,sans-serif;max-width:560px;margin:auto;color:${MARCA.texto}">
   <div style="background:${MARCA.roxo};color:#fff;padding:20px 24px;border-radius:12px 12px 0 0">
-    <div style="font-size:13px;letter-spacing:2px;opacity:.8">HYPER</div>
+    <div style="font-size:13px;letter-spacing:2px;opacity:.8">HYPER ESTRATÉGIA DIGITAL</div>
     <div style="font-size:22px;font-weight:bold;font-style:italic">${esc(titulo)}</div>
   </div>
   <div style="border:1px solid ${MARCA.gelo};border-top:0;padding:24px;border-radius:0 0 12px 12px;line-height:1.5">

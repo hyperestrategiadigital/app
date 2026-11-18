@@ -1,6 +1,6 @@
 # Hyper App
 
-App web da Hyper (agência de tráfego pago) com Firebase: projeto `hyper-9e023`, Auth, Firestore e Hosting. HTML, CSS e JavaScript puros, sem build. O SDK do Firebase vem do CDN (gstatic).
+App web da Hyper Estratégia Digital (agência de estratégia digital: conteúdo, social media, tráfego pago e mais) com Firebase: projeto `hyper-9e023`, Auth, Firestore e Hosting. HTML, CSS e JavaScript puros, sem build. O SDK do Firebase vem do CDN (gstatic).
 
 ## Identidade visual: obrigatória
 
