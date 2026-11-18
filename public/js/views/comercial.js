@@ -33,13 +33,14 @@ export async function abrirGeradorContrato(clienteId, base = {}) {
   const nomes = servicosCatalogo().map((s) => s.nome);
   const temTrafego = (v) => (v.servicos || []).some((n) => servicoPorNome(n)?.trafego);
   const temUnico = (v) => (v.servicos || []).some((n) => servicoPorNome(n)?.tipo === "unico");
-  const v = await formulario(`Contrato · ${c?.nome || ""}`, [
+  const promessa = formulario(`Contrato · ${c?.nome || ""}`, [
     { tipo: "secao", rotulo: "Contratante" },
     { nome: "contratante", rotulo: "Nome ou razão social", obrigatorio: true, largura: "metade", dica: "Como está no CNPJ ou no documento" },
     { nome: "documento", rotulo: "CNPJ ou CPF", largura: "metade", dica: "CNPJ 00.000.000/0001-00" },
     { tipo: "secao", rotulo: "Serviços" },
     { nome: "servicos", rotulo: "O que entra no contrato", tipo: "multi", opcoes: nomes },
     { tipo: "secao", rotulo: "Valores" },
+    { nome: "desconto", rotulo: "Desconto sobre a tabela (%)", tipo: "number", largura: "metade", dica: "0" },
     { nome: "mensalidade", rotulo: "Valor mensal (R$)", tipo: "number", largura: "metade" },
     { nome: "pagamento", rotulo: "Pagamento", tipo: "select", opcoes: [["pos", "Pós-pago (paga o mês que passou)"], ["pre", "Pré-pago (paga antes)"], ["", "Não citar"]], largura: "metade" },
     { nome: "diaVencimento", rotulo: "Vencimento (dia)", tipo: "number", largura: "metade" },
@@ -57,8 +58,11 @@ export async function abrirGeradorContrato(clienteId, base = {}) {
     mensalidade: base.mensalidade ?? k.mensalidade ?? null, valorUnico: base.valorUnico ?? salvo.valorUnico ?? null,
     condicaoUnico: salvo.condicaoUnico || "50% na aprovação e 50% na entrega",
     pagamento: k.pagamento ?? "pos", diaVencimento: k.diaVencimento || 5, vencimentoUtil: k.vencimentoUtil ?? !k.diaVencimento,
-    verba: salvo.verba || k.verbaAnuncios || "", inicio: salvo.inicio || proximoMes(), meses: salvo.meses || 12, data: hojeISO()
+    verba: salvo.verba || k.verbaAnuncios || "", inicio: salvo.inicio || proximoMes(), meses: salvo.meses || 12, data: hojeISO(),
+    desconto: base.desconto ?? salvo.desconto ?? 0
   }, { rotuloSalvar: "Ver contrato", largo: true });
+  ligarPrecos([...document.querySelectorAll(".modal form")].pop(), { preencher: base.mensalidade == null && base.valorUnico == null && !k.mensalidade });
+  const v = await promessa;
   if (!v) return;
   if (!v.servicos.length) { avisar("Marque pelo menos um serviço.", "erro"); return abrirGeradorContrato(clienteId, base); }
   // Guarda o que foi usado: o próximo contrato do cliente já vem preenchido, e a mensalidade alimenta o Financeiro
@@ -69,6 +73,55 @@ export async function abrirGeradorContrato(clienteId, base = {}) {
     diaVencimento: Number(v.diaVencimento) || 5, vencimentoUtil: !!v.vencimentoUtil, pagamento: v.pagamento, verbaAnuncios: v.verba || ""
   });
   previaContrato(`Contrato ${c?.nome || ""}`, textoContrato({ ...v, data: data || hojeISO() }));
+}
+
+/** Preço de tabela dos serviços marcados (Financeiro → Configurar). */
+export function precoTabela(nomes = []) {
+  const servicos = nomes.map(servicoPorNome).filter(Boolean);
+  const soma = (unico) => servicos.filter((s) => (s.tipo === "unico") === unico).reduce((t, s) => t + (Number(s.preco) || 0), 0);
+  return { mensal: soma(false), unico: soma(true), semPreco: servicos.filter((s) => !(Number(s.preco) > 0)).map((s) => s.nome) };
+}
+
+/**
+ * No formulário do contrato: marcar serviços ou mudar o desconto preenche os valores com a tabela de preços.
+ * Dá para digitar outro valor por cima (combo, promoção); o resumo mostra o desconto que ficou.
+ */
+function ligarPrecos(form, { preencher }) {
+  if (!form) return;
+  const campo = (n) => form.querySelector(`#f-${n}`);
+  const info = el("div", { class: "tabela-precos" });
+  campo("mensalidade").closest("label").before(info);
+  const arred = (x) => Math.round(x * 100) / 100;
+  const aplicar = () => {
+    const v = form.lerValores();
+    const t = precoTabela(v.servicos);
+    const d = Math.min(Math.max(Number(v.desconto) || 0, 0), 100) / 100;
+    if (t.mensal) campo("mensalidade").value = arred(t.mensal * (1 - d));
+    if (t.unico && campo("valorUnico")) campo("valorUnico").value = arred(t.unico * (1 - d));
+    resumo();
+  };
+  const resumo = () => {
+    const v = form.lerValores();
+    const t = precoTabela(v.servicos);
+    const partes = [];
+    if (t.mensal) {
+      const real = Number(v.mensalidade) || 0;
+      const desc = t.mensal ? Math.round((1 - real / t.mensal) * 1000) / 10 : 0;
+      partes.push(el("span", {}, "Tabela: ", el("strong", {}, `${fmtMoeda(t.mensal)}/mês`),
+        real && Math.abs(real - t.mensal) > 0.009 ? ` → ${fmtMoeda(real)}/mês (${desc > 0 ? `${String(desc).replace(".", ",")}% de desconto` : `${String(-desc).replace(".", ",")}% acima da tabela`})` : ""));
+    }
+    if (t.unico) {
+      const real = Number(v.valorUnico) || 0;
+      partes.push(el("span", {}, "Projeto: ", el("strong", {}, fmtMoeda(t.unico)), real && Math.abs(real - t.unico) > 0.009 ? ` → ${fmtMoeda(real)}` : ""));
+    }
+    if (t.semPreco.length) partes.push(el("span", { class: "erro" }, `Sem preço na tabela: ${t.semPreco.join(", ")}.`));
+    if (!(v.servicos || []).length) partes.push(el("span", { class: "subtitulo" }, "Marque os serviços para puxar os preços da tabela."));
+    info.replaceChildren(...partes, el("a", { class: "link", href: "#/financeiro/configurar", onClick: () => fecharModais() }, "Editar a tabela de preços"));
+  };
+  form.querySelector("#f-servicos").addEventListener("change", aplicar);
+  campo("desconto").addEventListener("input", aplicar);
+  for (const n of ["mensalidade", "valorUnico"]) campo(n)?.addEventListener("input", resumo);
+  if (preencher) aplicar(); else resumo();
 }
 
 function previaContrato(titulo, texto) {
@@ -189,7 +242,7 @@ async function contratoDoOrcamento(o) {
   }
   const t = totaisOrcamento(o);
   const nomes = servicosCatalogo().map((s) => s.nome);
-  await abrirGeradorContrato(clienteId, { servicos: (o.itens || []).map((i) => i.nome).filter((n) => nomes.includes(n)), mensalidade: t.mensal || null, valorUnico: t.unico || null });
+  await abrirGeradorContrato(clienteId, { servicos: (o.itens || []).map((i) => i.nome).filter((n) => nomes.includes(n)), mensalidade: t.mensal || null, valorUnico: t.unico || null, desconto: Number(o.desconto) || 0 });
 }
 
 /* ---------------- Configurar (Financeiro) ---------------- */

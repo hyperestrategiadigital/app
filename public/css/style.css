@@ -808,3 +808,4 @@ img.avatar { object-fit: cover; padding: 0; }
   .fixa { grid-template-columns: 1fr 90px; }
   .linha-importar { grid-template-columns: 1fr; }
 }
+.tabela-precos { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; padding: 10px 12px; background: var(--cor-primaria-clara); border-radius: var(--raio-pequeno); font-size: 13px; }
