@@ -27,7 +27,9 @@
   --cor-destaque-clara: #FFF4D6;
   --cor-ok: var(--hyper-petroleo);
   --cor-ok-clara: #E1F0F1;
-  --cor-alerta: #B3261E;
+  --cor-confirmar: #1E8E4E;      /* botão de confirmar/salvar (verde) */
+  --cor-confirmar-hover: #187640;
+  --cor-alerta: #B3261E;          /* negativas: cancelar, excluir, desligar (vermelho) */
   --cor-alerta-clara: #FDECEC;
 
   /* Tipografia */
@@ -85,6 +87,11 @@ button.destaque:hover { background: var(--cor-destaque-hover); }
 button.secundario { background: var(--cor-superficie); color: var(--hyper-roxo); border: 1px solid var(--cor-borda); }
 button.secundario:hover { background: var(--cor-primaria-clara); }
 button.perigo { background: var(--cor-alerta); }
+/* Confirmar/salvar é sempre verde; cancelar/negar é sempre vermelho */
+button.confirmar { background: var(--cor-confirmar); color: var(--hyper-branco); }
+button.confirmar:hover { background: var(--cor-confirmar-hover); }
+button.negar, button.secundario.negar { background: var(--cor-superficie); color: var(--cor-alerta); border: 1px solid var(--cor-alerta); }
+button.negar:hover, button.secundario.negar:hover { background: var(--cor-alerta-clara); }
 button.perigo-texto, button.link, button.link-claro { background: none; padding: 6px 4px; color: var(--cor-alerta); }
 button.link { color: var(--cor-primaria); }
 button.link-claro { color: var(--hyper-gelo); font-weight: 500; }

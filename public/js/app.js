@@ -221,7 +221,7 @@ async function entrar(usuario) {
     const nome = el("input", { id: "acesso-nome", type: "text", value: usuario.displayName || "", placeholder: "Seu nome" });
     const funcoes = el("div", { class: "multi" }, [...AREAS.map(([v, r]) => [v, r]), ["admin", "Administração (tudo)"]].map(([v, r]) =>
       el("label", { class: "chip-check" }, el("input", { type: "checkbox", value: v }), r)));
-    const clientes = el("textarea", { id: "acesso-clientes", rows: 2, placeholder: "Ex.: Castelari e Body in Shape. Deixe em branco se for trabalhar com todos." });
+    const clientes = el("textarea", { id: "acesso-clientes", rows: 2, placeholder: "Ex.: os nomes dos clientes com quem vai trabalhar. Deixe em branco se for trabalhar com todos." });
     const mensagem = el("textarea", { id: "acesso-mensagem", rows: 2, placeholder: "Ex.: sou a nova social media, começo segunda" });
     return telaCheia(
       el("h1", {}, "Bem-vindo à Hyper"),

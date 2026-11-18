@@ -1,10 +1,9 @@
-// Ajustes (só administradores): e-mails automáticos, OpenAI, importação de marcas e da planilha, backup.
+// Ajustes (só administradores): e-mails automáticos, Meta, OpenAI, importação dos arquivos do Claude e backup.
 import { el, formulario, confirmar, avisar, abrirModal, hojeISO, addDias, vazio, normalizar, baixar } from "../ui.js";
 import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes, nomeCliente, clientesAtivos } from "../db.js";
 import { cabecalho } from "./componentes.js";
-import { analisarPlanilha } from "../importacao.js";
-import { abrirImportarPlanejamento } from "./importarPlanejamento.js";
-import { abrirOrganizarGrupos } from "./organizarGrupos.js";
+import { previaPlanejamento } from "./importarPlanejamento.js";
+import { previaImportacao } from "./comercial.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
 import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
@@ -13,73 +12,6 @@ import { configAgenda, agendaConectada, testarAgenda } from "../agenda.js";
 import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO } from "../constantes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
 
-
-function abrirImportacao() {
-  const entrada = el("input", { type: "file", accept: ".csv,text/csv,text/plain" });
-  const area = el("div", { class: "importacao-previa" });
-  let analise = null;
-
-  entrada.addEventListener("change", async () => {
-    const arquivo = entrada.files[0];
-    if (!arquivo) return;
-    analise = analisarPlanilha(await arquivo.text());
-    if (!analise.tarefas.length) { area.replaceChildren(el("p", { class: "erro" }, "Não encontrei tarefas nesse arquivo. Baixe a aba \"Área de Trabalho\" como CSV.")); return; }
-    const porStatus = (s) => analise.tarefas.filter((t) => t.status === s).length;
-    const corrigidos = analise.nomes.filter((n) => n.original !== n.canonico);
-    const clientesNovos = [...new Set(analise.tarefas.map((t) => t.cliente).filter(Boolean))]
-      .filter((n) => !dados.clientes.some((c) => normalizar(c.nome) === normalizar(n)));
-    area.replaceChildren(el("div", {},
-      el("p", {}, el("strong", {}, `${analise.tarefas.length} tarefas encontradas: `),
-        `${porStatus("a_fazer")} a fazer, ${porStatus("andamento")} em andamento, ${porStatus("concluido")} concluídas.`),
-      el("p", {}, `${analise.tarefas.filter((t) => t.checklist.length).length} tarefas com várias entregas viraram checklist.`),
-      corrigidos.length ? [el("p", {}, el("strong", {}, "Nomes de cliente corrigidos:")),
-        el("ul", {}, corrigidos.map((n) => el("li", {}, `"${n.original}" → ${n.canonico} (${n.qtd})`)))] : null,
-      clientesNovos.length ? el("p", {}, el("strong", {}, `${clientesNovos.length} clientes serão criados: `), clientesNovos.join(", ")) : null,
-      el("p", { class: "subtitulo" }, "Importar de novo o mesmo arquivo não duplica tarefas."),
-      botaoImportar));
-  });
-
-  const botaoImportar = el("button", {
-    class: "destaque", onClick: async () => {
-      botaoImportar.disabled = true;
-      try {
-        // 1) Clientes
-        const mapa = Object.fromEntries(dados.clientes.map((c) => [normalizar(c.nome), c.id]));
-        const cores = ["#4E2CA3", "#592C85", "#16626A", "#606060", "#C98A00", "#2D6CDF", "#B4415A", "#2E8B57"];
-        let i = dados.clientes.length;
-        const novosClientes = [];
-        for (const nome of [...new Set(analise.tarefas.map((t) => t.cliente).filter(Boolean))]) {
-          if (mapa[normalizar(nome)]) continue;
-          const qtd = analise.tarefas.filter((t) => t.cliente === nome).length;
-          const recente = analise.tarefas.some((t) => t.cliente === nome && t.prazo >= addDias(hojeISO(), -90));
-          const id = novoId("clientes");
-          novosClientes.push({ id, nome, cor: cores[i++ % cores.length], ativo: recente || qtd > 5, servicos: [], criadoEm: Date.now() });
-          mapa[normalizar(nome)] = id;
-        }
-        botaoImportar.textContent = `Criando ${novosClientes.length} clientes...`;
-        if (novosClientes.length) await gravarEmLote("clientes", novosClientes);
-        // 2) Tarefas
-        const itens = analise.tarefas.map(({ cliente, ...t }) => ({ ...t, clienteId: mapa[normalizar(cliente)] || "", criadoEm: Date.now() }));
-        await gravarEmLote("tarefas", itens, (feitas, total) => { botaoImportar.textContent = `Importando ${feitas}/${total}...`; });
-        avisar(`Importação concluída: ${itens.length} tarefas.`);
-        fechar();
-        location.hash = "#/clientes";
-      } catch (e) {
-        console.error(e);
-        avisar("Erro ao importar: " + e.message, "erro");
-        botaoImportar.disabled = false;
-        botaoImportar.textContent = "Importar";
-      }
-    }
-  }, "Importar");
-
-  const fechar = abrirModal("Importar planilha Fluxo de Trabalho", el("div", {},
-    el("ol", { class: "passos" },
-      el("li", {}, "Abra a planilha no Google Sheets."),
-      el("li", {}, "Vá em Arquivo → Fazer download → Valores separados por vírgula (.csv)."),
-      el("li", {}, "Escolha o arquivo baixado aqui embaixo e confira o resumo.")),
-    entrada, area), { largo: true });
-}
 
 async function baixarBackup() {
   await carregarArquivo(); // inclui as tarefas arquivadas
@@ -96,22 +28,7 @@ export function render() {
     blocoErros(),
     ehAdmin() ? blocoOpenAI() : null,
 
-    ehAdmin() ? blocoImportarMarcas() : null,
-
-    ehAdmin() ? el("section", { class: "bloco" },
-      el("h2", {}, "Importar planilha"),
-      el("p", {}, "Traga o histórico da planilha Fluxo de Trabalho: clientes, tarefas e entregas."),
-      el("button", { onClick: abrirImportacao }, "Importar CSV da planilha")) : null,
-
-    ehAdmin() ? el("section", { class: "bloco" },
-      el("h2", {}, "Organizar grupos e marcas"),
-      el("p", {}, "Transforma clientes em grupos com as marcas certas (ex.: Grupo Comportamento → Comportamento, MeuCPTO, IntegraCulture, CuidaTech), juntando clientes que estavam separados, a partir do arquivo .json que o Claude prepara. Mostra tudo antes de fazer."),
-      el("button", { onClick: abrirOrganizarGrupos }, "Organizar grupos (.json)")) : null,
-
-    ehAdmin() ? el("section", { class: "bloco" },
-      el("h2", {}, "Importar planejamento de posts"),
-      el("p", {}, "Posts de um ou mais meses de um cliente (com as marcas), a partir do arquivo .json que o Claude monta dos seus prints ou planilhas. Não duplica e não mexe no que já existe."),
-      el("button", { onClick: abrirImportarPlanejamento }, "Importar planejamento (.json)")) : null,
+    ehAdmin() ? blocoImportar() : null,
 
     ehAdmin() ? el("section", { class: "bloco" },
       el("h2", {}, "Backup"),
@@ -158,15 +75,10 @@ const preenchido = (x) => (Array.isArray(x) ? x.filter(Boolean).length : String(
  * Cada item: { cliente, marca?, tomDeVoz, persona, ... }. Sem "marca" (ou marca = nome do cliente),
  * vai para a identidade do próprio cliente; com "marca", cria ou atualiza a marca dentro do cliente.
  */
-function blocoImportarMarcas() {
-  const entrada = el("input", { type: "file", accept: ".json,application/json" });
+function previaMarcas(lista) {
   const previa = el("div", { class: "importacao-previa" });
-  entrada.addEventListener("change", async () => {
-    const arquivo = entrada.files[0];
-    if (!arquivo) return;
-    let lista;
-    try { lista = JSON.parse(await arquivo.text()); if (!Array.isArray(lista)) lista = lista.marcas || lista.clientes || []; }
-    catch { previa.replaceChildren(el("p", { class: "erro" }, "Arquivo inválido. Use o .json que o Claude preparou.")); return; }
+  let fechar = () => {};
+  {
     const itens = lista.map((m) => {
       const nomeCli = m.cliente || m.nome || "";
       const cliente = dados.clientes.find((c) => normalizar(c.nome) === normalizar(nomeCli));
@@ -183,7 +95,7 @@ function blocoImportarMarcas() {
       el("ul", {}, itens.map((i) => el("li", {},
         el("strong", {}, destino(i)), ": ", i.campos.map((k) => ROTULO_CAMPO[k]).join(", ") || "nada para importar"))),
       el("label", { class: "check-inline", for: "marcas-sobrescrever" }, sobrescrever, "Substituir o que já está preenchido (sem marcar, só preenche campos vazios)"),
-      el("div", { class: "acoes" }, el("button", { class: "destaque", onClick: async (e) => {
+      el("div", { class: "acoes" }, el("button", { class: "secundario negar", onClick: () => fechar() }, "Cancelar"), el("button", { class: "confirmar", onClick: async (e) => {
         e.currentTarget.disabled = true;
         let n = 0;
         const criados = {};
@@ -207,14 +119,30 @@ function blocoImportarMarcas() {
           }
           avisar(`${n} cliente(s)/marca(s) atualizados. Revise cada um na aba Marca.`);
         } catch (erro) { avisar("Parou no meio: " + erro.message, "erro"); }
-        previa.replaceChildren();
-        entrada.value = "";
+        fechar();
       } }, "Importar definições"))));
+  }
+  fechar = abrirModal("Importar definições de marca", previa, { largo: true });
+}
+
+/** Um lugar só para os arquivos .json que o Claude prepara: reconhece o tipo e mostra tudo antes de aplicar. */
+function blocoImportar() {
+  const entrada = el("input", { id: "importar-arquivo", type: "file", accept: ".json,application/json", hidden: true });
+  entrada.addEventListener("change", async () => {
+    const arquivo = entrada.files[0];
+    entrada.value = "";
+    if (!arquivo) return;
+    let j;
+    try { j = JSON.parse(await arquivo.text()); } catch { avisar("Esse arquivo não é um .json válido.", "erro"); return; }
+    if (j.tipo === "planejamento-hyper") previaPlanejamento(j);
+    else if (j.tipo === "financeiro-hyper") previaImportacao(j);
+    else if (Array.isArray(j) || j.tipo === "marcas-hyper" || j.marcas || j.clientes) previaMarcas(Array.isArray(j) ? j : j.marcas || j.clientes || []);
+    else avisar("Não reconheci esse arquivo. Use um .json que o Claude preparou.", "erro");
   });
   return el("section", { class: "bloco" },
-    el("h2", {}, "Importar definições de marca"),
-    el("p", {}, "Tom de voz, persona, público, identidade e cores de cada cliente e de cada marca dele, a partir do arquivo .json que o Claude monta com as suas conversas e agentes do ChatGPT."),
-    entrada, previa);
+    el("h2", {}, "Importar arquivo do Claude"),
+    el("p", {}, "Para os arquivos .json que o Claude prepara: planejamento de posts (a partir de prints ou planilhas), definições de marca (tom de voz, persona, cores) e financeiro (contratos, despesas fixas, preços). O app reconhece o tipo e mostra tudo antes de aplicar. Importar de novo não duplica."),
+    el("label", { class: "botao-link secundario", for: "importar-arquivo" }, "Escolher arquivo .json", entrada));
 }
 
 /** E-mails e automações pelo Google Apps Script da conta da Hyper (docs/email). */

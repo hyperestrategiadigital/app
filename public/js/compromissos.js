@@ -16,7 +16,7 @@ export function abrirCompromisso(comp = {}) {
     sincronizar: comp.naoSincronizar ? false : comp.sincronizar !== false || !editando
   };
   const campos = [
-    { nome: "titulo", rotulo: "Compromisso", obrigatorio: true, dica: "Ex.: Reunião mensal Body in Shape" },
+    { nome: "titulo", rotulo: "Compromisso", obrigatorio: true, dica: "Ex.: Reunião mensal com o cliente" },
     { nome: "tipo", rotulo: "Tipo", tipo: "select", opcoes: TIPOS_COMPROMISSO, largura: "metade" },
     { nome: "clienteId", rotulo: "Cliente (opcional)", tipo: "select", opcoes: opcoesClientes(), largura: "metade" },
     { nome: "data", rotulo: "Data", tipo: "date", obrigatorio: true, largura: "metade" },

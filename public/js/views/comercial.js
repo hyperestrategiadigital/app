@@ -134,7 +134,7 @@ function previaContrato(titulo, texto) {
     el("div", { class: "acoes" },
       el("button", { class: "secundario", onClick: async () => { await navigator.clipboard.writeText(area.value).catch(() => {}); avisar("Texto copiado."); } }, "Copiar texto"),
       el("button", { class: "secundario", onClick: () => baixarWord(html(), nomeArquivo(titulo)) }, "⬇ Word"),
-      el("button", { class: "destaque", onClick: async () => { if (!(await abrirParaPDF(html()))) avisar("Permita pop-ups para este site para gerar o PDF.", "erro"); } }, "⬇ PDF"))),
+      el("button", { class: "confirmar", onClick: async () => { if (!(await abrirParaPDF(html()))) avisar("Permita pop-ups para este site para gerar o PDF.", "erro"); } }, "⬇ PDF"))),
   { largo: true });
 }
 
@@ -217,7 +217,7 @@ export function abrirOrcamentoNovo(o = {}) {
   const fechar = abrirModal(editando ? `Orçamento · ${o.titulo || o.para}` : "Novo orçamento", el("div", {},
     el("div", { class: "form-grade" },
       campo("Para quem", para), campo("Cliente cadastrado", cliente),
-      campo("Nome do projeto", entrada("titulo", { placeholder: "Ex.: 1 Ano da Body Ride" })), campo("Situação", status),
+      campo("Nome do projeto", entrada("titulo", { placeholder: "Ex.: Aniversário de 1 ano da marca" })), campo("Situação", status),
       campo("Data", entrada("data", { type: "date" })), campo("Validade (dias)", entrada("validade", { type: "number", min: "0" })),
       campo("Apresentação (abre a proposta)", entrada("apresentacao", { tag: "textarea", rows: 3, placeholder: "O que é o projeto e o que a Hyper vai fazer." }), ""),
       campo("Sobre a proposta", entrada("sobre", { tag: "textarea", rows: 2, placeholder: "O que está incluído e o que já faz parte do mensal (opcional)." }), "")),
@@ -236,7 +236,7 @@ export function abrirOrcamentoNovo(o = {}) {
       el("button", { class: "secundario", onClick: async () => { if (await salvar()) { fechar(); avisar("Orçamento salvo."); } } }, "Salvar"),
       el("button", { class: "secundario", onClick: async () => { const s = await salvar(); if (s) baixarWord(await documentoOrcamento(s), nomeArquivo(`orcamento ${s.titulo || ""} ${s.para}`)); } }, "⬇ Word"),
       editando ? el("button", { class: "secundario", onClick: async () => { const s = await salvar(); if (s) { fechar(); await contratoDoOrcamento(s); } } }, "📄 Gerar contrato") : null,
-      el("button", { class: "destaque", onClick: async () => {
+      el("button", { class: "confirmar", onClick: async () => {
         if (!estado.para.trim()) { avisar("Diga para quem é o orçamento.", "erro"); return; }
         const pdf = abrirParaPDF(salvar().then((s) => documentoOrcamento(s)));
         fechar();
@@ -349,17 +349,7 @@ export function abaConfigurar() {
         modelo,
         el("div", { class: "acoes" },
           el("button", { class: "secundario", onClick: async () => { if (await confirmar("Voltar ao texto padrão do contrato?")) { modelo.value = MODELO_CONTRATO; await salvar({ modeloContrato: "" }, "Modelo padrão restaurado."); } } }, "Voltar ao padrão"),
-          el("button", { onClick: () => salvar({ modeloContrato: modelo.value === MODELO_CONTRATO ? "" : modelo.value }, "Modelo salvo.") }, "Salvar modelo")))),
-    el("section", { class: "bloco" },
-      el("h2", {}, "Importar da planilha"),
-      el("p", { class: "subtitulo" }, "Arquivo .json preparado pelo Claude com contratos, despesas fixas, preços e lançamentos avulsos. Você confere antes de aplicar."),
-      el("label", { class: "botao-link secundario" }, "Escolher arquivo .json",
-        el("input", { type: "file", accept: ".json,application/json", hidden: true, onChange: async (e) => {
-          const f = e.target.files[0]; e.target.value = "";
-          if (!f) return;
-          try { const j = JSON.parse(await f.text()); if (j.tipo !== "financeiro-hyper") throw new Error("Esse arquivo não é de financeiro."); previaImportacao(j); }
-          catch (erro) { avisar("Não consegui ler: " + erro.message, "erro"); }
-        } })))
+          el("button", { onClick: () => salvar({ modeloContrato: modelo.value === MODELO_CONTRATO ? "" : modelo.value }, "Modelo salvo.") }, "Salvar modelo"))))
   ];
 }
 
@@ -392,8 +382,8 @@ export function previaImportacao(j) {
     j.quitarAte ? el("p", { class: "faixa-aviso" }, `Tudo que vence até o fim de ${j.quitarAte.split("-").reverse().join("/")} fica marcado como pago (zero a zero).`) : null,
     status,
     el("div", { class: "acoes" },
-      el("button", { class: "secundario", onClick: () => fechar() }, "Cancelar"),
-      el("button", { class: "destaque", onClick: async (e) => {
+      el("button", { class: "secundario negar", onClick: () => fechar() }, "Cancelar"),
+      el("button", { class: "confirmar", onClick: async (e) => {
         const botao = e.currentTarget;
         botao.disabled = true;
         try {

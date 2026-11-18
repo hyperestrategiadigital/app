@@ -112,8 +112,8 @@ export function confirmar(msg) {
     const fechar = abrirModal("Confirmar", el("div", {},
       el("p", {}, msg),
       el("div", { class: "acoes" },
-        el("button", { class: "secundario", onClick: () => { fechar(); ok(false); } }, "Cancelar"),
-        el("button", { class: "perigo", onClick: () => { fechar(); ok(true); } }, "Confirmar"))));
+        el("button", { class: "negar", onClick: () => { fechar(); ok(false); } }, "Cancelar"),
+        el("button", { class: "confirmar", onClick: () => { fechar(); ok(true); } }, "Confirmar"))));
   });
 }
 
@@ -220,8 +220,8 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
       }
     }, grade, depois, el("div", { class: "acoes" }, extras,
       el("span", { class: "espaco" }),
-      el("button", { type: "button", class: "secundario", onClick: () => { fechar(); resolver(null); } }, "Cancelar"),
-      el("button", { type: "submit" }, rotuloSalvar)));
+      el("button", { type: "button", class: "negar", onClick: () => { fechar(); resolver(null); } }, "Cancelar"),
+      el("button", { type: "submit", class: "confirmar" }, rotuloSalvar)));
     form.lerValores = lerValores;
     fechar = abrirModal(titulo, form, { largo });
   });

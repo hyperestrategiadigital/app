@@ -1,5 +1,5 @@
-// Aba "Marca" da ficha do cliente. Um cliente pode ter várias marcas (ex.: Grupo Comportamento →
-// Comportamento, Integra Culture, MeuCPTO, CuidaTech), cada uma com identidade e linguagem próprias.
+// Aba "Marca" da ficha do cliente. Um cliente pode ter várias marcas (ex.: um grupo com uma marca para cada
+// negócio), cada uma com identidade e linguagem próprias.
 // A "marca principal" é a identidade do próprio cliente; as demais ficam em `marcas` e, onde um campo
 // estiver vazio, usam o do cliente. Alimenta a copy, o prompt de imagem e o pedido de arte no Canva.
 import { el, avisar, linkExterno, campoCor, abrirModal, confirmar, formulario, fecharModais, normalizar } from "../ui.js";
@@ -71,7 +71,7 @@ async function sugerirMelhoria(alvo, campo, rotulo, textoAtual, aplicar) {
         el("button", { class: "secundario", onClick: async () => { await navigator.clipboard.writeText(area.value).catch(() => {}); avisar("Copiado."); } }, "Copiar"),
         el("span", { class: "espaco" }),
         el("button", { class: "secundario", onClick: () => f2() }, "Descartar"),
-        el("button", { class: "destaque", onClick: () => { aplicar(area.value); f2(); } }, "Usar no campo"))), { largo: true });
+        el("button", { class: "confirmar", onClick: () => { aplicar(area.value); f2(); } }, "Usar no campo"))), { largo: true });
   } catch (e) {
     fechar();
     avisar("Não consegui gerar a sugestão: " + e.message, "erro");
@@ -167,7 +167,7 @@ export function abrirMarca(clienteId, marca = {}) {
 const CAMPOS_COPIADOS = ["paleta", "cor", "fontes", "tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva", "instagram", "facebook", "facebookPageId", "linkedin", "tiktok", "youtube", "site"];
 
 /**
- * Transforma outros clientes em marcas deste (ex.: CuidaTech e MeuCPTO viram marcas do Grupo Comportamento).
+ * Transforma outros clientes em marcas deste (ex.: duas empresas soltas viram marcas de um grupo).
  * Cada cliente escolhido vira uma marca com a identidade dele; posts, tarefas, compromissos, rotinas,
  * lançamentos, contas de anúncio e criativos passam para este cliente; o cliente antigo fica inativo (não é apagado).
  */
@@ -177,12 +177,12 @@ export function juntarClientes(c) {
   const status = el("p", { class: "subtitulo" });
   const fechar = abrirModal(`Juntar clientes em ${c.nome}`, el("div", {},
     el("p", {}, "Os clientes marcados viram marcas de ", el("strong", {}, c.nome), ", cada um com a própria identidade (cores, tom de voz, persona…). Posts, tarefas, compromissos, rotinas, lançamentos, contas de anúncio e criativos passam para cá. O cliente antigo fica inativo, não é apagado."),
-    el("p", { class: "subtitulo" }, "Se o grupo já tem uma marca com o mesmo nome (ex.: o cliente \"Comportamento\" e a marca Comportamento), tudo vai para essa marca, sem duplicar. O contrato (mensalidade) do cliente antigo só é copiado se este cliente ainda não tiver um."),
+    el("p", { class: "subtitulo" }, "Se o grupo já tem uma marca com o mesmo nome (ex.: o cliente \"Exemplo\" e a marca Exemplo), tudo vai para essa marca, sem duplicar. O contrato (mensalidade) do cliente antigo só é copiado se este cliente ainda não tiver um."),
     el("div", { class: "multi" }, caixas),
     status,
     el("div", { class: "acoes" },
-      el("button", { class: "secundario", onClick: () => fechar() }, "Cancelar"),
-      el("button", { class: "destaque", onClick: async (e) => {
+      el("button", { class: "negar", onClick: () => fechar() }, "Cancelar"),
+      el("button", { class: "confirmar", onClick: async (e) => {
         const ids = caixas.map((l) => l.querySelector("input")).filter((i) => i.checked).map((i) => i.value);
         if (!ids.length) { avisar("Marque pelo menos um cliente.", "erro"); return; }
         const botao = e.currentTarget;
@@ -323,7 +323,7 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
 
   return el("div", { class: "aba-marca" },
     seletor,
-    !grupo ? el("p", { class: "subtitulo" }, "Este cliente tem uma marca só: a identidade é configurada aqui. Se ele tiver outras marcas com identidades diferentes (ex.: Achadinhos da Castelari), crie cada uma em \"+ Marca\" e ele vira um grupo: aí cada marca tem a sua identidade.") : null,
+    !grupo ? el("p", { class: "subtitulo" }, "Este cliente tem uma marca só: a identidade é configurada aqui. Se ele tiver outras marcas com identidades diferentes (ex.: uma loja on-line com nome próprio), crie cada uma em \"+ Marca\" e ele vira um grupo: aí cada marca tem a sua identidade.") : null,
     grupo && !marca ? el("p", { class: "faixa-aviso" }, `${c.nome} é um grupo: a identidade de cada marca fica na própria marca. Esta aqui só vale para os posts institucionais do grupo (sem marca) e completa o que estiver vazio nas marcas.`) : null,
     marca ? el("div", { class: "marca-cabeca" },
       el("div", {},
