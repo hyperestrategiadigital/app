@@ -3,11 +3,12 @@ import { auth } from "./firebase.js";
 import {
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso } from "./db.js";
+import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas } from "./db.js";
 import { el, avisar } from "./ui.js";
 import { eu, pode, ehAdmin, AREAS } from "./permissoes.js";
 import { gerarRecorrencias } from "./recorrencias.js";
-import { migrarConteudos, completarPostsSemFormato, migrarReunioes } from "./migracoes.js";
+import { abrirBusca, definirTelas, ativarAtalhoBusca } from "./busca.js";
+import { completarPostsSemFormato, migrarReunioes, migrarTipos, alinharStatusPosts } from "./migracoes.js";
 
 import * as hoje from "./views/hoje.js";
 import * as tarefas from "./views/tarefas.js";
@@ -23,19 +24,22 @@ import * as relatorios from "./views/relatorios.js";
 import * as usuarios from "./views/usuarios.js";
 
 // `area`: quem não tem essa área não vê a tela ("admin" = só administradores)
+// `grupo: "admin"`: fica dentro de "Administração" no menu. `menu: false`: tela sem item no menu.
 const ROTAS = {
   hoje: { titulo: "Hoje", icone: "☀", view: hoje },
   tarefas: { titulo: "Tarefas", icone: "✓", view: tarefas },
   calendario: { titulo: "Calendário", icone: "▦", view: calendario },
-  planejamento: { titulo: "Planejamento", icone: "☷", view: planejamento, area: "conteudo" },
-  criar: { titulo: "Criar", icone: "✦", view: criar, area: "conteudo" },
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
-  rotinas: { titulo: "Rotinas", icone: "↻", view: rotinas, area: "admin" },
   trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego, area: "trafego" },
   financeiro: { titulo: "Financeiro", icone: "$", view: financeiro, area: "financeiro" },
-  relatorios: { titulo: "Relatórios", icone: "▤", view: relatorios, area: "admin" },
-  usuarios: { titulo: "Usuários", icone: "☺", view: usuarios, area: "admin" },
-  config: { titulo: "Ajustes", icone: "⚙", view: config }
+  rotinas: { titulo: "Rotinas", icone: "↻", view: rotinas, area: "admin", grupo: "admin" },
+  relatorios: { titulo: "Relatórios", icone: "▤", view: relatorios, area: "admin", grupo: "admin" },
+  usuarios: { titulo: "Usuários e equipe", icone: "☺", view: usuarios, area: "admin", grupo: "admin" },
+  config: { titulo: "Ajustes", icone: "⚙", view: config, grupo: "admin" },
+  // Abertas a partir do calendário e do post
+  // Endereços antigos: o planejamento agora é um modo do Calendário e o Criar abre dentro do post
+  planejamento: { titulo: "Planejamento", icone: "☷", view: { render: planejamento.redirecionar }, area: "conteudo", menu: false },
+  criar: { titulo: "Criar", icone: "✦", view: { render: criar.redirecionar }, area: "conteudo", menu: false }
 };
 const liberada = (r) => !r.area || (r.area === "admin" ? ehAdmin() : pode(r.area));
 
@@ -49,11 +53,23 @@ function rotaAtual() {
 
 export function irPara(caminho) { location.hash = "#/" + caminho; }
 
+let adminAberto = null; // grupo "Administração" aberto/fechado (lembra a escolha)
 function montarMenu() {
   const { nome } = rotaAtual();
-  $("menu").replaceChildren(...Object.entries(ROTAS).filter(([, r]) => liberada(r)).map(([chave, r]) =>
-    el("a", { href: `#/${chave}`, class: chave === nome ? "ativo" : "" },
-      el("span", { class: "menu-icone", "aria-hidden": "true" }, r.icone), r.titulo)));
+  const item = ([chave, r]) => el("a", { href: `#/${chave}`, class: chave === nome ? "ativo" : "" },
+    el("span", { class: "menu-icone", "aria-hidden": "true" }, r.icone), r.titulo);
+  const visiveis = Object.entries(ROTAS).filter(([, r]) => liberada(r) && r.menu !== false);
+  const principais = visiveis.filter(([, r]) => r.grupo !== "admin" || !ehAdmin()).map(item);
+  const busca = el("button", { class: "menu-busca", onClick: abrirBusca, title: "Ctrl+K" },
+    el("span", { class: "menu-icone", "aria-hidden": "true" }, "⌕"), "Buscar", el("kbd", {}, "Ctrl K"));
+  if (!ehAdmin()) return $("menu").replaceChildren(busca, ...principais);
+  const doGrupo = visiveis.filter(([, r]) => r.grupo === "admin");
+  const dentro = doGrupo.some(([chave]) => chave === nome);
+  const grupo = el("details", { class: "menu-grupo", onToggle: (e) => (adminAberto = e.currentTarget.open) },
+    el("summary", { class: dentro ? "ativo-grupo" : "" }, el("span", { class: "menu-icone", "aria-hidden": "true" }, "▣"), "Administração"),
+    ...doGrupo.map(item));
+  grupo.open = adminAberto ?? dentro;
+  $("menu").replaceChildren(busca, ...principais, grupo);
 }
 
 function renderizar() {
@@ -73,6 +89,10 @@ function renderizar() {
     if (novo) { novo.focus(); try { novo.setSelectionRange(cursor, cursor); } catch {} }
   }
 }
+
+definirTelas(() => Object.entries(ROTAS).filter(([, r]) => liberada(r) && r.menu !== false)
+  .map(([chave, r]) => ({ titulo: r.titulo, icone: r.icone, href: `#/${chave}` })));
+ativarAtalhoBusca();
 
 window.addEventListener("hashchange", () => { $("conteudo").scrollTop = 0; renderizar(); });
 
@@ -158,7 +178,7 @@ async function entrar(usuario) {
   // Rotinas automáticas e ajustes de dados antigos: só o administrador roda
   if (ehAdmin()) {
     gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
-    migrarConteudos().then(completarPostsSemFormato).then(migrarReunioes).catch((e) => console.error("Migração:", e));
+    completarPostsSemFormato().then(migrarReunioes).then(migrarTipos).then(alinharStatusPosts).then(arquivarAntigas).catch((e) => console.error("Migração:", e));
   }
 }
 

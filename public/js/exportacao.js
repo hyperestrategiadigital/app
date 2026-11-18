@@ -1,6 +1,6 @@
 // Exportação do conteúdo do mês de um cliente: PDF visual para o cliente aprovar.
-import { dados, porId, listarSub } from "./db.js";
-import { fmtData, fmtDiaSemana, avisar } from "./ui.js";
+import { dados, porId, listarSub, todasTarefas, garantirArquivo, carregarArquivo, limiteArquivo, identidade } from "./db.js";
+import { fmtData, fmtDiaSemana, avisar, esc } from "./ui.js";
 import { TIPO_CONTEUDO } from "./constantes.js";
 import { caminhoArtes } from "./arquivos.js";
 
@@ -12,9 +12,11 @@ export const dataPost = (t) => t.dataPublicacao || t.prazo || "";
 export const temPrefixo = (titulo = "") => /^[^|]{2,24}\|/.test(titulo);
 
 /** Posts (tarefas do tipo Conteúdo) de um cliente num mês "AAAA-MM", em ordem de publicação. */
-export function postsDoMes(clienteId, mes) {
-  return dados.tarefas
-    .filter((t) => t.tipo === TIPO_CONTEUDO && (!clienteId || t.clienteId === clienteId) && dataPost(t).startsWith(mes))
+export function postsDoMes(clienteId, mes, marcaId) {
+  garantirArquivo(`${mes}-01`);
+  return todasTarefas()
+    .filter((t) => t.tipo === TIPO_CONTEUDO && (!clienteId || t.clienteId === clienteId) && dataPost(t).startsWith(mes) &&
+      (marcaId == null || (t.marcaId || "") === marcaId))
     .sort((a, b) => (dataPost(a) + (a.hora || "")).localeCompare(dataPost(b) + (b.hora || "")));
 }
 
@@ -22,7 +24,6 @@ const nomeArquivo = (cliente, mes, ext) =>
   `Conteudo ${cliente?.nome || "Hyper"} ${nomeMes(mes)}.${ext}`.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w .-]/g, "");
 
 /* ---------------- PDF visual (página de impressão) ---------------- */
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 const DIAS_CAB = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
 function calendarioMes(posts, mes, artes) {
@@ -42,9 +43,11 @@ function calendarioMes(posts, mes, artes) {
   return `<div class="grade">${DIAS_CAB.map((n) => `<div class="cab">${n}</div>`).join("")}${celulas.join("")}</div>`;
 }
 
-export async function exportarPDF(clienteId, mes) {
-  const cliente = porId("clientes", clienteId);
-  const posts = postsDoMes(clienteId, mes);
+/** marcaId: undefined = todas as marcas do cliente; "" = só a principal; id = só aquela marca (PDF com a cor e o nome dela). */
+export async function exportarPDF(clienteId, mes, marcaId) {
+  if (`${mes}-01` < limiteArquivo()) await carregarArquivo();
+  const cliente = marcaId ? identidade(clienteId, marcaId) : porId("clientes", clienteId);
+  const posts = postsDoMes(clienteId, mes, marcaId);
   if (!posts.length) { avisar("Nenhum post desse cliente neste mês.", "erro"); return; }
   const janela = window.open("", "_blank");
   if (!janela) { avisar("O navegador bloqueou a nova janela. Permita pop-ups para este site.", "erro"); return; }

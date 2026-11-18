@@ -3,7 +3,8 @@
 // As coleções ficam em memória e atualizadas em tempo real; as telas leem de `dados`.
 import { app } from "./firebase.js";
 import {
-  getFirestore, collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch, getDocs, getDoc
+  getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch, getDocs, getDoc
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 import { eu, definirEu, colecoesPermitidas, pode } from "./permissoes.js";
 
@@ -14,15 +15,27 @@ export const espacoInfo = { dono: "" };
 // O console do Firebase pode criar o banco com o id "(default)" ou com o nome "default".
 const BANCOS = ["(default)", "default"];
 let db = null;
-const abrirBanco = (id) => (id === "(default)" ? getFirestore(app) : getFirestore(app, id));
+// Cache no navegador: abre na hora com os dados da última visita e só busca o que mudou.
+function abrirBanco(id) {
+  try {
+    const opcoes = { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) };
+    return id === "(default)" ? initializeFirestore(app, opcoes) : initializeFirestore(app, opcoes, id);
+  } catch (e) {
+    console.warn("Cache local indisponível:", e.message);
+    return id === "(default)" ? getFirestore(app) : getFirestore(app, id);
+  }
+}
 
 const TODAS = [
-  "clientes", "tarefas", "recorrencias", "compromissos", "membros",
-  "financeiro", "orcamentos", "contratos", "contasAds", "manutencoes", "config", "conteudos"
+  "clientes", "marcas", "tarefas", "recorrencias", "compromissos", "membros",
+  "financeiro", "orcamentos", "contratos", "contasAds", "manutencoes", "config"
 ];
 
 /** Dados em memória: dados.clientes = [{ id, ...campos }]. `config` reúne documentos avulsos (openai, equipe, agenda). */
 export const dados = Object.fromEntries(TODAS.map((c) => [c, []]));
+// Tarefas concluídas há mais de 90 dias ficam em `tarefasArquivo` e só são lidas quando preciso
+// (relatórios e PDFs de meses antigos). Assim o app abre rápido mesmo com anos de histórico.
+dados.tarefasArquivo = [];
 
 let cancelamentos = [];
 const ouvintes = new Set();
@@ -178,6 +191,47 @@ export async function gravarEmLote(col, itens, aoProgredir) {
   }
 }
 
+/* ---------------- Arquivo de tarefas antigas ---------------- */
+
+const DIAS_ARQUIVO = 90;
+const isoDe = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+/** Data (AAAA-MM-DD) antes da qual as tarefas concluídas vão para o arquivo. */
+export const limiteArquivo = () => isoDe(new Date(Date.now() - DIAS_ARQUIVO * 86400000));
+let arquivoCarregado = null;
+
+/** Carrega o arquivo uma vez por sessão (as telas se atualizam quando chega). */
+export function carregarArquivo() {
+  if (!arquivoCarregado) {
+    arquivoCarregado = comPrazo(getDocs(ref("tarefasArquivo")), 60).then((snap) => {
+      dados.tarefasArquivo = snap.docs.map((d) => ({ id: d.id, arquivada: true, ...d.data() }));
+      notificar();
+    }).catch((e) => { arquivoCarregado = null; console.warn("Arquivo:", e.message); });
+  }
+  return arquivoCarregado;
+}
+/** Se o período começa antes do limite do arquivo, pede o arquivo (sem esperar). */
+export function garantirArquivo(desde) {
+  if (desde && desde < limiteArquivo()) carregarArquivo();
+}
+/** Tarefas atuais + arquivadas já carregadas. */
+export const todasTarefas = () => (dados.tarefasArquivo.length ? [...dados.tarefas, ...dados.tarefasArquivo] : dados.tarefas);
+
+/** Move para o arquivo as tarefas concluídas há mais de 90 dias (só administrador). */
+export async function arquivarAntigas() {
+  const limite = limiteArquivo();
+  const velhas = dados.tarefas.filter((t) => t.status === "concluido" && (t.concluidoEm || t.prazo || "9999") < limite);
+  for (let i = 0; i < velhas.length; i += 200) {
+    const lote = writeBatch(db);
+    for (const { id, ...t } of velhas.slice(i, i + 200)) {
+      lote.set(doc(ref("tarefasArquivo"), id), { ...t, arquivadaEm: Date.now() });
+      lote.delete(doc(ref("tarefas"), id));
+    }
+    await comPrazo(lote.commit(), 60);
+  }
+  if (velhas.length && arquivoCarregado) { arquivoCarregado = null; carregarArquivo(); }
+  return velhas.length;
+}
+
 /* ---------------- Subcoleções sob demanda (arquivos pesados, não ficam em memória) ---------------- */
 const refSub = (caminho) => collection(db, "espacos", ESPACO, ...caminho);
 export async function listarSub(caminho) {
@@ -252,3 +306,21 @@ export const opcoesClientes = (incluirVazio = true) => [
 ];
 /** Contrato do cliente (mensalidade, dia de vencimento). Só chega para quem tem acesso ao financeiro. */
 export const contrato = (clienteId) => porId("contratos", clienteId) || {};
+
+/** Campos de identidade (aba Marca), que existem no cliente e em cada marca dele. */
+export const CAMPOS_IDENTIDADE = ["paleta", "cor", "fontes", "tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva"];
+export const marcasDo = (clienteId) => (dados.marcas || []).filter((m) => m.clienteId === clienteId && m.ativo !== false)
+  .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+/**
+ * Identidade usada na copy, na imagem e no pedido do Canva: a da marca (quando o post é de uma marca),
+ * completando o que faltar com a do cliente. `nome` vira o da marca e `clienteNome` guarda o do cliente.
+ */
+export function identidade(clienteId, marcaId) {
+  const c = porId("clientes", clienteId) || {};
+  const m = marcaId ? porId("marcas", marcaId) : null;
+  if (!m) return { ...c, clienteNome: c.nome };
+  const r = { ...c, nome: m.nome, clienteNome: c.nome, marcaId: m.id };
+  for (const k of CAMPOS_IDENTIDADE) if (m[k] && (!Array.isArray(m[k]) || m[k].filter(Boolean).length)) r[k] = m[k];
+  if (m.paleta?.[0]) r.cor = m.paleta[0];
+  return r;
+}

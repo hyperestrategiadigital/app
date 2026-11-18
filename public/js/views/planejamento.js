@@ -1,13 +1,13 @@
 // Planejamento do mês de um cliente: uma tabela onde cada linha é um post.
 // Ao salvar, cada linha vira (ou atualiza) uma tarefa do tipo Conteúdo — aparece na lista de tarefas e no calendário.
-import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal, confirmar, formulario, vazio } from "../ui.js";
-import { dados, porId, criar, atualizar, excluir, clientesAtivos } from "../db.js";
+import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal, confirmar, formulario, vazio, fecharModais } from "../ui.js";
+import { dados, porId, criar, atualizar, excluir, clientesAtivos, marcasDo } from "../db.js";
 import { cabecalho, abas } from "./componentes.js";
-import { FORMATOS, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo } from "../constantes.js";
+import { FORMATOS, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
 import { postsDoMes, dataPost, exportarPDF, nomeMes, temPrefixo } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
 
-const CAMPOS = ["dataPublicacao", "hora", "formato", "rede", "titulo", "objetivo", "roteiro", "prazo", "statusConteudo"];
+const CAMPOS = ["dataPublicacao", "hora", "formato", "rede", "titulo", "objetivo", "roteiro", "prazo", "statusConteudo", "marcaId"];
 let contador = 0;
 const novaChave = () => `n${Date.now().toString(36)}${contador++}`;
 
@@ -21,7 +21,7 @@ function linhaDePost(t) {
 function linhaNova(data, base = {}) {
   return {
     chave: novaChave(), id: null, dataPublicacao: data, hora: base.hora || "", formato: base.formato || "Feed estático",
-    rede: base.rede || "Instagram", titulo: "", objetivo: "", roteiro: "", prazo: "", statusConteudo: "ideia"
+    rede: base.rede || "Instagram", titulo: "", objetivo: "", roteiro: "", prazo: "", statusConteudo: "ideia", marcaId: base.marcaId || ""
   };
 }
 
@@ -30,11 +30,21 @@ function seletor(lista, valor, aoMudar, rotulo) {
     lista.map((o) => { const [v, r] = Array.isArray(o) ? o : [o, o]; return el("option", { value: v, selected: v === valor }, r); }));
 }
 
+/** O planejamento é um modo do Calendário: #/calendario/<cliente>/<mês>/planejar */
+export const linkPlano = (clienteId, mes) => `#/calendario/${clienteId}/${mes}/planejar`;
+
+/** Rota antiga #/planejamento/<cliente>/<mês>: leva para o Calendário. */
+export function redirecionar({ params }) {
+  const [clienteId, mes] = params;
+  location.replace(clienteId ? linkPlano(clienteId, /^\d{4}-\d{2}$/.test(mes || "") ? mes : hojeISO().slice(0, 7)) : "#/calendario");
+  return el("div");
+}
+
 export function render({ params, estado, renderizar }) {
   const [clienteId, mesParam] = params;
   if (!clienteId) return telaEscolha();
   const cliente = porId("clientes", clienteId);
-  if (!cliente) return el("div", { class: "tela" }, vazio("Cliente não encontrado.", el("a", { href: "#/planejamento", class: "link" }, "← Voltar")));
+  if (!cliente) return el("div", { class: "tela" }, vazio("Cliente não encontrado.", el("a", { href: "#/calendario", class: "link" }, "← Calendário")));
   const mes = /^\d{4}-\d{2}$/.test(mesParam || "") ? mesParam : hojeISO().slice(0, 7);
   const chave = `${clienteId}|${mes}`;
 
@@ -42,18 +52,21 @@ export function render({ params, estado, renderizar }) {
   // Rascunho em memória até salvar
   if (estado.chave !== chave) {
     estado.chave = chave;
+    estado.clienteId = clienteId;
     estado.linhas = postsDoMes(clienteId, mes).map(linhaDePost);
     estado.removidas = [];
     estado.alterado = false;
   }
   const marcar = () => { if (!estado.alterado) { estado.alterado = true; renderizar(); } };
+  const marcas = marcasDo(clienteId);
+  const opcoesMarca = [["", "Principal"], ...marcas.map((m) => [m.id, m.nome])];
   const ordenar = () => estado.linhas.sort((a, b) => (a.dataPublicacao + a.hora).localeCompare(b.dataPublicacao + b.hora));
 
   const irMes = (n) => {
     const [a, m] = mes.split("-").map(Number);
     const d = new Date(a, m - 1 + n, 1);
     if (estado.alterado && !window.confirm("Há alterações não salvas. Sair mesmo assim?")) return;
-    location.hash = `#/planejamento/${clienteId}/${hojeISO(d).slice(0, 7)}`;
+    location.hash = linkPlano(clienteId, hojeISO(d).slice(0, 7));
   };
 
   const adicionar = () => {
@@ -102,11 +115,15 @@ export function render({ params, estado, renderizar }) {
         const v = {};
         for (const c of CAMPOS) v[c] = typeof l[c] === "string" ? l[c].trim() : l[c];
         if (!v.prazo) v.prazo = addDias(v.dataPublicacao, -2) < hojeISO() ? hojeISO() : addDias(v.dataPublicacao, -2);
+        const status = statusDaEtapa(v.statusConteudo);
         if (l.id) {
           const atual = porId("tarefas", l.id);
-          if (atual && CAMPOS.some((c) => (atual[c] ?? "") !== v[c])) { await atualizar("tarefas", l.id, v); atualizados++; }
+          if (atual && CAMPOS.some((c) => (atual[c] ?? "") !== v[c])) {
+            await atualizar("tarefas", l.id, { ...v, status, ...(status !== atual.status ? { concluidoEm: status === "concluido" ? hojeISO() : null } : {}) });
+            atualizados++;
+          }
         } else {
-          const ref = await criar("tarefas", { ...v, tipo: TIPO_CONTEUDO, clienteId, status: "a_fazer", checklist: [], notas: "", linkCanva: "", linkDrive: "", copy: "" });
+          const ref = await criar("tarefas", { ...v, tipo: TIPO_CONTEUDO, clienteId, status, concluidoEm: status === "concluido" ? hojeISO() : null, checklist: [], notas: "", linkCanva: "", linkDrive: "", copy: "" });
           l.id = ref.id; l.chave = ref.id; criados++;
         }
       }
@@ -148,6 +165,7 @@ export function render({ params, estado, renderizar }) {
     el("td", { class: "col-hora" }, campoTexto(l, "hora", { tipo: "time", rotulo: "Horário" })),
     el("td", {}, seletor(FORMATOS, l.formato, (v) => { l.formato = v; marcar(); }, "Formato")),
     el("td", {}, seletor(REDES, l.rede, (v) => { l.rede = v; marcar(); }, "Rede")),
+    marcas.length ? el("td", {}, seletor(opcoesMarca, l.marcaId || "", (v) => { l.marcaId = v; marcar(); }, "Marca")) : null,
     el("td", { class: "col-tema" }, campoTexto(l, "titulo", { dica: "Tema do post", rotulo: "Tema" })),
     el("td", {}, campoTexto(l, "objetivo", { dica: "Objetivo", rotulo: "Objetivo" })),
     el("td", { class: "col-briefing" }, campoTexto(l, "roteiro", { textarea: true, dica: "Briefing / ideia", rotulo: "Briefing" })),
@@ -168,8 +186,8 @@ export function render({ params, estado, renderizar }) {
 
   const tabela = el("div", { class: "bloco tabela-rolagem" },
       el("table", { class: "tabela-plano" },
-        el("thead", {}, el("tr", {}, ["Publicação", "Hora", "Formato", "Rede", "Tema", "Objetivo", "Briefing", "Prazo produção", "Etapa", ""].map((h) => el("th", {}, h)))),
-        el("tbody", {}, linhas.length ? linhas : el("tr", {}, el("td", { colspan: 10, class: "vazio" }, "Nenhum post planejado. Adicione linhas ou use \"Preencher o mês\".")))),
+        el("thead", {}, el("tr", {}, ["Publicação", "Hora", "Formato", "Rede", ...(marcas.length ? ["Marca"] : []), "Tema", "Objetivo", "Briefing", "Prazo produção", "Etapa", ""].map((h) => el("th", {}, h)))),
+        el("tbody", {}, linhas.length ? linhas : el("tr", {}, el("td", { colspan: marcas.length ? 11 : 10, class: "vazio" }, "Nenhum post planejado. Adicione linhas ou use \"Preencher o mês\".")))),
       el("div", { class: "acoes" },
         el("button", { class: "secundario", onClick: adicionar }, "+ Adicionar post"),
         el("button", { class: "secundario", onClick: preencher }, "Preencher o mês (dias fixos)"),
@@ -179,7 +197,11 @@ export function render({ params, estado, renderizar }) {
   const botaoSalvar = el("button", { class: "destaque", disabled: !estado.alterado, onClick: (e) => salvar(e.currentTarget) }, "Salvar planejamento");
 
   return el("div", { class: "tela tela-larga" },
-    el("a", { href: "#/planejamento", class: "voltar" }, "← Planejamento"),
+    el("div", { class: "filtros" },
+      abas([["ver", "Calendário"], ["planejar", "Planejar mês"]], "planejar", () => {
+        if (estado.alterado && !window.confirm("Há alterações não salvas. Sair mesmo assim?")) return;
+        location.hash = `#/calendario/${clienteId}/${mes}`;
+      })),
     el("header", { class: "tela-topo ficha-topo", style: { "--selo": corCliente(cliente) } },
       el("div", {},
         el("h1", {}, `Planejamento · ${cliente.nome}`),
@@ -195,8 +217,10 @@ export function render({ params, estado, renderizar }) {
       cliente.tomDeVoz ? [el("strong", {}, "Tom de voz: "), cliente.tomDeVoz, " "] : null,
       cliente.publico ? [el("strong", {}, " Público: "), cliente.publico] : null) : null,
     el("div", { class: "filtros" },
-      abas([["calendario", "Calendário"], ["tabela", "Tabela"]], estado.modo, (m) => { estado.modo = m; renderizar(); }),
+      abas([["calendario", "Grade do mês"], ["tabela", "Tabela"]], estado.modo, (m) => { estado.modo = m; renderizar(); }),
       el("button", { class: "secundario mini", onClick: preencher }, "Preencher dias fixos"),
+      marcas.length ? el("label", { class: "check-inline" }, "Novos posts da marca ",
+        seletor(opcoesMarca, estado.marcaAtual || "", (v) => { estado.marcaAtual = v; }, "Marca dos novos posts")) : null,
       el("span", { class: "espaco" }),
       estado.alterado ? el("button", { class: "link", onClick: () => { estado.chave = null; renderizar(); } }, "Descartar alterações") : null),
     estado.modo === "calendario" ? calendarioPlano({ estado, mes, cliente, renderizar, marcar: () => { estado.alterado = true; renderizar(); } }) : tabela,
@@ -210,7 +234,7 @@ function telaEscolha() {
     el("div", { class: "grade-clientes" }, clientesAtivos().map((c) => {
       const n = postsDoMes(c.id, mes).length;
       const prox = postsDoMes(c.id, hojeISO(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)).slice(0, 7)).length;
-      return el("a", { class: "cartao-cliente", href: `#/planejamento/${c.id}/${mes}`, style: { "--selo": corCliente(c) } },
+      return el("a", { class: "cartao-cliente", href: linkPlano(c.id, mes), style: { "--selo": corCliente(c) } },
         el("h3", {}, c.nome),
         el("div", { class: "numeros-cliente" },
           el("span", {}, el("strong", {}, n), " posts este mês"),
@@ -241,6 +265,7 @@ export function lerTextoRapido(texto, formatoPadrao = "Feed estático") {
 function editarLinha(l, estado, marcar) {
   formulario("Post do planejamento", [
     { nome: "titulo", rotulo: "Tema", obrigatorio: true },
+    ...(marcasDo(estado.clienteId).length ? [{ nome: "marcaId", rotulo: "Marca", tipo: "select", opcoes: [["", "Principal"], ...marcasDo(estado.clienteId).map((m) => [m.id, m.nome])] }] : []),
     { nome: "dataPublicacao", rotulo: "Publicação", tipo: "date", obrigatorio: true, largura: "metade" },
     { nome: "hora", rotulo: "Horário", tipo: "time", largura: "metade" },
     { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, largura: "metade" },
@@ -255,11 +280,11 @@ function editarLinha(l, estado, marcar) {
       if (l.id && !(await confirmar(`Remover "${l.titulo}"? O post será excluído quando você salvar o planejamento.`))) return;
       if (l.id) estado.removidas.push(l.id);
       estado.linhas = estado.linhas.filter((x) => x !== l);
-      document.querySelector(".modal-fundo")?.remove();
+      fecharModais();
       marcar();
     } }, "Remover"), el("button", { type: "button", class: "secundario", onClick: () => {
       estado.linhas.push({ ...l, chave: novaChave(), id: null });
-      document.querySelector(".modal-fundo")?.remove();
+      fecharModais();
       marcar();
     } }, "Duplicar")],
     aoSalvar: (v) => { Object.assign(l, v); marcar(); }
@@ -284,7 +309,7 @@ function calendarioPlano({ estado, mes, cliente, renderizar, marcar }) {
         if (e.key !== "Enter" || !e.target.value.trim()) return;
         e.preventDefault();
         const base = doDia[doDia.length - 1] || estado.linhas[estado.linhas.length - 1];
-        for (const item of lerTextoRapido(e.target.value, base?.formato)) estado.linhas.push({ ...linhaNova(d, base), ...item });
+        for (const item of lerTextoRapido(e.target.value, base?.formato)) estado.linhas.push({ ...linhaNova(d, base), marcaId: estado.marcaAtual || "", ...item });
         estado.alterado = true;
         renderizar();
         setTimeout(() => document.getElementById(`rapido-${d}`)?.focus(), 20);
@@ -302,11 +327,14 @@ function calendarioPlano({ estado, mes, cliente, renderizar, marcar }) {
     },
     el("div", { class: "plano-data" }, el("strong", {}, Number(d.slice(8))), el("span", {}, `/${d.slice(5, 7)}`)),
     doDia.map((l) => {
+      const marcaL = porId("marcas", l.marcaId);
       const chip = el("button", {
         class: `plano-post st-${l.statusConteudo || "ideia"} ${l.id ? "" : "novo"}`, draggable: "true",
-        title: `${l.formato} · ${rotuloStatusConteudo(l.statusConteudo || "ideia")}${l.objetivo ? " · " + l.objetivo : ""}`,
+        style: marcaL ? { "--marca": corCliente(marcaL) } : undefined,
+        title: `${marcaL ? marcaL.nome + " · " : ""}${l.formato} · ${rotuloStatusConteudo(l.statusConteudo || "ideia")}${l.objetivo ? " · " + l.objetivo : ""}`,
         onClick: () => editarLinha(l, estado, marcar)
-      }, temPrefixo(l.titulo) ? l.titulo : [el("strong", {}, l.formato), ` | ${l.titulo || "(sem tema)"}`], l.hora ? el("small", {}, ` ${l.hora}`) : null);
+      }, marcaL ? el("span", { class: "plano-marca" }, marcaL.nome) : null,
+        temPrefixo(l.titulo) ? l.titulo : [el("strong", {}, l.formato), ` | ${l.titulo || "(sem tema)"}`], l.hora ? el("small", {}, ` ${l.hora}`) : null);
       chip.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", l.chave));
       return chip;
     }),

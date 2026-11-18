@@ -1,5 +1,6 @@
 // Financeiro: receitas e despesas do mês, mensalidades automáticas e orçamentos.
-import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, vazio } from "../ui.js";
+import { garantirMensalidade } from "../recorrencias.js";
+import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, vazio, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, salvarComId, nomeCliente, opcoesClientes, clientesAtivos, contrato } from "../db.js";
 import { cabecalho, abas, seloCliente } from "./componentes.js";
 import { CATEGORIAS_FIN, STATUS_ORCAMENTO } from "../constantes.js";
@@ -9,7 +10,7 @@ const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julh
 function botaoExcluir(col, item, msg) {
   return el("button", {
     type: "button", class: "perigo-texto", onClick: async () => {
-      if (await confirmar(msg)) { await excluir(col, item.id); document.querySelector(".modal-fundo")?.remove(); }
+      if (await confirmar(msg)) { await excluir(col, item.id); fecharModais(); }
     }
   }, "Excluir");
 }
@@ -54,21 +55,10 @@ export function abrirOrcamento(o = {}) {
 }
 
 async function gerarMensalidades(mes) {
-  const [a, m] = mes.split("-").map(Number);
-  const ultimoDia = new Date(a, m, 0).getDate();
-  const comMensalidade = clientesAtivos().map((c) => ({ ...c, ...contrato(c.id), id: c.id })).filter((c) => c.mensalidade > 0);
-  if (!comMensalidade.length) { avisar("Nenhum cliente tem mensalidade cadastrada. Preencha na ficha do cliente.", "erro"); return; }
+  const comMensalidade = clientesAtivos().filter((c) => Number(contrato(c.id).mensalidade) > 0);
+  if (!comMensalidade.length) { avisar("Nenhum cliente tem mensalidade cadastrada. Preencha em Editar, na ficha do cliente.", "erro"); return; }
   let novas = 0;
-  for (const c of comMensalidade) {
-    const id = `mens-${c.id}-${mes}`;
-    if (dados.financeiro.some((f) => f.id === id)) continue;
-    const dia = String(Math.min(Number(c.diaVencimento) || 10, ultimoDia)).padStart(2, "0");
-    await salvarComId("financeiro", id, {
-      descricao: `Mensalidade ${MESES[m - 1]}`, tipo: "receita", categoria: "Mensalidade", clienteId: c.id,
-      valor: c.mensalidade, vencimento: `${mes}-${dia}`, status: "pendente", pagoEm: null, criadoEm: Date.now()
-    });
-    novas++;
-  }
+  for (const c of comMensalidade) if (await garantirMensalidade(c.id, mes)) novas++;
   avisar(novas ? `${novas} mensalidade(s) criada(s).` : "As mensalidades deste mês já estavam criadas.");
 }
 

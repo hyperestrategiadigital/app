@@ -1,5 +1,5 @@
 // Tráfego pago: contas de anúncio por cliente, verba e diário de manutenções.
-import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, diasAte, linkExterno, vazio } from "../ui.js";
+import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, diasAte, linkExterno, vazio, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, opcoesClientes, clientesAtivos } from "../db.js";
 import { cabecalho, seloCliente, corCliente } from "./componentes.js";
 import { PLATAFORMAS } from "../constantes.js";
@@ -15,7 +15,7 @@ const linkGerenciador = (conta) => {
 function botaoExcluir(col, item, msg) {
   return el("button", {
     type: "button", class: "perigo-texto", onClick: async () => {
-      if (await confirmar(msg)) { await excluir(col, item.id); document.querySelector(".modal-fundo")?.remove(); }
+      if (await confirmar(msg)) { await excluir(col, item.id); fecharModais(); }
     }
   }, "Excluir");
 }

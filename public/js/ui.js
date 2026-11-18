@@ -60,11 +60,30 @@ export const fmtMoeda = (v) =>
   (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 /* ---------------- Avisos ---------------- */
-export function avisar(msg, tipo = "ok") {
-  const t = el("div", { class: `aviso aviso-${tipo}`, role: "status" }, msg);
+/** Aviso no rodapé. Com { desfazer: fn }, mostra o botão "Desfazer" por 7 segundos. */
+export function avisar(msg, tipo = "ok", { desfazer } = {}) {
+  document.querySelectorAll(".aviso").forEach((a) => a.remove());
+  let fechar;
+  const botao = desfazer ? el("button", { class: "link-claro desfazer", onClick: async () => { fechar(); try { await desfazer(); avisar("Desfeito."); } catch (e) { avisar("Não deu para desfazer: " + e.message, "erro"); } } }, "Desfazer") : null;
+  const t = el("div", { class: `aviso aviso-${tipo}`, role: "status" }, msg, botao);
+  fechar = () => { t.classList.remove("visivel"); setTimeout(() => t.remove(), 300); };
   document.body.append(t);
   requestAnimationFrame(() => t.classList.add("visivel"));
-  setTimeout(() => { t.classList.remove("visivel"); setTimeout(() => t.remove(), 300); }, 3500);
+  setTimeout(fechar, desfazer ? 7000 : 3500);
+}
+
+/** Fecha todos os modais abertos. */
+export const fecharModais = () => document.querySelectorAll(".modal-fundo").forEach((m) => m.remove());
+
+/** Escapa texto para montar HTML (exportações em PDF). */
+export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/** Baixa um arquivo (URL, data: URL ou Blob). */
+export function baixar(origem, nome) {
+  const href = origem instanceof Blob ? URL.createObjectURL(origem) : origem;
+  const a = el("a", { href, download: nome });
+  document.body.append(a); a.click(); a.remove();
+  if (origem instanceof Blob) setTimeout(() => URL.revokeObjectURL(href), 2000);
 }
 
 /* ---------------- Modal ---------------- */
@@ -98,9 +117,15 @@ export function confirmar(msg) {
  * campos: [{ nome, rotulo, tipo: text|textarea|date|time|number|select|checkbox|checklist|multi, opcoes, obrigatorio, dica, largura: "metade" }]
  * Resolve com os valores ou null se cancelado. extras = elementos adicionais (ex.: botão excluir).
  */
+const opcoesSelect = (opcoes = [], valor) => opcoes.map((o) => {
+  const [val, rot] = Array.isArray(o) ? o : [o, o];
+  return el("option", { value: val, selected: String(val) === String(valor ?? "") }, rot);
+});
+
 export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = [], rotuloSalvar = "Salvar", largo = false } = {}) {
   const entradas = {};
   const condicionais = []; // [{ c, elemento, entrada }] com c.mostrarSe(valores)
+  const dinamicos = []; // selects com c.opcoesDe(valores): opções mudam conforme outros campos
   const grade = el("div", { class: "form-grade" });
   for (const c of campos) {
     if (c.tipo === "secao") {
@@ -115,10 +140,8 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
       entrada = el("textarea", { rows: c.linhas || 4, placeholder: c.dica || "" });
       entrada.value = v;
     } else if (c.tipo === "select") {
-      entrada = el("select", {}, (c.opcoes || []).map((o) => {
-        const [val, rot] = Array.isArray(o) ? o : [o, o];
-        return el("option", { value: val, selected: String(val) === String(v) }, rot);
-      }));
+      entrada = el("select", {}, opcoesSelect(c.opcoesDe ? c.opcoesDe(valores) : c.opcoes, v));
+      if (c.opcoesDe) dinamicos.push({ c, entrada });
     } else if (c.tipo === "checkbox") {
       entrada = el("input", { type: "checkbox", checked: !!v });
     } else if (c.tipo === "multi") {
@@ -154,7 +177,15 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
     return out;
   };
   const atualizarVisiveis = () => {
-    const v = lerValores();
+    let v = lerValores();
+    for (const { c, entrada } of dinamicos) {
+      const opcoes = c.opcoesDe(v);
+      const assinatura = JSON.stringify(opcoes);
+      if (entrada.dataset.opcoes === assinatura) continue;
+      entrada.dataset.opcoes = assinatura;
+      entrada.replaceChildren(...opcoesSelect(opcoes, entrada.value));
+      v = lerValores();
+    }
     for (const { c, elemento, entrada } of condicionais) {
       const mostrar = !!c.mostrarSe(v);
       elemento.hidden = !mostrar;

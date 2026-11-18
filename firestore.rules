@@ -47,7 +47,17 @@ service cloud.firestore {
         allow read: if ativo();
         allow write: if admin() || pode('conteudo') || pode('trafego');
       }
+      // Marcas dentro do cliente (identidade de cada marca de um grupo)
+      match /marcas/{id} {
+        allow read: if ativo();
+        allow write: if admin() || pode('conteudo') || pode('trafego');
+      }
       match /tarefas/{id} { allow read, write: if ativo(); }
+      // Tarefas concluídas há mais de 90 dias: todos leem; só o administrador arquiva e mexe
+      match /tarefasArquivo/{id} {
+        allow read: if ativo();
+        allow write: if admin();
+      }
       match /compromissos/{id} { allow read, write: if ativo(); }
       match /recorrencias/{id} {
         allow read: if ativo();

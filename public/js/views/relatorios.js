@@ -1,7 +1,7 @@
 // Relatórios: o que foi entregue para cada cliente (ou para todos) num período,
 // com exportação em PDF para enviar ao cliente ou guardar.
-import { el, hojeISO, fmtData, fmtMoeda, vazio, avisar } from "../ui.js";
-import { dados, porId, opcoesClientes, nomeCliente, clientesAtivos } from "../db.js";
+import { el, hojeISO, fmtData, fmtMoeda, vazio, avisar, esc } from "../ui.js";
+import { dados, porId, opcoesClientes, nomeCliente, clientesAtivos, todasTarefas, garantirArquivo, carregarArquivo, limiteArquivo } from "../db.js";
 import { cabecalho, abas, corCliente } from "./componentes.js";
 import { TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
@@ -14,9 +14,11 @@ const soma = (l) => l.reduce((s, x) => s + (Number(x) || 0), 0);
 export function montarRelatorio(clienteId, de, ate) {
   const doCliente = (x) => !clienteId || x.clienteId === clienteId;
   const no = (d) => d && d >= de && d <= ate;
-  const posts = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && doCliente(t) && no(dataPost(t)));
+  garantirArquivo(de);
+  const tarefas = todasTarefas();
+  const posts = tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && doCliente(t) && no(dataPost(t)));
   const publicados = posts.filter((t) => t.statusConteudo === "publicado" || t.status === "concluido");
-  const tarefasFeitas = dados.tarefas.filter((t) => t.tipo !== TIPO_CONTEUDO && doCliente(t) && t.status === "concluido" && no(t.concluidoEm || t.prazo));
+  const tarefasFeitas = tarefas.filter((t) => t.tipo !== TIPO_CONTEUDO && doCliente(t) && t.status === "concluido" && no(t.concluidoEm || t.prazo));
   const manutencoes = dados.manutencoes.filter((m) => doCliente(m) && no(m.data)).sort((a, b) => a.data.localeCompare(b.data));
   const reunioes = compromissosEntre(de, ate).filter(({ c }) => doCliente(c));
   const receitas = dados.financeiro.filter((f) => f.tipo === "receita" && doCliente(f) && no(f.vencimento));
@@ -108,12 +110,12 @@ export function render({ estado, renderizar }) {
 }
 
 /* ---------------- PDF ---------------- */
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 export async function exportarRelatorioPDF(clienteId, de, ate) {
   const janela = window.open("", "_blank");
   if (!janela) { avisar("O navegador bloqueou a nova janela. Permita pop-ups para este site.", "erro"); return; }
   const cliente = porId("clientes", clienteId);
+  if (de < limiteArquivo()) await carregarArquivo();
   const r = montarRelatorio(clienteId, de, ate);
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
   let css = "";

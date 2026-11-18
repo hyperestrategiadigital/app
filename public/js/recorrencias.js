@@ -3,7 +3,8 @@
 // - producao:     toda semana, produzir os posts da SEMANA SEGUINTE do cliente
 // - planejamento: todo mês, planejar o MÊS SEGUINTE do cliente
 // - cobranca:     todo mês, cobrar a mensalidade no vencimento do cliente (ou X dias antes)
-import { dados, gravarEmLote, atualizar, porId, contrato } from "./db.js";
+import { dados, gravarEmLote, atualizar, porId, contrato, salvarComId } from "./db.js";
+import { pode } from "./permissoes.js";
 import { hojeISO, addDias, dataDe, normalizar, fmtData } from "./ui.js";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -47,7 +48,7 @@ export function ocorrencia(r, d) {
   if (r.modelo === "planejamento") {
     const mes = mesSeguinte(d);
     return { ...base, tipo: "Planejamento", titulo: `Planejar ${MESES[Number(mes.slice(5)) - 1]}${nome ? ` — ${nome}` : ""}`,
-      mesAlvo: mes, atalho: `#/planejamento/${r.clienteId}/${mes}`,
+      mesAlvo: mes, atalho: `#/calendario/${r.clienteId}/${mes}/planejar`,
       checklist: base.checklist.length ? base.checklist : [
         { texto: "Planejar os posts no calendário", feito: false },
         { texto: "Enviar o PDF para o cliente aprovar", feito: false },
@@ -56,8 +57,8 @@ export function ocorrencia(r, d) {
   if (r.modelo === "cobranca") {
     const mes = d.slice(0, 7);
     // Sem valor no título: tarefas são vistas pela equipe; o valor fica no Financeiro
-    return { ...base, tipo: "Financeiro", titulo: `Cobrar mensalidade ${MESES[Number(mes.slice(5)) - 1]}${nome ? ` — ${nome}` : ""}`,
-      atalho: "#/financeiro" };
+    return { ...base, tipo: "Financeiro / Comercial", titulo: `Cobrar mensalidade ${MESES[Number(mes.slice(5)) - 1]}${nome ? ` — ${nome}` : ""}`,
+      atalho: "#/financeiro", lancamentoId: `mens-${r.clienteId}-${mes}` };
   }
   return { ...base, tipo: r.tipo || "Outro", titulo: r.titulo };
 }
@@ -81,8 +82,35 @@ export async function gerarRecorrencias() {
       if (!jaExiste) novas.push(t);
     }
     if (novas.length) await gravarEmLote("tarefas", novas);
+    // Cobrança cria (se ainda não existe) a receita pendente do mês no Financeiro
+    for (const t of novas) if (t.lancamentoId) await garantirMensalidade(r.clienteId, t.prazo.slice(0, 7)).catch((e) => console.warn("Mensalidade:", e.message));
     await atualizar("recorrencias", r.id, { geradasAte: limite });
   }
+}
+
+/** Cria a receita "Mensalidade <mês>" do cliente (id mens-<cliente>-<mês>), se houver mensalidade no contrato. */
+export async function garantirMensalidade(clienteId, mes) {
+  const id = `mens-${clienteId}-${mes}`;
+  const c = contrato(clienteId);
+  if (!pode("financeiro") || !(Number(c.mensalidade) > 0) || dados.financeiro.some((f) => f.id === id)) return false;
+  const [a, m] = mes.split("-").map(Number);
+  const dia = String(Math.min(Number(c.diaVencimento) || 10, new Date(a, m, 0).getDate())).padStart(2, "0");
+  await salvarComId("financeiro", id, {
+    descricao: `Mensalidade ${MESES[m - 1]}`, tipo: "receita", categoria: "Mensalidade", clienteId,
+    valor: Number(c.mensalidade), vencimento: `${mes}-${dia}`, status: "pendente", pagoEm: null, criadoEm: Date.now()
+  });
+  return true;
+}
+
+/** Concluir a tarefa de cobrança marca a mensalidade como paga (e reabrir volta para pendente). */
+export const lancamentoDe = (t) => t?.lancamentoId || (t?.rotina === "cobranca" && t.clienteId && t.prazo ? `mens-${t.clienteId}-${t.prazo.slice(0, 7)}` : "");
+export async function quitarCobranca(t, pago) {
+  if (!lancamentoDe(t) || !pode("financeiro")) return;
+  const f = porId("financeiro", lancamentoDe(t));
+  if (!f || (f.status === "pago") === pago) return;
+  try {
+    await atualizar("financeiro", f.id, { status: pago ? "pago" : "pendente", pagoEm: pago ? hojeISO() : null });
+  } catch (e) { console.warn("Cobrança:", e.message); }
 }
 
 export function proximaData(r) {

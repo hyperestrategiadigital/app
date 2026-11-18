@@ -1,7 +1,10 @@
 // Peças reutilizadas entre telas: cartão e formulário de tarefa, selo de cliente.
-import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno } from "../ui.js";
-import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId } from "../db.js";
-import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo } from "../constantes.js";
+import { pode } from "../permissoes.js";
+import { abrirCriarArte } from "./criar.js";
+import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
+import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
+import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo } from "../db.js";
+import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
 import { promptCopy } from "../prompts.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
 import { abrirCompromisso } from "../compromissos.js";
@@ -22,11 +25,20 @@ export const atrasada = (t) => t.status !== "concluido" && t.prazo && t.prazo < 
 /** Cor que identifica o cliente: 1ª cor da paleta da marca ou a cor escolhida no cadastro. */
 export const corCliente = (c) => c?.paleta?.[0] || c?.cor || "#606060";
 
-export function seloCliente(clienteId) {
+/** Cor de um post/tarefa: a da marca (se tiver) ou a do cliente. */
+export const corDoItem = (t) => corCliente(porId("marcas", t?.marcaId) || porId("clientes", t?.clienteId));
+/** "Cliente" ou "Cliente · Marca". */
+export const nomeComMarca = (t) => {
+  const m = porId("marcas", t?.marcaId);
+  return m ? `${nomeCliente(t.clienteId)} · ${m.nome}` : nomeCliente(t?.clienteId);
+};
+
+/** Selo com o nome (e a cor) do cliente; passe a tarefa para mostrar também a marca. */
+export function seloCliente(clienteId, item) {
   if (!clienteId) return null;
   const c = porId("clientes", clienteId);
-  return el("a", { class: "selo-cliente", href: `#/clientes/${clienteId}`, onClick: (e) => e.stopPropagation(), style: c ? { "--selo": corCliente(c) } : undefined },
-    nomeCliente(clienteId));
+  return el("a", { class: "selo-cliente", href: `#/clientes/${clienteId}`, onClick: (e) => e.stopPropagation(), style: c ? { "--selo": item ? corDoItem(item) : corCliente(c) } : undefined },
+    item ? nomeComMarca(item) : nomeCliente(clienteId));
 }
 
 export function abrirTarefa(tarefa = {}) {
@@ -38,6 +50,9 @@ export function abrirTarefa(tarefa = {}) {
     { nome: "titulo", rotulo: "Tarefa / tema do post", obrigatorio: true, dica: "Ex.: Black Week — plano anual" },
     { nome: "clienteId", rotulo: "Cliente", tipo: "select", opcoes: opcoesClientes(), largura: "metade" },
     { nome: "tipo", rotulo: "Tipo", tipo: "select", opcoes: TIPOS_TAREFA, largura: "metade" },
+    { nome: "marcaId", rotulo: "Marca", tipo: "select", largura: "metade",
+      opcoesDe: (v) => [["", "Marca principal do cliente"], ...marcasDo(v.clienteId).map((m) => [m.id, m.nome])],
+      mostrarSe: (v) => marcasDo(v.clienteId).length > 0 },
 
     { tipo: "secao", rotulo: "Post (aparece no calendário de conteúdo)", mostrarSe: conteudo },
     { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: "Feed estático", largura: "metade", mostrarSe: conteudo },
@@ -51,7 +66,7 @@ export function abrirTarefa(tarefa = {}) {
 
     { tipo: "secao", rotulo: "Tarefa" },
     { nome: "responsavel", rotulo: "Responsável", tipo: "select", opcoes: opcoesResponsaveis(tarefa.responsavel), padrao: opcoesResponsaveis()[0], largura: "metade" },
-    { nome: "status", rotulo: "Status", tipo: "select", opcoes: STATUS_TAREFA, padrao: "a_fazer", largura: "metade" },
+    { nome: "status", rotulo: "Status", tipo: "select", opcoes: STATUS_TAREFA, padrao: "a_fazer", largura: "metade", mostrarSe: (v) => !conteudo(v) },
     { nome: "prazo", rotulo: "Prazo de entrega", tipo: "date", padrao: hojeISO(), largura: "metade" },
     { nome: "checklist", rotulo: "Checklist", tipo: "checklist" },
     { nome: "linkCanva", rotulo: "Link do Canva (criativo)", dica: "https://www.canva.com/design/...", largura: "metade" },
@@ -78,9 +93,10 @@ export function abrirTarefa(tarefa = {}) {
       type: "button", class: "perigo-texto",
       onClick: async () => {
         if (await confirmar(`Excluir "${tarefa.titulo}"?`)) {
-          await excluir("tarefas", tarefa.id);
-          document.querySelector(".modal-fundo")?.remove();
-          avisar("Tarefa excluída.");
+          const { id, ...copia } = porId("tarefas", tarefa.id) || tarefa;
+          await excluir("tarefas", id);
+          fecharModais();
+          avisar("Tarefa excluída.", "ok", { desfazer: () => salvarComId("tarefas", id, copia) });
         }
       }
     }, "Excluir") : null
@@ -95,12 +111,12 @@ export function abrirTarefa(tarefa = {}) {
   if (form) form.querySelector(".acoes").before(secaoCriativos(tarefa));
   // Rotina "Produzir semana": mostra ao vivo os posts da semana seguinte do cliente
   if (form && tarefa.semanaInicio) form.querySelector(".acoes").before(secaoSemana(tarefa));
-  if (form && tarefa.atalho) form.querySelector(".acoes").prepend(el("a", { class: "botao-link secundario mini", href: tarefa.atalho, onClick: () => document.querySelector(".modal-fundo")?.remove() },
+  if (form && tarefa.atalho) form.querySelector(".acoes").prepend(el("a", { class: "botao-link secundario mini", href: tarefa.atalho, onClick: () => fecharModais() },
     tarefa.rotina === "planejamento" ? "☷ Abrir planejamento" : tarefa.rotina === "cobranca" ? "$ Abrir financeiro" : "▦ Abrir calendário"));
   // Reunião não é tarefa: vira compromisso (calendário de compromissos + Google Agenda)
   const virarCompromisso = async () => {
     const v = form.lerValores();
-    document.querySelector(".modal-fundo")?.remove();
+    fecharModais();
     const salvo = await abrirCompromisso({ titulo: v.titulo, clienteId: v.clienteId, data: v.prazo || hojeISO(), descricao: v.notas, tipo: "Reunião" });
     if (salvo && tarefa.id) await excluir("tarefas", tarefa.id);
   };
@@ -124,7 +140,7 @@ function secaoSemana(tarefa) {
     .sort((a, b) => a.d.localeCompare(b.d));
   return el("div", { class: "semana-producao" },
     el("h3", { class: "form-secao" }, `Posts de ${fmtData(tarefa.semanaInicio, true)} a ${fmtData(fim, true)} (${posts.length})`),
-    posts.length ? posts.map(({ t, d }) => el("button", { type: "button", class: "linha-tabela", onClick: () => { document.querySelector(".modal-fundo")?.remove(); abrirTarefa(t); } },
+    posts.length ? posts.map(({ t, d }) => el("button", { type: "button", class: "linha-tabela", onClick: () => { fecharModais(); abrirTarefa(t); } },
       el("span", { class: "data-mini" }, fmtData(d, true)), el("strong", {}, `${t.formato || "Post"} | ${t.titulo}`),
       el("span", { class: `etiqueta st-${t.statusConteudo || "ideia"}` }, rotuloStatusConteudo(t.statusConteudo || "ideia")),
       t.qtdArtes ? el("span", { class: "progresso-mini" }, `🖼 ${t.qtdArtes}`) : null))
@@ -160,7 +176,7 @@ function secaoCriativos(tarefa) {
   carregar();
   caixa.append(lista, el("div", { class: "acoes-criativos" },
     el("label", { class: "botao-link secundario mini" }, "📎 Anexar criativo final", entrada),
-    el("a", { class: "botao-link secundario mini", href: `#/criar/${tarefa.id}`, onClick: () => document.querySelector(".modal-fundo")?.remove() }, "🎨 Gerar imagem no Criar")));
+    el("button", { type: "button", class: "secundario mini", onClick: () => { fecharModais(); abrirCriarArte(porId("tarefas", tarefa.id) || tarefa); } }, "✦ Criar arte (imagem + Canva)")));
   return caixa;
 }
 
@@ -170,23 +186,33 @@ export async function salvarTarefa(original, v) {
     for (const k of ["formato", "rede", "dataPublicacao", "hora", "statusConteudo", "objetivo", "roteiro", "copy"]) delete v[k];
   } else {
     if (!v.prazo) v.prazo = v.dataPublicacao;
-    if (v.statusConteudo === "publicado" && v.status !== "concluido") v.status = "concluido";
+    v.statusConteudo ||= "ideia";
+    v.status = statusDaEtapa(v.statusConteudo);
   }
   if (v.status === "concluido" && original.status !== "concluido") v.concluidoEm = hojeISO();
   if (v.status !== "concluido") v.concluidoEm = null;
   if (original.id) await atualizar("tarefas", original.id, v);
   else await criar("tarefas", v);
+  if (original.id && (v.status === "concluido") !== (original.status === "concluido")) await quitarCobranca(original, v.status === "concluido");
   avisar(original.id ? "Salvo." : v.tipo === TIPO_CONTEUDO ? "Post criado e adicionado ao calendário." : "Tarefa criada.");
 }
 
 export async function alternarConcluida(t) {
   const concluir = t.status !== "concluido";
+  const post = ehConteudo(t);
   await atualizar("tarefas", t.id, {
-    status: concluir ? "concluido" : "a_fazer",
+    status: concluir ? "concluido" : post ? "andamento" : "a_fazer",
+    ...(post ? { statusConteudo: concluir ? "publicado" : "agendado" } : {}),
     concluidoEm: concluir ? hojeISO() : null,
     checklist: concluir && t.checklist?.length ? t.checklist.map((i) => ({ ...i, feito: true })) : (t.checklist || [])
   });
-  if (concluir) avisar("Concluída! ✓");
+  await quitarCobranca(t, concluir);
+  if (concluir) avisar(lancamentoDe(t) && pode("financeiro") ? "Concluída! Mensalidade marcada como paga ✓" : "Concluída! ✓", "ok", {
+    desfazer: async () => {
+      await quitarCobranca(t, false);
+      await atualizar("tarefas", t.id, { status: t.status || "a_fazer", concluidoEm: t.concluidoEm || null, checklist: t.checklist || [], ...(post ? { statusConteudo: t.statusConteudo || "ideia" } : {}) });
+    }
+  });
 }
 
 export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
@@ -203,7 +229,7 @@ export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
     el("div", { class: "cartao-corpo" },
       el("div", { class: "cartao-titulo" }, t.titulo),
       el("div", { class: "cartao-meta" },
-        mostrarCliente ? seloCliente(t.clienteId) : null,
+        mostrarCliente ? seloCliente(t.clienteId, t) : t.marcaId ? el("span", { class: "etiqueta" }, porId("marcas", t.marcaId)?.nome || "") : null,
         ehConteudo(t) ? el("span", { class: "etiqueta formato" }, `${t.formato || "Post"}${t.dataPublicacao ? " · " + fmtData(t.dataPublicacao, true) : ""}`) : t.tipo ? el("span", { class: "etiqueta" }, t.tipo) : null,
         ehConteudo(t) && t.statusConteudo ? el("span", { class: `etiqueta st-${t.statusConteudo}` }, rotuloStatusConteudo(t.statusConteudo)) : null,
         t.status === "andamento" ? el("span", { class: "etiqueta andamento" }, "Em andamento") : null,

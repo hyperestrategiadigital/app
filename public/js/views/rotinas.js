@@ -1,6 +1,6 @@
 // Rotinas: lembretes que viram tarefas sozinhos na agenda, seguindo o ritmo da Hyper
 // (produzir a semana seguinte, planejar o mês seguinte, cobrar no vencimento).
-import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtDiaSemana, vazio, normalizar } from "../ui.js";
+import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtDiaSemana, vazio, normalizar, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, clientesAtivos, contrato } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { TIPOS_TAREFA, DIAS_SEMANA } from "../constantes.js";
@@ -84,7 +84,7 @@ function editarRotina(r) {
   return formulario(novo ? "Nova rotina" : `${MODELOS[modelo].titulo}${r.clienteId ? ` · ${nomeCliente(r.clienteId)}` : ""}`, campos, valores, {
     largo: modelo === "livre",
     extras: novo ? [] : [el("button", { type: "button", class: "perigo-texto", onClick: async () => {
-      if (await confirmar("Excluir esta rotina? As tarefas já criadas continuam.")) { await excluir("recorrencias", r.id); document.querySelector(".modal-fundo")?.remove(); }
+      if (await confirmar("Excluir esta rotina? As tarefas já criadas continuam.")) { await excluir("recorrencias", r.id); fecharModais(); }
     } }, "Excluir")],
     aoSalvar: async (v) => {
       if (v.diaSemana !== undefined) v.diaSemana = String(v.diaSemana);

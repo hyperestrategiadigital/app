@@ -1,8 +1,9 @@
 // Calendário de conteúdo: cada post é uma tarefa do tipo Conteúdo. Mostra o mês com a cor e o nome
 // do cliente em cada post, filtros, planejamento e exportação para aprovação do cliente.
+import * as planejamento from "./planejamento.js";
 import { el, hojeISO, addDias, fmtData, vazio, formulario } from "../ui.js";
-import { dados, porId, opcoesClientes, nomeCliente } from "../db.js";
-import { cabecalho, abas, seloCliente, abrirTarefa, corCliente } from "./componentes.js";
+import { dados, marcasDo, porId, opcoesClientes, nomeCliente } from "../db.js";
+import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca } from "./componentes.js";
 import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost, exportarPDF, nomeMes } from "../exportacao.js";
 import { abrirCompromisso, rotuloCompromisso, avisoPendentes } from "../compromissos.js";
@@ -18,9 +19,9 @@ const ICONE_FORMATO = {
 export { corCliente };
 
 /** Abre um novo post no calendário (tarefa do tipo Conteúdo). */
-export function novoPost({ data = hojeISO(), clienteId = "" } = {}) {
+export function novoPost({ data = hojeISO(), clienteId = "", marcaId = "" } = {}) {
   const prazo = addDias(data, -1) < hojeISO() ? hojeISO() : addDias(data, -1);
-  return abrirTarefa({ tipo: TIPO_CONTEUDO, dataPublicacao: data, prazo, clienteId, statusConteudo: "ideia" });
+  return abrirTarefa({ tipo: TIPO_CONTEUDO, dataPublicacao: data, prazo, clienteId, marcaId, statusConteudo: "ideia" });
 }
 
 /** Pergunta cliente e mês quando a ação precisa de um só cliente. */
@@ -49,11 +50,11 @@ function escolherNoDia(data, clienteId) {
 function chip(t) {
   const cli = porId("clientes", t.clienteId);
   return el("button", {
-    class: `chip-conteudo st-${t.statusConteudo || "ideia"}`, style: { "--selo": corCliente(cli) },
-    title: `${nomeCliente(t.clienteId)} · ${t.formato || "Post"} · ${t.titulo} · ${rotuloStatusConteudo(t.statusConteudo || "ideia")}`,
+    class: `chip-conteudo st-${t.statusConteudo || "ideia"}`, style: { "--selo": corDoItem(t) },
+    title: `${nomeComMarca(t)} · ${t.formato || "Post"} · ${t.titulo} · ${rotuloStatusConteudo(t.statusConteudo || "ideia")}`,
     onClick: (e) => { e.stopPropagation(); abrirTarefa(t); }
   },
-  el("span", { class: "chip-cliente" }, cli ? cli.nome : "Sem cliente"),
+  el("span", { class: "chip-cliente" }, cli ? nomeComMarca(t) : "Sem cliente"),
   el("span", { class: "chip-linha" },
     el("span", { class: "chip-icone", "aria-hidden": "true" }, ICONE_FORMATO[t.formato] || "•"),
     t.hora ? el("small", {}, t.hora) : null,
@@ -62,6 +63,13 @@ function chip(t) {
 }
 
 export function render({ params, estado, renderizar }) {
+  // Modo planejar: #/calendario/<cliente>/<mês>/planejar
+  if (params[2] === "planejar" && params[0] && pode("conteudo")) {
+    estado.cliente = params[0];
+    if (/^\d{4}-\d{2}$/.test(params[1] || "")) estado.mes = params[1];
+    estado.plano ??= {};
+    return planejamento.render({ params: [params[0], estado.mes], estado: estado.plano, renderizar });
+  }
   // Atalho #/calendario/<cliente>/<mês> (ex.: rotina "Produzir semana")
   const chaveParams = params.join("/");
   if (params.length && estado.params !== chaveParams) {
@@ -77,8 +85,11 @@ export function render({ params, estado, renderizar }) {
   const verCompromissos = estado.camada !== "conteudo";
   const [ano, mes] = estado.mes.split("-").map(Number);
   const posts = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && dataPost(t));
+  const marcas = estado.cliente ? marcasDo(estado.cliente) : [];
+  if (!marcas.length) estado.marca = null;
   const filtrados = posts.filter((t) =>
     (!estado.cliente || t.clienteId === estado.cliente) &&
+    (estado.marca == null || (t.marcaId || "") === estado.marca) &&
     (!estado.status || (t.statusConteudo || "ideia") === estado.status));
 
   const mudarMes = (n) => { const d = new Date(ano, mes - 1 + n, 1); estado.mes = hojeISO(d).slice(0, 7); renderizar(); };
@@ -104,13 +115,18 @@ export function render({ params, estado, renderizar }) {
   };
 
   const filtros = el("div", { class: "filtros" },
+    estado.cliente && pode("conteudo") ? abas([["ver", "Calendário"], ["planejar", "Planejar mês"]], "ver",
+      () => (location.hash = planejamento.linkPlano(estado.cliente, estado.mes))) : null,
     el("div", { class: "navegador-mes" },
       el("button", { class: "icone", "aria-label": "Mês anterior", onClick: () => mudarMes(-1) }, "‹"),
       el("strong", {}, nomeMes(estado.mes)),
       el("button", { class: "icone", "aria-label": "Próximo mês", onClick: () => mudarMes(1) }, "›"),
       el("button", { class: "secundario mini", onClick: () => { estado.mes = hojeISO().slice(0, 7); renderizar(); } }, "Hoje")),
-    el("select", { onChange: set("cliente"), "aria-label": "Cliente" },
+    el("select", { onChange: (e) => { estado.cliente = e.target.value; estado.marca = null; renderizar(); }, "aria-label": "Cliente" },
       opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (estado.cliente || "") }, v ? r : "Todos os clientes"))),
+    marcas.length ? el("select", { "aria-label": "Marca", onChange: (e) => { estado.marca = e.target.value === "*" ? null : e.target.value; renderizar(); } },
+      [["*", "Todas as marcas"], ["", "Marca principal"], ...marcas.map((m) => [m.id, m.nome])]
+        .map(([v, r]) => el("option", { value: v, selected: v === (estado.marca ?? "*") }, r))) : null,
     !pode("conteudo") ? null : el("select", { onChange: set("status"), "aria-label": "Etapa" },
       el("option", { value: "" }, "Todas as etapas"), STATUS_CONTEUDO.map(([v, r]) => el("option", { value: v, selected: v === estado.status }, r))),
     pode("conteudo") ? abas([["tudo", "Tudo"], ["conteudo", "Conteúdo"], ["compromissos", "Compromissos"]], estado.camada, (m) => { estado.camada = m; renderizar(); }) : null,
@@ -135,7 +151,7 @@ export function render({ params, estado, renderizar }) {
         return el("div", {
           class: `cal-dia ${d.slice(0, 7) !== estado.mes ? "fora" : ""} ${d === hoje ? "hoje" : ""}`,
           onClick: () => estado.camada === "compromissos" ? abrirCompromisso({ data: d, clienteId: estado.cliente || "" })
-            : estado.camada === "conteudo" ? novoPost({ data: d, clienteId: estado.cliente || "" }) : escolherNoDia(d, estado.cliente || ""),
+            : estado.camada === "conteudo" ? novoPost({ data: d, clienteId: estado.cliente || "", marcaId: estado.marca || "" }) : escolherNoDia(d, estado.cliente || ""),
           title: "Clique para criar neste dia"
         }, el("span", { class: "cal-num" }, Number(d.slice(8))), comps.map(chipCompromisso), doDia.map(chip));
       }));
@@ -152,7 +168,7 @@ export function render({ params, estado, renderizar }) {
         x.c.googleEventId ? el("span", { class: "etiqueta ok" }, "Google Agenda ✓") : null)
       : el("div", { class: "linha-tabela", onClick: () => abrirTarefa(t) },
         el("span", { class: "data-mini" }, `${fmtData(dataPost(t), true)}${t.hora ? " " + t.hora : ""}`),
-        seloCliente(t.clienteId), el("strong", {}, t.titulo),
+        seloCliente(t.clienteId, t), el("strong", {}, t.titulo),
         el("span", { class: "etiqueta" }, `${t.formato || "Post"} · ${t.rede || ""}`),
         el("span", { class: `etiqueta st-${t.statusConteudo || "ideia"}` }, rotuloStatusConteudo(t.statusConteudo || "ideia")),
         t.copy ? el("span", { class: "etiqueta ok" }, "copy ✓") : el("span", { class: "etiqueta" }, "sem copy")))
@@ -162,10 +178,10 @@ export function render({ params, estado, renderizar }) {
   return el("div", { class: "tela" },
     cabecalho("Calendário",
       !pode("conteudo") ? "Seus compromissos e reuniões" : contagem.length ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para criar um post",
-      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = `#/planejamento/${c}/${m}`), "Planejar mês") }, "☷ Planejar mês") : null,
-      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente(exportarPDF, "Exportar PDF") }, "⬇ PDF para o cliente") : null,
+      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = planejamento.linkPlano(c, m)), "Planejar mês") }, "☷ Planejar mês") : null,
+      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => exportarPDF(c, m, estado.cliente === c ? estado.marca ?? undefined : undefined), "Exportar PDF") }, "⬇ PDF para o cliente") : null,
       el("button", { class: "secundario", onClick: () => abrirCompromisso({ clienteId: estado.cliente || "" }) }, "+ Compromisso"),
-      pode("conteudo") ? el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "" }) }, "+ Novo post") : null),
+      pode("conteudo") ? el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "", marcaId: estado.marca || "" }) }, "+ Novo post") : null),
     verCompromissos ? avisoPendentes() : null,
     filtros, verPosts ? legenda : null, corpo,
     el("p", { class: "nota" }, "Posts são tarefas do tipo Conteúdo e nunca vão para a sua agenda pessoal. Compromissos (◷) são reuniões, gravações e visitas: esses podem ir para a Google Agenda. Para exportar ou planejar, filtre um cliente ou escolha na hora."));
