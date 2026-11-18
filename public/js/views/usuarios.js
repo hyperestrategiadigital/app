@@ -1,66 +1,186 @@
-// Usuários (só administradores): quem pediu acesso, quem já está no espaço e o que cada um pode ver.
-// Toda pessoa entra como "básico" e o administrador libera as áreas aqui.
-import { el, avisar, confirmar, hojeISO, vazio } from "../ui.js";
-import { dados, atualizar, excluir, espacoInfo, salvarComId } from "../db.js";
-import { cabecalho, iniciais } from "./componentes.js";
+// Usuários e equipe (só administradores; qualquer administrador gerencia): pedidos de acesso,
+// convites por e-mail, quem está no espaço, o que cada um pode ver (áreas e clientes) e a equipe sem conta.
+// Toda pessoa entra como "básico"; pelo convite, já entra com o acesso definido aqui.
+import { el, avisar, confirmar, hojeISO, vazio, formulario } from "../ui.js";
+import { dados, atualizar, excluir, espacoInfo, salvarComId, listarConvites, salvarConvite, excluirConvite } from "../db.js";
+import { cabecalho, avatar } from "./componentes.js";
 import { AREAS, eu, rotuloArea } from "../permissoes.js";
+import { descreverPedido } from "./conta.js";
+import { emailConvite, emailLiberado, emailMaisAcesso, emailAtivo, sincronizarAdmins } from "../emails.js";
 
-function cartaoMembro(m) {
-  const ehDono = m.id === espacoInfo.dono;
-  const souEu = m.id === eu.uid;
-  const marcado = new Set(m.permissoes || []);
-  let admin = m.papel === "admin";
+const clientesOrdenados = () => [...dados.clientes].filter((c) => c.ativo !== false).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+const nomesDe = (ids = []) => ids.map((id) => dados.clientes.find((c) => c.id === id)?.nome).filter(Boolean);
+
+/** Controles de acesso (administrador, áreas, clientes) reaproveitados no cartão e no convite. */
+function editorAcesso(inicial, { travarAdmin = false } = {}) {
+  let admin = inicial.papel === "admin";
+  const marcado = new Set(inicial.permissoes || []);
   const checks = AREAS.map(([v, r, desc]) => {
     const c = el("input", { type: "checkbox", value: v, checked: admin || marcado.has(v), disabled: admin });
     return el("label", { class: "chip-check", title: desc }, c, r);
   });
-  const caixaAdmin = el("input", { type: "checkbox", checked: admin, disabled: ehDono });
-  caixaAdmin.addEventListener("change", () => {
-    admin = caixaAdmin.checked;
+  const caixaAdmin = el("input", { type: "checkbox", checked: admin, disabled: travarAdmin });
+  const modo = el("select", { "aria-label": "Clientes" },
+    el("option", { value: "todos", selected: (inicial.acessoClientes || "todos") !== "alguns" }, "Todos os clientes"),
+    el("option", { value: "alguns", selected: inicial.acessoClientes === "alguns" }, "Só alguns clientes"));
+  const escolhidos = new Set(inicial.clientes || []);
+  const listaClientes = el("div", { class: "multi lista-clientes-acesso" }, clientesOrdenados().map((c) =>
+    el("label", { class: "chip-check" }, el("input", { type: "checkbox", value: c.id, checked: escolhidos.has(c.id) }), c.nome)));
+  const blocoClientes = el("div", { class: "campo" }, el("span", {}, "Clientes que pode ver"), modo, listaClientes);
+  const atualizarVisao = () => {
     checks.forEach((l) => { const i = l.querySelector("input"); i.disabled = admin; if (admin) i.checked = true; });
-  });
-  const salvar = async (botao) => {
+    blocoClientes.hidden = admin;
+    listaClientes.hidden = modo.value !== "alguns";
+  };
+  caixaAdmin.addEventListener("change", () => { admin = caixaAdmin.checked; atualizarVisao(); });
+  modo.addEventListener("change", atualizarVisao);
+  atualizarVisao();
+  return {
+    elemento: el("div", { class: "membro-acessos" },
+      el("label", { class: "chip-check destaque-admin" }, caixaAdmin, "Administrador (tudo, inclusive usuários)"),
+      el("div", { class: "multi" }, checks),
+      blocoClientes),
+    ler: () => {
+      if (admin) return { papel: "admin", permissoes: AREAS.map(([v]) => v), acessoClientes: "todos", clientes: [] };
+      const alguns = modo.value === "alguns";
+      return {
+        papel: "basico",
+        permissoes: checks.map((l) => l.querySelector("input")).filter((i) => i.checked).map((i) => i.value),
+        acessoClientes: alguns ? "alguns" : "todos",
+        clientes: alguns ? [...listaClientes.querySelectorAll("input:checked")].map((i) => i.value) : []
+      };
+    }
+  };
+}
+
+/** Junta ao acesso atual o que a pessoa pediu (para o administrador só conferir e salvar). */
+function comPedido(m) {
+  const p = m.pedido || {};
+  if (p.admin) return { ...m, papel: "admin" };
+  return {
+    ...m,
+    permissoes: [...new Set([...(m.permissoes || []), ...(p.areas || [])])],
+    acessoClientes: p.todosClientes ? "todos" : m.acessoClientes,
+    clientes: [...new Set([...(m.clientes || []), ...(p.clientes || [])])]
+  };
+}
+
+function cartaoMembro(m) {
+  const ehDono = m.id === espacoInfo.dono;
+  const souEu = m.id === eu.uid;
+  const pendente = m.status === "pendente";
+  const temPedido = !!m.pedido;
+  // Pedido de mais acesso: já vem marcado com o que foi pedido
+  const editor = editorAcesso(temPedido ? comPedido(m) : m, { travarAdmin: ehDono });
+  const salvar = async (botao, { aprovarPedido = false } = {}) => {
     botao.disabled = true;
-    const permissoes = admin ? AREAS.map(([v]) => v) : checks.map((l) => l.querySelector("input")).filter((i) => i.checked).map((i) => i.value);
+    const acesso = editor.ler();
+    if (acesso.acessoClientes === "alguns" && !acesso.clientes.length && !(await confirmar("Nenhum cliente marcado: a pessoa não vai ver nenhum cliente. Salvar assim?"))) { botao.disabled = false; return; }
     try {
-      await atualizar("membros", m.id, { papel: admin ? "admin" : "basico", permissoes, status: "ativo", liberadoPor: eu.email, liberadoEm: hojeISO() });
-      avisar(`Acessos de ${m.nome || m.email} salvos.`);
+      await atualizar("membros", m.id, { ...acesso, status: "ativo", liberadoPor: eu.email, liberadoEm: hojeISO(), ...(aprovarPedido || pendente ? { pedido: null } : {}) });
+      const dados_ = { ...m, ...acesso, nomesClientes: nomesDe(acesso.clientes) };
+      let enviado = false;
+      if (pendente) enviado = await emailLiberado(dados_).catch((e) => { avisar(e.message, "erro"); return false; });
+      else if (aprovarPedido) enviado = await emailMaisAcesso(dados_, true).catch(() => false);
+      avisar(`${pendente ? "Acesso liberado" : aprovarPedido ? "Pedido aprovado" : "Acessos salvos"} para ${m.nome || m.email}.${enviado ? " Avisamos por e-mail." : ""}`);
     } catch (e) { avisar(e.message, "erro"); }
     botao.disabled = false;
   };
-  const pendente = m.status === "pendente";
-  return el("article", { class: `cartao-membro ${pendente ? "pendente" : ""}` },
+  const etiqueta = pendente ? ["alerta", "Aguardando liberação"] : temPedido ? ["alerta", "Pediu mais acesso"]
+    : m.papel === "admin" || ehDono ? ["compromisso", "Administrador"]
+    : ["ok", [(m.permissoes || []).length ? m.permissoes.map(rotuloArea).join(" · ") : "Básico", m.acessoClientes === "alguns" ? `${(m.clientes || []).length} cliente(s)` : null].filter(Boolean).join(" · ")];
+  return el("article", { class: `cartao-membro ${pendente || temPedido ? "pendente" : ""}` },
     el("div", { class: "membro-topo" },
-      el("span", { class: "avatar grande" }, iniciais(m.nome || m.email)),
+      avatar(m, { grande: true }),
       el("div", {},
         el("strong", {}, m.nome || "(sem nome)", souEu ? " (você)" : "", ehDono ? " · dono do espaço" : ""),
         el("div", { class: "subtitulo" }, m.email),
-        pendente && m.funcoesPedidas?.length ? el("div", { class: "subtitulo" }, "Pediu: ", m.funcoesPedidas.map((f) => f === "admin" ? "Administração" : rotuloArea(f)).join(", ")) : null),
-      el("span", { class: `etiqueta ${pendente ? "alerta" : admin ? "compromisso" : "ok"}` },
-        pendente ? "Aguardando liberação" : admin ? "Administrador" : (m.permissoes || []).length ? (m.permissoes || []).map(rotuloArea).join(" · ") : "Básico")),
-    el("div", { class: "membro-acessos" },
-      el("label", { class: "chip-check destaque-admin" }, caixaAdmin, "Administrador (tudo, inclusive usuários)"),
-      el("div", { class: "multi" }, checks)),
+        m.pedido ? el("div", { class: "pedido-texto" }, el("strong", {}, pendente ? "Pediu: " : "Pede agora: "), descreverPedido(m.pedido)) : null,
+        !m.pedido && m.funcoesPedidas?.length ? el("div", { class: "subtitulo" }, "Pediu: ", m.funcoesPedidas.map((f) => f === "admin" ? "Administração" : rotuloArea(f)).join(", ")) : null),
+      el("span", { class: `etiqueta ${etiqueta[0]}` }, etiqueta[1])),
+    ehDono ? el("p", { class: "subtitulo" }, "O dono do espaço é sempre administrador.") : editor.elemento,
     el("div", { class: "acoes" },
-      el("button", { class: pendente ? "destaque" : "", onClick: (e) => salvar(e.currentTarget) }, pendente ? "Liberar acesso" : "Salvar acessos"),
+      ehDono ? null : pendente
+        ? el("button", { class: "destaque", onClick: (e) => salvar(e.currentTarget) }, "Liberar acesso")
+        : temPedido
+          ? [el("button", { class: "destaque", onClick: (e) => salvar(e.currentTarget, { aprovarPedido: true }) }, "Aprovar pedido"),
+            el("button", { class: "secundario", onClick: async () => {
+              await atualizar("membros", m.id, { pedido: null });
+              await emailMaisAcesso(m, false).catch(() => {});
+              avisar("Pedido recusado.");
+            } }, "Recusar pedido")]
+          : el("button", { onClick: (e) => salvar(e.currentTarget) }, "Salvar acessos"),
       el("span", { class: "espaco" }),
       !ehDono && !souEu ? el("button", { class: "perigo-texto", onClick: async () => {
-        if (await confirmar(`Remover ${m.nome || m.email} do espaço? A pessoa perde o acesso na hora (os dados continuam).`)) {
-          await excluir("membros", m.id); avisar("Usuário removido.");
+        if (await confirmar(pendente ? `Recusar o pedido de ${m.nome || m.email}?` : `Remover ${m.nome || m.email} do espaço? A pessoa perde o acesso na hora (os dados continuam).`)) {
+          await excluir("membros", m.id); avisar(pendente ? "Pedido recusado." : "Usuário removido.");
         }
-      } }, "Remover do espaço") : null));
+      } }, pendente ? "Recusar" : "Remover do espaço") : null));
 }
 
-export function render() {
-  const membros = [...dados.membros].sort((a, b) => (a.status === "pendente" ? 0 : 1) - (b.status === "pendente" ? 0 : 1) || (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
-  const pendentes = membros.filter((m) => m.status === "pendente").length;
+/* ---------------- Convites ---------------- */
+
+let convites = null; // carregados sob demanda (não ficam ouvindo)
+async function recarregarConvites(renderizar) {
+  try { convites = await listarConvites(); } catch (e) { convites = []; console.warn("Convites:", e.message); }
+  renderizar();
+}
+
+function abrirConvite(renderizar, inicial = {}) {
+  const editor = editorAcesso(inicial);
+  return formulario(inicial.email ? `Convite · ${inicial.nome || inicial.email}` : "Adicionar usuário", [
+    { nome: "nome", rotulo: "Nome", obrigatorio: true, largura: "metade" },
+    { nome: "email", rotulo: "E-mail (conta Google da pessoa)", tipo: "email", obrigatorio: true, largura: "metade", dica: "nome@gmail.com" }
+  ], inicial, {
+    largo: true, rotuloSalvar: emailAtivo() ? "Adicionar e enviar e-mail" : "Adicionar",
+    depois: el("div", { class: "campo" }, el("span", {}, "Acesso"), editor.elemento),
+    aoSalvar: async (v) => {
+      const email = v.email.trim().toLowerCase();
+      if (dados.membros.some((m) => (m.email || "").toLowerCase() === email)) throw new Error("Esse e-mail já está no espaço. Ajuste o acesso no cartão da pessoa.");
+      const convite = { nome: v.nome, email, ...editor.ler() };
+      await salvarConvite(convite);
+      if (inicial.email && inicial.email !== email) await excluirConvite(inicial.email);
+      const enviado = await emailConvite({ ...convite, nomesClientes: nomesDe(convite.clientes) }).catch((e) => { avisar("Convite salvo, mas o e-mail falhou: " + e.message, "erro"); return null; });
+      if (enviado !== null) avisar(enviado ? `Convite enviado para ${email}.` : `${v.nome} adicionado. Avise para entrar com ${email} (e-mails automáticos estão desligados em Ajustes).`);
+      recarregarConvites(renderizar);
+    }
+  });
+}
+
+function blocoConvites(renderizar) {
+  if (convites === null) { recarregarConvites(renderizar); return null; }
+  if (!convites.length) return null;
+  return el("section", { class: "bloco" },
+    el("h2", {}, `Convites aguardando o primeiro acesso (${convites.length})`),
+    el("p", { class: "subtitulo" }, "Quando a pessoa entrar com esse e-mail, ela já entra com o acesso definido."),
+    convites.map((c) => el("div", { class: "linha-tabela" },
+      el("strong", {}, c.nome || c.email), el("span", {}, c.email),
+      el("span", { class: "etiqueta" }, c.papel === "admin" ? "Administrador" : [(c.permissoes || []).map(rotuloArea).join(", ") || "Básico", c.acessoClientes === "alguns" ? `${(c.clientes || []).length} cliente(s)` : null].filter(Boolean).join(" · ")),
+      el("span", { class: "espaco" }),
+      emailAtivo() ? el("button", { class: "link", onClick: async () => {
+        try { await emailConvite({ ...c, nomesClientes: nomesDe(c.clientes) }); avisar("E-mail reenviado."); } catch (e) { avisar(e.message, "erro"); }
+      } }, "Reenviar e-mail") : null,
+      el("button", { class: "link", onClick: () => abrirConvite(renderizar, c) }, "Editar"),
+      el("button", { class: "perigo-texto", onClick: async () => {
+        if (await confirmar(`Cancelar o convite de ${c.email}?`)) { await excluirConvite(c.email); recarregarConvites(renderizar); }
+      } }, "Cancelar"))));
+}
+
+export function render({ renderizar }) {
+  sincronizarAdmins().catch((e) => console.warn("Admins no script de e-mail:", e.message));
+  const ordem = (m) => (m.status === "pendente" ? 0 : m.pedido ? 1 : 2);
+  const membros = [...dados.membros].sort((a, b) => ordem(a) - ordem(b) || (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+  const pendentes = membros.filter((m) => m.status === "pendente" || m.pedido).length;
   return el("div", { class: "tela" },
-    cabecalho("Usuários e equipe", pendentes ? `${pendentes} pedido(s) de acesso aguardando você` : `${membros.length} pessoa(s) no espaço da Hyper`),
+    cabecalho("Usuários e equipe", pendentes ? `${pendentes} pedido(s) aguardando um administrador` : `${membros.length} pessoa(s) no espaço da Hyper`,
+      el("button", { class: "destaque", onClick: () => abrirConvite(renderizar) }, "+ Adicionar usuário")),
     el("div", { class: "explica-rotinas" },
-      el("strong", {}, "Como funciona: "), "a pessoa abre o app, entra com o Google dela e pede acesso. Ela não vê nada até você clicar em Liberar. Liberada sem áreas, fica com o acesso básico (Hoje, Tarefas, compromissos e lista de clientes). As áreas são: ",
-      el("strong", {}, "Conteúdo"), " (posts, planejamento, criar, marca), ", el("strong", {}, "Tráfego pago"), " (contas, verbas, manutenções) e ",
-      el("strong", {}, "Financeiro"), " (mensalidades, cobranças, orçamentos). Valores dos clientes só aparecem para quem tem Financeiro."),
-    el("p", { class: "subtitulo" }, "Link para mandar para a pessoa: ", el("a", { href: location.origin, target: "_blank", rel: "noopener" }, location.origin)),
+      el("strong", {}, "Como funciona: "), "adicione a pessoa pelo e-mail da conta Google dela (ela recebe um convite e já entra liberada) ou peça para ela abrir o app e pedir acesso: o pedido aparece aqui para qualquer administrador aprovar. ",
+      "Áreas: ", el("strong", {}, "Conteúdo"), " (posts, planejamento, criar arte, marca), ", el("strong", {}, "Tráfego pago"), " (contas, verbas, manutenções) e ",
+      el("strong", {}, "Financeiro"), " (mensalidades, cobranças, orçamentos). Em ", el("strong", {}, "Clientes que pode ver"), " você limita a pessoa a alguns clientes: ela não vê os outros nem no banco."),
+    !emailAtivo() ? el("p", { class: "faixa-aviso" }, "E-mails automáticos desligados: convites e liberações não avisam por e-mail. ", el("a", { href: "#/config" }, "Ligar em Ajustes →")) : null,
+    el("p", { class: "subtitulo" }, "Link do app: ", el("a", { href: location.origin, target: "_blank", rel: "noopener" }, location.origin)),
+    blocoConvites(renderizar),
     membros.length ? el("div", { class: "lista-membros" }, membros.map(cartaoMembro)) : vazio("Ninguém ainda."),
     blocoEquipe());
 }

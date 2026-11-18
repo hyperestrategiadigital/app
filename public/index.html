@@ -32,8 +32,12 @@
       </div>
       <nav id="menu" aria-label="Menu principal"></nav>
       <div class="usuario">
-        <span id="usuario-nome"></span>
-        <button id="btn-sair" class="link-claro">Sair</button>
+        <div id="menu-usuario" class="menu-usuario" hidden>
+          <a href="#/conta">Minha conta</a>
+          <a href="#/conta">Conexões (Google Agenda)</a>
+          <button id="btn-sair" type="button">Sair</button>
+        </div>
+        <button id="btn-usuario" class="btn-usuario" type="button" aria-haspopup="true" aria-expanded="false"></button>
       </div>
     </aside>
     <div class="principal">

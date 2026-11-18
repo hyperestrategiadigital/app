@@ -115,14 +115,15 @@ export function confirmar(msg) {
 /**
  * Formulário genérico em modal.
  * campos: [{ nome, rotulo, tipo: text|textarea|date|time|number|select|checkbox|checklist|multi, opcoes, obrigatorio, dica, largura: "metade" }]
- * Resolve com os valores ou null se cancelado. extras = elementos adicionais (ex.: botão excluir).
+ * Resolve com os valores ou null se cancelado. extras = elementos adicionais (ex.: botão excluir) ao lado dos botões;
+ * depois = bloco extra logo abaixo dos campos.
  */
 const opcoesSelect = (opcoes = [], valor) => opcoes.map((o) => {
   const [val, rot] = Array.isArray(o) ? o : [o, o];
   return el("option", { value: val, selected: String(val) === String(valor ?? "") }, rot);
 });
 
-export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = [], rotuloSalvar = "Salvar", largo = false } = {}) {
+export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = [], depois = null, rotuloSalvar = "Salvar", largo = false } = {}) {
   const entradas = {};
   const condicionais = []; // [{ c, elemento, entrada }] com c.mostrarSe(valores)
   const dinamicos = []; // selects com c.opcoesDe(valores): opções mudam conforme outros campos
@@ -212,7 +213,7 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
           botao.disabled = false;
         }
       }
-    }, grade, el("div", { class: "acoes" }, extras,
+    }, grade, depois, el("div", { class: "acoes" }, extras,
       el("span", { class: "espaco" }),
       el("button", { type: "button", class: "secundario", onClick: () => { fechar(); resolver(null); } }, "Cancelar"),
       el("button", { type: "submit" }, rotuloSalvar)));

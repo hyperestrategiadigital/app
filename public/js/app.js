@@ -3,7 +3,9 @@ import { auth } from "./firebase.js";
 import {
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas } from "./db.js";
+import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes } from "./db.js";
+import { avisarAdmins, sincronizarAdmins } from "./emails.js";
+import { avatar } from "./views/componentes.js";
 import { el, avisar } from "./ui.js";
 import { eu, pode, ehAdmin, AREAS } from "./permissoes.js";
 import { gerarRecorrencias } from "./recorrencias.js";
@@ -22,6 +24,7 @@ import * as criar from "./views/criar.js";
 import * as rotinas from "./views/rotinas.js";
 import * as relatorios from "./views/relatorios.js";
 import * as usuarios from "./views/usuarios.js";
+import * as conta from "./views/conta.js";
 
 // `area`: quem não tem essa área não vê a tela ("admin" = só administradores)
 // `grupo: "admin"`: fica dentro de "Administração" no menu. `menu: false`: tela sem item no menu.
@@ -35,7 +38,8 @@ const ROTAS = {
   rotinas: { titulo: "Rotinas", icone: "↻", view: rotinas, area: "admin", grupo: "admin" },
   relatorios: { titulo: "Relatórios", icone: "▤", view: relatorios, area: "admin", grupo: "admin" },
   usuarios: { titulo: "Usuários e equipe", icone: "☺", view: usuarios, area: "admin", grupo: "admin" },
-  config: { titulo: "Ajustes", icone: "⚙", view: config, grupo: "admin" },
+  config: { titulo: "Ajustes", icone: "⚙", view: config, area: "admin", grupo: "admin" },
+  conta: { titulo: "Minha conta", icone: "☺", view: conta, menu: false },
   // Abertas a partir do calendário e do post
   // Endereços antigos: o planejamento agora é um modo do Calendário e o Criar abre dentro do post
   planejamento: { titulo: "Planejamento", icone: "☷", view: { render: planejamento.redirecionar }, area: "conteudo", menu: false },
@@ -96,12 +100,38 @@ ativarAtalhoBusca();
 
 window.addEventListener("hashchange", () => { $("conteudo").scrollTop = 0; renderizar(); });
 
+/** Manutenção feita pelo administrador quando os dados mudam (com folga, para não gravar a cada tecla). */
+let esperaAdmin = null;
+function tarefasDeAdmin() {
+  clearTimeout(esperaAdmin);
+  esperaAdmin = setTimeout(() => {
+    sincronizarNomesClientes().catch((e) => console.warn("Nomes dos clientes:", e.message));
+    sincronizarAdmins().catch((e) => console.warn("Admins no script de e-mail:", e.message));
+  }, 3000);
+}
+
 /* ---------------- Login ---------------- */
 $("btn-entrar").addEventListener("click", async () => {
   try { await signInWithPopup(auth, new GoogleAuthProvider()); }
   catch (e) { avisar("Não foi possível entrar: " + e.message, "erro"); }
 });
-$("btn-sair").addEventListener("click", () => signOut(auth));
+
+/* ---------------- Menu do usuário (clique no nome) ---------------- */
+function montarUsuario() {
+  const meu = dados.membros.find((m) => m.id === eu.uid) || eu;
+  const papel = ehAdmin() ? "Administrador" : eu.permissoes?.length ? eu.permissoes.map((a) => AREAS.find(([v]) => v === a)?.[1]).join(", ") : "Acesso básico";
+  $("btn-usuario").replaceChildren(avatar(meu), el("span", { class: "usuario-textos" }, el("strong", {}, meu.nome || eu.email), el("small", {}, papel)), el("span", { "aria-hidden": "true" }, "▴"));
+}
+function fecharMenuUsuario() { $("menu-usuario").hidden = true; $("btn-usuario").setAttribute("aria-expanded", "false"); }
+$("btn-usuario").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const menu = $("menu-usuario");
+  menu.hidden = !menu.hidden;
+  $("btn-usuario").setAttribute("aria-expanded", String(!menu.hidden));
+});
+document.addEventListener("click", (e) => { if (!$("menu-usuario").hidden && !$("menu-usuario").contains(e.target)) fecharMenuUsuario(); });
+$("menu-usuario").addEventListener("click", (e) => { if (e.target.closest("a")) { fecharMenuUsuario(); document.body.classList.remove("menu-aberto"); } });
+$("btn-sair").addEventListener("click", () => { fecharMenuUsuario(); signOut(auth); });
 
 let pararDeOuvir = null;
 let usuarioAtual = null;
@@ -119,8 +149,7 @@ function telaCheia(...filhos) {
 
 async function entrar(usuario) {
   const estado = await conectar(usuario, (e) => avisar("Erro ao carregar dados: " + e.message, "erro"));
-  const papel = ehAdmin() ? "Administrador" : eu.permissoes?.length ? eu.permissoes.map((a) => AREAS.find(([v]) => v === a)?.[1]).join(", ") : "Acesso básico";
-  $("usuario-nome").textContent = `${eu.nome || usuario.email} · ${papel}`;
+  montarUsuario();
 
   if (estado === "migrar") return telaCheia(
     el("h1", {}, "Criar o espaço da Hyper"),
@@ -141,8 +170,9 @@ async function entrar(usuario) {
 
   if (estado === "pendente") return telaCheia(
     el("h1", {}, "Pedido enviado ✓"),
-    el("p", {}, `Olá, ${eu.nome || usuario.email}! Seu pedido de acesso foi para o administrador da Hyper.`),
-    el("p", { class: "subtitulo" }, "Esta tela atualiza sozinha quando ele liberar. Você entra com o acesso básico e ele libera as outras áreas."),
+    el("p", {}, `Olá, ${eu.nome || usuario.email}! Seu pedido de acesso foi para os administradores da Hyper.`),
+    eu.pedido ? el("p", { class: "subtitulo" }, "Você pediu: ", conta.descreverPedido(eu.pedido)) : null,
+    el("p", { class: "subtitulo" }, "Esta tela atualiza sozinha quando um administrador liberar, e você também recebe um e-mail."),
     el("button", { class: "link", onClick: () => signOut(auth) }, "Sair"));
 
   if (estado === "sem-espaco") return telaCheia(
@@ -152,20 +182,26 @@ async function entrar(usuario) {
 
   if (estado === "novo") {
     const nome = el("input", { id: "acesso-nome", type: "text", value: usuario.displayName || "", placeholder: "Seu nome" });
-    const funcoes = el("div", { class: "multi" }, [["admin", "Administração (tudo)"], ...AREAS.map(([v, r]) => [v, r])].map(([v, r]) =>
+    const funcoes = el("div", { class: "multi" }, [...AREAS.map(([v, r]) => [v, r]), ["admin", "Administração (tudo)"]].map(([v, r]) =>
       el("label", { class: "chip-check" }, el("input", { type: "checkbox", value: v }), r)));
+    const clientes = el("textarea", { id: "acesso-clientes", rows: 2, placeholder: "Ex.: Castelari e Body in Shape. Deixe em branco se for trabalhar com todos." });
+    const mensagem = el("textarea", { id: "acesso-mensagem", rows: 2, placeholder: "Ex.: sou a nova social media, começo segunda" });
     return telaCheia(
       el("h1", {}, "Bem-vindo à Hyper"),
-      el("p", {}, `Você entrou como ${usuario.email}. Para usar o app, peça acesso ao espaço da Hyper.`),
+      el("p", {}, `Você entrou como ${usuario.email}. Para usar o app, peça acesso: um administrador da Hyper aprova e você recebe um e-mail.`),
       el("label", { class: "campo", for: "acesso-nome" }, el("span", {}, "Seu nome"), nome),
-      el("div", { class: "campo" }, el("span", {}, "Qual é o seu tipo de acesso? (o administrador confirma)"), funcoes),
-      el("p", { class: "subtitulo" }, "Você entra com o acesso básico e o administrador libera as áreas depois."),
+      el("div", { class: "campo" }, el("span", {}, "O que você precisa acessar?"), funcoes),
+      el("label", { class: "campo", for: "acesso-clientes" }, el("span", {}, "Com quais clientes você vai trabalhar?"), clientes),
+      el("label", { class: "campo", for: "acesso-mensagem" }, el("span", {}, "Recado para o administrador (opcional)"), mensagem),
       el("div", { class: "acoes" },
         el("button", { class: "destaque", onClick: async (e) => {
           if (!nome.value.trim()) { avisar("Digite seu nome.", "erro"); return; }
           e.currentTarget.disabled = true;
+          const marcadas = [...funcoes.querySelectorAll("input:checked")].map((i) => i.value);
+          const pedido = { areas: marcadas.filter((a) => a !== "admin"), admin: marcadas.includes("admin"), clientesTexto: clientes.value.trim(), mensagem: mensagem.value.trim() };
           try {
-            await pedirAcesso({ nome: nome.value.trim(), funcoes: [...funcoes.querySelectorAll("input:checked")].map((i) => i.value) });
+            await pedirAcesso({ nome: nome.value.trim(), pedido });
+            await avisarAdmins({ nome: nome.value.trim(), email: usuario.email, detalhe: `Primeiro acesso. ${conta.descreverPedido(pedido) || "Sem detalhes."}` });
             location.reload();
           } catch (erro) { avisar(erro.message, "erro"); e.currentTarget.disabled = false; }
         } }, "Pedir acesso"),
@@ -173,8 +209,12 @@ async function entrar(usuario) {
   }
 
   document.body.classList.remove("carregando");
-  pararDeOuvir = aoMudar(renderizar);
+  pararDeOuvir = aoMudar(() => { montarUsuario(); renderizar(); if (ehAdmin()) tarefasDeAdmin(); });
   renderizar();
+  if (espacoInfo.boasVindas) avisar("Bem-vindo! Seu acesso já estava liberado pelo convite.");
+  // Foto do Google como foto inicial (dá para trocar em Minha conta)
+  const meu = dados.membros.find((m) => m.id === eu.uid);
+  if (meu && meu.foto === undefined && usuario.photoURL) atualizarMeuCadastro({ foto: usuario.photoURL }).catch(() => {});
   // Rotinas automáticas e ajustes de dados antigos: só o administrador roda
   if (ehAdmin()) {
     gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
@@ -191,7 +231,7 @@ onAuthStateChanged(auth, async (usuario) => {
     return;
   }
   document.body.classList.add("logado", "carregando");
-  $("usuario-nome").textContent = usuario.displayName || usuario.email;
+  $("btn-usuario").replaceChildren(el("span", { class: "usuario-textos" }, el("strong", {}, usuario.displayName || usuario.email)));
   try {
     await entrar(usuario);
   } catch (e) {

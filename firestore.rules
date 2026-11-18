@@ -41,7 +41,8 @@ service cloud.firestore {
       // Só pode ser criado uma vez, por quem vira o dono.
       allow read: if logado();
       allow create: if logado() && request.resource.data.dono == request.auth.uid;
-      allow update, delete: if dono();
+      allow update: if dono() || (admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['emailUrl']));
+      allow delete: if dono();
 
       match /membros/{uid} {
         allow read: if ativo() || (logado() && request.auth.uid == uid);

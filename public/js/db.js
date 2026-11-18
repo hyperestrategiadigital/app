@@ -10,7 +10,7 @@ import { eu, definirEu, colecoesPermitidas, pode, ehAdmin, clientesRestritos } f
 
 export const ESPACO = "hyper";
 /** Dados do documento do espaço (ex.: uid do dono). */
-export const espacoInfo = { dono: "" };
+export const espacoInfo = { dono: "", emailUrl: "" };
 
 // O console do Firebase pode criar o banco com o id "(default)" ou com o nome "default".
 const BANCOS = ["(default)", "default"];
@@ -120,6 +120,7 @@ export async function conectar(usuario, aoErro) {
     return antigos && !antigos.empty ? "migrar" : "sem-espaco";
   }
   espacoInfo.dono = espaco.data().dono;
+  espacoInfo.emailUrl = espaco.data().emailUrl || "";
   const dono = espaco.data().dono === usuario.uid;
   let membro = await comPrazo(getDoc(doc(ref("membros"), usuario.uid)), 15);
   if (!membro.exists() && !dono) {
@@ -241,6 +242,9 @@ export async function pedirAcesso({ nome, pedido }) {
     pedido: { ...pedido, em: Date.now() }
   }));
 }
+
+/** Campos do documento do espaço (o administrador só pode mudar a URL dos e-mails). */
+export const atualizarEspaco = (valores) => comPrazo(updateDoc(doc(db, "espacos", ESPACO), valores)).then(() => Object.assign(espacoInfo, valores));
 
 /** A própria pessoa: nome, foto e pedido de mais acesso (as regras não deixam mudar o resto). */
 export const atualizarMeuCadastro = (valores) => comPrazo(updateDoc(doc(ref("membros"), eu.uid), { ...valores, atualizadoEm: Date.now() }));

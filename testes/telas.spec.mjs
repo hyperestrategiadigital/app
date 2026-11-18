@@ -28,7 +28,7 @@ const BANCO = {
   }
 };
 
-async function abrir(page, { usuario, membros } = {}) {
+async function abrir(page, { usuario, membros, semMenu = false } = {}) {
   const erros = [];
   if (usuario) await page.addInitScript((u) => { window.__usuario = u; }, usuario);
   page.on("pageerror", (e) => erros.push(String(e)));
@@ -41,7 +41,8 @@ async function abrir(page, { usuario, membros } = {}) {
   const banco = membros ? { ...BANCO, [`${E}/membros`]: membros } : BANCO;
   await page.addInitScript((b) => { if (!localStorage.getItem("fake-fs-store")) localStorage.setItem("fake-fs-store", JSON.stringify(b)); }, banco);
   await page.goto("/");
-  await expect(page.locator("#menu")).toContainText("Hoje");
+  if (semMenu) await page.waitForTimeout(500);
+  else await expect(page.locator("#menu")).toContainText("Hoje");
   return erros;
 }
 
@@ -159,4 +160,74 @@ test("usuário básico não vê valores nem a administração", async ({ page })
   await expect(page.locator("#conteudo h1")).toHaveText("Clientes");
   await expect(page.locator("#conteudo")).not.toContainText("R$");
   expect(erros).toEqual([]);
+});
+
+test("menu do usuário: Minha conta com nome, acesso e conexões", async ({ page }) => {
+  await abrir(page);
+  await page.locator("#btn-usuario").click();
+  await page.locator("#menu-usuario").getByText("Minha conta").click();
+  await expect(page.locator("#conteudo h1")).toHaveText("Minha conta");
+  await expect(page.locator("#conteudo")).toContainText("Google Agenda");
+  await page.fill("#conta-nome", "Hyper Agência");
+  await page.getByRole("button", { name: "Salvar nome" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/membros"]?.hyper?.nome)).toBe("Hyper Agência");
+  await expect(page.locator("#btn-usuario")).toContainText("Hyper Agência");
+});
+
+test("administrador adiciona usuário por e-mail e ele entra já liberado, só com os clientes escolhidos", async ({ browser }) => {
+  const admin = await browser.newPage();
+  await abrir(admin, { membros: { hyper: { nome: "Hyper", email: "hyperestrategiadigital@gmail.com", papel: "admin", permissoes: ["conteudo", "trafego", "financeiro"], status: "ativo" } } });
+  await admin.goto("/#/usuarios");
+  await admin.getByRole("button", { name: "+ Adicionar usuário" }).click();
+  await admin.fill("#f-nome", "Luísa");
+  await admin.fill("#f-email", "Luisa@Exemplo.com");
+  await admin.locator(".modal .chip-check", { hasText: "Conteúdo" }).locator("input").check();
+  await admin.locator(".modal select[aria-label=Clientes]").selectOption("alguns");
+  await admin.locator(".modal .lista-clientes-acesso .chip-check", { hasText: "Loja Exemplo" }).locator("input").check();
+  await admin.click(".modal button[type=submit]");
+  await expect(admin.locator("#conteudo")).toContainText("Convites aguardando");
+  const banco = await admin.evaluate(() => localStorage.getItem("fake-fs-store"));
+  expect(JSON.parse(banco)["espacos/hyper/convites"]["luisa@exemplo.com"]).toMatchObject({ permissoes: ["conteudo"], acessoClientes: "alguns", clientes: ["loja"] });
+
+  // A Luísa entra pela primeira vez (outro navegador, mesmo banco)
+  const ctx = await browser.newContext();
+  const luisa = await ctx.newPage();
+  await luisa.addInitScript((b) => localStorage.setItem("fake-fs-store", b), banco);
+  await abrir(luisa, { usuario: { uid: "luisa", displayName: "Luísa", email: "luisa@exemplo.com" } });
+  await expect(luisa.locator(".aviso")).toContainText("Bem-vindo");
+  const s = await luisa.evaluate(() => window.__store);
+  expect(s["espacos/hyper/membros"].luisa).toMatchObject({ status: "ativo", acessoClientes: "alguns", clientes: ["loja"] });
+  expect(s["espacos/hyper/convites"]["luisa@exemplo.com"]).toBeUndefined();
+  await luisa.goto("/#/clientes");
+  await expect(luisa.locator("#conteudo")).toContainText("Loja Exemplo");
+  await expect(luisa.locator("#conteudo")).not.toContainText("Grupo Exemplo");
+  await luisa.goto("/#/tarefas");
+  await expect(luisa.locator("#conteudo")).not.toContainText("Revisar campanhas");
+  await ctx.close();
+});
+
+test("primeiro acesso sem convite: pede acesso e o administrador libera", async ({ browser }) => {
+  const ctx = await browser.newContext();
+  const novo = await ctx.newPage();
+  await abrir(novo, { usuario: { uid: "matheus", displayName: "Matheus", email: "matheus@exemplo.com" }, semMenu: true });
+  await expect(novo.locator("#conteudo h1")).toContainText("Bem-vindo à Hyper");
+  await novo.locator(".chip-check", { hasText: "Administração" }).locator("input").check();
+  await novo.fill("#acesso-clientes", "todos");
+  await novo.getByRole("button", { name: "Pedir acesso" }).click();
+  await expect(novo.locator("#conteudo h1")).toContainText("Pedido enviado");
+  const banco = await novo.evaluate(() => localStorage.getItem("fake-fs-store"));
+  expect(JSON.parse(banco)["espacos/hyper/membros"].matheus).toMatchObject({ status: "pendente", pedido: { admin: true } });
+  await ctx.close();
+
+  const ctx2 = await browser.newContext();
+  const admin = await ctx2.newPage();
+  await admin.addInitScript((b) => localStorage.setItem("fake-fs-store", b), banco);
+  await abrir(admin);
+  await admin.goto("/#/usuarios");
+  const cartao = admin.locator(".cartao-membro", { hasText: "Matheus" });
+  await expect(cartao).toContainText("Aguardando liberação");
+  await cartao.locator(".destaque-admin input").check();
+  await cartao.getByRole("button", { name: "Liberar acesso" }).click();
+  await expect.poll(() => admin.evaluate(() => window.__store["espacos/hyper/membros"].matheus)).toMatchObject({ status: "ativo", papel: "admin", pedido: null });
+  await ctx2.close();
 });

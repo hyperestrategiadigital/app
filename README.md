@@ -17,8 +17,9 @@ Menu: **Hoje, Tarefas, Calendário, Clientes, Tráfego pago, Financeiro** e o gr
 | Financeiro | Receitas e despesas do mês, mensalidades a partir dos contratos e orçamentos. A rotina de cobrança cria a receita pendente e concluir a tarefa de cobrança marca como paga |
 | Rotinas | Tarefas automáticas: produzir a semana seguinte, planejar o mês seguinte, cobrar a mensalidade no vencimento e rotinas livres |
 | Relatórios | Por cliente ou geral, por mês ou período: posts publicados, outras entregas, manutenções, reuniões e financeiro. Exporta PDF. Meses antigos leem o arquivo de tarefas |
-| Usuários e equipe | Liberação de acessos e pessoas da equipe sem conta (para convites e responsáveis) |
-| Ajustes | Google Agenda, chave da OpenAI, importação de definições de marca (.json, com marcas), importação da planilha e backup |
+| Usuários e equipe | **+ Adicionar usuário** por e-mail (convite: a pessoa entra já liberada), pedidos de acesso e de mais acesso para qualquer administrador aprovar, áreas e **clientes que cada um pode ver**, e pessoas da equipe sem conta |
+| Minha conta | Clique no seu nome no menu: foto, nome, seu acesso, pedir mais acesso (áreas ou clientes) e suas conexões (Google Agenda) |
+| Ajustes | E-mails automáticos (Gmail da Hyper via Apps Script), chave da OpenAI, importação de definições de marca (.json, com marcas), importação da planilha e backup |
 
 ### Marcas
 
@@ -46,6 +47,10 @@ testes/                 testes das regras (emulador) e das telas (Playwright com
 Não precisa de build: o SDK do Firebase vem do CDN.
 
 ## Usuários e permissões
+
+Duas formas de entrar: o administrador adiciona o e-mail em Usuários (vira `convites/{email}`; no primeiro login a pessoa entra liberada com aquele acesso) ou a pessoa entra e pede acesso (fica `pendente` com o `pedido`, e qualquer administrador aprova). Cada membro pode ter `acessoClientes: "alguns"` com a lista `clientes`: as regras só deixam ler os itens desses clientes (e os sem cliente), e o app lê essas coleções com consultas por `clienteId`.
+
+E-mails: `docs/email/Codigo.gs` roda no Google Apps Script da conta da Hyper (instruções em Ajustes). O app guarda `config/email` (URL e segredo, só administradores) e a URL em `espacos/hyper.emailUrl` (para quem ainda não tem acesso avisar os administradores).
 
 Cada pessoa entra com o próprio Google e pede acesso; o administrador libera em **Usuários**. Áreas: **Conteúdo** (posts, planejamento, criar arte, marca), **Tráfego pago** (contas, verbas, manutenções) e **Financeiro** (mensalidades, cobranças, orçamentos e valores). Sem áreas = acesso básico (Hoje, Tarefas, compromissos, lista de clientes). As regras do Firestore (`firestore.rules`) protegem os dados sensíveis.
 

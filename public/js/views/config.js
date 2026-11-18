@@ -1,12 +1,12 @@
-// Ajustes: tarefas recorrentes, importação da planilha e backup.
+// Ajustes (só administradores): e-mails automáticos, OpenAI, importação de marcas e da planilha, backup.
 import { el, formulario, confirmar, avisar, abrirModal, hojeISO, addDias, vazio, normalizar, baixar } from "../ui.js";
 import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes, nomeCliente, clientesAtivos } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { analisarPlanilha } from "../importacao.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
-import { configAgenda, conectarAgenda, desconectarAgenda, configEquipe, sincronizar } from "../agenda.js";
 import { salvarComId, carregarArquivo } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
+import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail } from "../emails.js";
 
 
 function abrirImportacao() {
@@ -83,9 +83,9 @@ async function baixarBackup() {
 
 export function render() {
   return el("div", { class: "tela" },
-    cabecalho("Ajustes", ehAdmin() ? "Agenda, OpenAI, importação e backup" : "Sua Google Agenda"),
+    cabecalho("Ajustes", "E-mails automáticos, OpenAI, importação e backup. Sua Google Agenda fica em Minha conta (clique no seu nome)."),
 
-    blocoAgenda(),
+    blocoEmail(),
     ehAdmin() ? blocoOpenAI() : null,
 
     ehAdmin() ? blocoImportarMarcas() : null,
@@ -130,37 +130,6 @@ function blocoOpenAI() {
       } }, "Remover chave") : null));
 }
 
-function blocoAgenda() {
-  const cfg = configAgenda();
-  const pendentes = dados.compromissos.filter((c) => c.sincronizar && !c.googleEventId);
-  const conectar = async (botao) => {
-    botao.disabled = true;
-    try { const email = await conectarAgenda(); avisar(`Google Agenda conectada: ${email}`); }
-    catch (e) { avisar("Não conectou: " + (e.code === "auth/popup-closed-by-user" ? "janela fechada." : e.message), "erro"); botao.disabled = false; }
-  };
-  return el("section", { class: "bloco" },
-    el("h2", {}, "Google Agenda (compromissos)"),
-    el("p", {}, cfg.email
-      ? ["✓ Conectada à agenda de ", el("strong", {}, cfg.email), ". Compromissos marcados com \"Enviar para a Google Agenda\" vão para lá — posts de conteúdo nunca vão."]
-      : "Conecte a sua conta Google pessoal (a do iPhone) para os compromissos aparecerem na sua agenda. Posts de conteúdo nunca vão para lá."),
-    el("details", { class: "prompt-final" }, el("summary", {}, "Primeira vez? Ative a API do Google Agenda (1 minuto)"),
-      el("ol", { class: "passos" },
-        el("li", {}, "Abra ", el("a", { href: "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=hyper-9e023", target: "_blank", rel: "noopener" }, "a página da Google Calendar API do projeto hyper-9e023"), " e clique em Ativar."),
-        el("li", {}, "Volte aqui e clique em Conectar. Escolha a conta pessoal."),
-        el("li", {}, "Se aparecer \"O Google não verificou este app\", clique em Avançado → Acessar hyper-9e023. É o seu próprio app."))),
-    el("div", { class: "acoes" },
-      cfg.email
-        ? [el("button", { class: "secundario", onClick: (e) => conectar(e.currentTarget) }, "Trocar de conta"),
-          el("button", { class: "perigo-texto", onClick: async () => { await desconectarAgenda(); avisar("Agenda desconectada."); } }, "Desconectar")]
-        : el("button", { onClick: (e) => conectar(e.currentTarget) }, "Conectar Google Agenda"),
-      cfg.email && pendentes.length ? el("button", { class: "destaque", onClick: async (e) => {
-        e.currentTarget.disabled = true;
-        let ok = 0;
-        for (const c of pendentes) { try { await sincronizar(c); ok++; } catch (erro) { avisar(erro.message, "erro"); break; } }
-        if (ok) avisar(`${ok} compromisso(s) enviado(s) para a agenda.`);
-      } }, `Enviar ${pendentes.length} pendente(s)`) : null),
-    el("p", { class: "subtitulo" }, "O Google libera o acesso por cerca de 1 hora. Depois disso, ao salvar um compromisso, o app pede para conectar de novo."));
-}
 
 const CAMPOS_MARCA = ["tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "fontes", "observacoes", "descricao", "instagram", "linkDrive", "linkCanva", "paleta"];
 const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", estiloVisual: "estilo de imagem", identidadeVisual: "diagramação", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
@@ -228,4 +197,40 @@ function blocoImportarMarcas() {
     el("h2", {}, "Importar definições de marca"),
     el("p", {}, "Tom de voz, persona, público, identidade e cores de cada cliente e de cada marca dele, a partir do arquivo .json que o Claude monta com as suas conversas e agentes do ChatGPT."),
     entrada, previa);
+}
+
+/** E-mails automáticos pelo Gmail da Hyper (Google Apps Script em docs/email/Codigo.gs). */
+function blocoEmail() {
+  const cfg = configEmail();
+  const url = el("input", { id: "email-url", type: "url", placeholder: "https://script.google.com/macros/s/.../exec", value: cfg.url || "" });
+  const codigo = "https://github.com/hyperestrategiadigital/app/blob/main/docs/email/Codigo.gs";
+  return el("section", { class: "bloco" },
+    el("h2", {}, "E-mails automáticos"),
+    emailAtivo()
+      ? el("p", {}, el("span", { class: "etiqueta ok" }, "Conectado"), ` Os e-mails saem de ${cfg.conta || "a conta que instalou o script"}: convite para quem você adiciona, aviso de acesso liberado e aviso aos administradores quando alguém pede acesso.`)
+      : el("p", {}, "Para o app mandar e-mails (convites, acesso liberado, pedidos de acesso), instale uma vez o script de e-mail na conta Google da Hyper. Ele envia pelo Gmail dela, sem custo (até 100 e-mails por dia)."),
+    el("details", { class: "passo-a-passo", open: !emailAtivo() },
+      el("summary", {}, "Como instalar (5 minutos)"),
+      el("ol", { class: "passos" },
+        el("li", {}, "Logado na conta da Hyper, abra ", el("a", { href: "https://script.google.com/home/projects/create", target: "_blank", rel: "noopener" }, "script.google.com → Novo projeto"), "."),
+        el("li", {}, "Apague o texto que aparece, copie o código de ", el("a", { href: codigo, target: "_blank", rel: "noopener" }, "docs/email/Codigo.gs"), " (botão Copiar) e cole. Salve (Ctrl+S)."),
+        el("li", {}, "Clique em Implantar → Nova implantação → engrenagem → App da Web. Executar como: Eu. Quem pode acessar: Qualquer pessoa. Implantar."),
+        el("li", {}, "Autorize com a conta da Hyper (se aparecer \"app não verificado\": Avançado → Acessar). Copie a URL do app da Web."),
+        el("li", {}, "Cole a URL aqui embaixo e clique em Conectar."))),
+    el("label", { class: "campo", for: "email-url" }, el("span", {}, "URL do app da Web"), url),
+    el("div", { class: "acoes" },
+      el("button", { class: emailAtivo() ? "secundario" : "destaque", onClick: async (e) => {
+        e.currentTarget.disabled = true;
+        try { const conta = await conectarEmail(url.value); avisar(`E-mails conectados${conta ? ` (${conta})` : ""}.`); }
+        catch (erro) { avisar(erro.message, "erro"); e.currentTarget.disabled = false; }
+      } }, emailAtivo() ? "Conectar de novo" : "Conectar"),
+      emailAtivo() ? el("button", { class: "secundario", onClick: async (e) => {
+        e.currentTarget.disabled = true;
+        try { const r = await testarEmail(); avisar(`E-mail de teste enviado para você. Restam ${r.restantes ?? "?"} envios hoje.`); }
+        catch (erro) { avisar(erro.message, "erro"); }
+        e.currentTarget.disabled = false;
+      } }, "Enviar e-mail de teste") : null,
+      emailAtivo() ? el("button", { class: "perigo-texto", onClick: async () => {
+        if (await confirmar("Desligar os e-mails automáticos?")) { await desconectarEmail(); avisar("E-mails desligados."); }
+      } }, "Desligar") : null));
 }
