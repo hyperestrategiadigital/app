@@ -1,9 +1,10 @@
 // Peças reutilizadas entre telas: cartão e formulário de tarefa, selo de cliente.
-import { pode } from "../permissoes.js";
+import { pode, eu, ehAdmin } from "../permissoes.js";
 import { abrirCriarArte } from "./criar.js";
+import { avisarMencao } from "../emails.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
-import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
-import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo, desfazerExclusao } from "../db.js";
+import { el, normalizar, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
+import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo, desfazerExclusao, listarAtividade, registrarAtividade, excluirAtividade } from "../db.js";
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa, MODELOS_PADRAO } from "../constantes.js";
 import { promptCopy } from "../prompts.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
@@ -128,6 +129,8 @@ export function abrirTarefa(tarefa = {}) {
   const form = ultimoForm();
   // Criativos anexados ao post (imagens guardadas no banco)
   if (form) form.querySelector(".acoes").before(secaoCriativos(tarefa));
+  // Comentários (com @menção) e histórico de mudanças
+  if (form && tarefa.id) form.querySelector(".acoes").before(secaoAtividade(tarefa));
   // Rotina "Produzir semana": mostra ao vivo os posts da semana seguinte do cliente
   if (form && tarefa.semanaInicio) form.querySelector(".acoes").before(secaoSemana(tarefa));
   if (form && tarefa.atalho) form.querySelector(".acoes").prepend(el("a", { class: "botao-link secundario mini", href: tarefa.atalho, onClick: () => fecharModais() },
@@ -149,6 +152,70 @@ export function abrirTarefa(tarefa = {}) {
   alternar();
   return promessa;
 }
+
+/** Pessoas mencionadas com @PrimeiroNome (ou @Nome Completo) no texto. */
+function mencionados(texto) {
+  const t = normalizar(texto);
+  return dados.membros.filter((m) => m.status === "ativo" && m.id !== eu.uid && m.nome && m.email &&
+    (t.includes("@" + normalizar(m.nome)) || t.includes("@" + normalizar(m.nome.split(" ")[0]))));
+}
+
+function secaoAtividade(tarefa) {
+  const lista = el("div", { class: "atividade-lista" }, el("p", { class: "subtitulo" }, "Carregando…"));
+  const quando = (ms) => new Date(ms).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const carregar = async () => {
+    try {
+      const itens = await listarAtividade(tarefa.id);
+      lista.replaceChildren(...(itens.length ? itens.map((a) => a.tipo === "comentario"
+        ? el("div", { class: "comentario" },
+          avatar(dados.membros.find((m) => m.id === a.uid) || a.nome),
+          el("div", {},
+            el("div", { class: "comentario-topo" }, el("strong", {}, a.nome), el("span", { class: "subtitulo" }, quando(a.em)),
+              a.uid === eu.uid || ehAdmin() ? el("button", { type: "button", class: "link", onClick: async () => { await excluirAtividade(tarefa.id, a.id); carregar(); } }, "apagar") : null),
+            el("p", {}, a.texto)))
+        : el("div", { class: "mudanca" }, el("span", {}, `${a.nome} ${a.texto}`), el("span", { class: "subtitulo" }, quando(a.em))))
+        : [el("p", { class: "subtitulo" }, "Nenhum comentário ainda.")]));
+    } catch (e) { lista.replaceChildren(el("p", { class: "erro" }, "Não consegui carregar: " + e.message)); }
+  };
+  const caixa = el("textarea", { rows: 2, placeholder: "Escreva um comentário. Use @nome para avisar alguém por e-mail." });
+  const enviar = async (botao) => {
+    const texto = caixa.value.trim();
+    if (!texto) return;
+    botao.disabled = true;
+    const pessoas = mencionados(texto);
+    await registrarAtividade(tarefa.id, { tipo: "comentario", texto, mencoes: pessoas.map((m) => m.nome) });
+    atualizar("tarefas", tarefa.id, { qtdComentarios: (porId("tarefas", tarefa.id)?.qtdComentarios || 0) + 1 }).catch(() => {});
+    let avisados = 0;
+    for (const m of pessoas) if (await avisarMencao({ para: m.email, nomePara: m.nome, tarefa, texto })) avisados++;
+    if (pessoas.length) avisar(avisados ? `Comentário enviado. ${avisados} pessoa(s) avisada(s) por e-mail.` : "Comentário enviado (e-mails automáticos desligados).");
+    caixa.value = "";
+    botao.disabled = false;
+    carregar();
+  };
+  caixa.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar(caixa.nextSibling.querySelector("button")); } });
+  carregar();
+  return el("div", { class: "secao-atividade" },
+    el("h3", { class: "form-secao" }, "Comentários e histórico"),
+    lista,
+    caixa,
+    el("div", { class: "acoes-criativos" }, el("button", { type: "button", class: "secundario mini", onClick: (e) => enviar(e.currentTarget) }, "Comentar"),
+      el("span", { class: "subtitulo" }, "Ctrl+Enter envia")));
+}
+
+/** Descreve o que mudou numa tarefa, para o histórico. */
+function mudancas(antes, depois) {
+  const r = [];
+  if (antes.statusConteudo !== depois.statusConteudo && depois.statusConteudo) r.push(`mudou a etapa para ${rotuloStatusConteudo(depois.statusConteudo)}`);
+  else if (antes.status !== depois.status && depois.status) r.push(`mudou o status para ${STATUS_TAREFA.find(([v]) => v === depois.status)?.[1] || depois.status}`);
+  if ((antes.responsavel || "") !== (depois.responsavel || "")) r.push(`passou para ${depois.responsavel || "ninguém"}`);
+  if ((antes.prazo || "") !== (depois.prazo || "") && depois.prazo) r.push(`mudou o prazo para ${fmtData(depois.prazo, true)}`);
+  if ((antes.dataPublicacao || "") !== (depois.dataPublicacao || "") && depois.dataPublicacao) r.push(`mudou a publicação para ${fmtData(depois.dataPublicacao, true)}`);
+  if ((antes.titulo || "") !== (depois.titulo || "") && antes.titulo) r.push(`renomeou para "${depois.titulo}"`);
+  if (!antes.copy && depois.copy) r.push("colocou a copy");
+  if ((antes.linkCanva || "") !== (depois.linkCanva || "") && depois.linkCanva) r.push("colocou o link do Canva");
+  return r.join(", ");
+}
+export const registrarMudanca = (antes, depois) => { const texto = mudancas(antes, { ...antes, ...depois }); if (texto) registrarAtividade(antes.id, { texto }); };
 
 function secaoSemana(tarefa) {
   const fim = addDias(tarefa.semanaInicio, 6);
@@ -216,8 +283,8 @@ export async function salvarTarefa(original, v) {
   }
   if (v.status === "concluido" && original.status !== "concluido") v.concluidoEm = hojeISO();
   if (v.status !== "concluido") v.concluidoEm = null;
-  if (original.id) await atualizar("tarefas", original.id, v);
-  else await criar("tarefas", v);
+  if (original.id) { const antes = { ...(porId("tarefas", original.id) || original) }; await atualizar("tarefas", original.id, v); registrarMudanca(antes, v); }
+  else { const novo = await criar("tarefas", v); registrarAtividade(novo.id, { texto: "criou" }); }
   if (original.id && (v.status === "concluido") !== (original.status === "concluido")) await quitarCobranca(original, v.status === "concluido");
   avisar(original.id ? "Salvo." : v.tipo === TIPO_CONTEUDO ? "Post criado e adicionado ao calendário." : "Tarefa criada.");
 }
@@ -228,6 +295,7 @@ export async function mudarEtapa(t, etapa) {
   const antes = { statusConteudo: t.statusConteudo || "ideia", status: t.status || "a_fazer", concluidoEm: t.concluidoEm || null };
   const status = statusDaEtapa(etapa);
   await atualizar("tarefas", t.id, { statusConteudo: etapa, status, concluidoEm: status === "concluido" ? (t.concluidoEm || hojeISO()) : null });
+  registrarAtividade(t.id, { texto: `mudou a etapa para ${rotuloStatusConteudo(etapa)}` });
   avisar(`Etapa: ${rotuloStatusConteudo(etapa)}.`, "ok", { desfazer: () => atualizar("tarefas", t.id, antes) });
 }
 /** Próxima etapa do post (ideia → produção → aprovação → aprovado → agendado → publicado). */
@@ -243,6 +311,7 @@ export async function alternarConcluida(t) {
     checklist: concluir && t.checklist?.length ? t.checklist.map((i) => ({ ...i, feito: true })) : (t.checklist || [])
   });
   await quitarCobranca(t, concluir);
+  registrarAtividade(t.id, { texto: concluir ? (post ? "marcou como publicado" : "concluiu") : "reabriu" });
   if (concluir) avisar(lancamentoDe(t) && pode("financeiro") ? "Concluída! Mensalidade marcada como paga ✓" : "Concluída! ✓", "ok", {
     desfazer: async () => {
       await quitarCobranca(t, false);
@@ -270,6 +339,7 @@ export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
         ehConteudo(t) && t.statusConteudo ? el("span", { class: `etiqueta st-${t.statusConteudo}` }, rotuloStatusConteudo(t.statusConteudo)) : null,
         t.status === "andamento" ? el("span", { class: "etiqueta andamento" }, "Em andamento") : null,
         total ? el("span", { class: "progresso-mini" }, `☑ ${feitos}/${total}`) : null,
+        t.qtdComentarios ? el("span", { class: "progresso-mini", title: "Comentários" }, `💬 ${t.qtdComentarios}`) : null,
         ehConteudo(t) && t.qtdArtes ? el("span", { class: "progresso-mini", title: "Criativos anexados" }, `🖼 ${t.qtdArtes}`) : null,
         ehConteudo(t) && t.copy ? el("span", { class: "progresso-mini", title: "Copy salva" }, "✎ copy") : null,
         linkExterno(t.linkCanva, "Canva"), linkExterno(t.linkDrive, "Drive"),

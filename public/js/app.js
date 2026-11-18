@@ -3,7 +3,7 @@ import { auth } from "./firebase.js";
 import {
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes, registrarErro, limparAntigos } from "./db.js";
+import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes, registrarErro, limparAntigos, porId } from "./db.js";
 import { avisarAdmins, sincronizarAdmins } from "./emails.js";
 import { avatar, abrirTarefa } from "./views/componentes.js";
 import { el, avisar, hojeISO, quandoErro } from "./ui.js";
@@ -26,6 +26,7 @@ import * as relatorios from "./views/relatorios.js";
 import * as usuarios from "./views/usuarios.js";
 import * as conta from "./views/conta.js";
 import * as lixeira from "./views/lixeira.js";
+import * as creators from "./views/creators.js";
 
 // `area`: quem não tem essa área não vê a tela ("admin" = só administradores)
 // `grupo: "admin"`: fica dentro de "Administração" no menu. `menu: false`: tela sem item no menu.
@@ -34,6 +35,7 @@ const ROTAS = {
   tarefas: { titulo: "Tarefas", icone: "✓", view: tarefas },
   calendario: { titulo: "Calendário", icone: "▦", view: calendario },
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
+  creators: { titulo: "Creators", icone: "★", view: creators, area: "conteudo", selo: "em breve" },
   trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego, area: "trafego" },
   financeiro: { titulo: "Financeiro", icone: "$", view: financeiro, area: "financeiro" },
   rotinas: { titulo: "Rotinas", icone: "↻", view: rotinas, area: "admin", grupo: "admin" },
@@ -42,6 +44,12 @@ const ROTAS = {
   lixeira: { titulo: "Lixeira", icone: "⌫", view: lixeira, area: "admin", grupo: "admin" },
   config: { titulo: "Ajustes", icone: "⚙", view: config, area: "admin", grupo: "admin" },
   conta: { titulo: "Minha conta", icone: "☺", view: conta, menu: false },
+  // Link direto para uma tarefa (ex.: e-mail de menção): abre Tarefas com ela aberta
+  tarefa: { titulo: "Tarefa", icone: "✓", menu: false, view: { render: ({ params }) => {
+    location.replace("#/tarefas");
+    setTimeout(() => { const t = porId("tarefas", params[0]); if (t) abrirTarefa(t); else avisar("Essa tarefa não existe mais ou você não tem acesso.", "erro"); }, 300);
+    return el("div");
+  } } },
   // Abertas a partir do calendário e do post
   // Endereços antigos: o planejamento agora é um modo do Calendário e o Criar abre dentro do post
   planejamento: { titulo: "Planejamento", icone: "☷", view: { render: planejamento.redirecionar }, area: "conteudo", menu: false },
@@ -63,7 +71,7 @@ let adminAberto = null; // grupo "Administração" aberto/fechado (lembra a esco
 function montarMenu() {
   const { nome } = rotaAtual();
   const item = ([chave, r]) => el("a", { href: `#/${chave}`, class: chave === nome ? "ativo" : "" },
-    el("span", { class: "menu-icone", "aria-hidden": "true" }, r.icone), r.titulo);
+    el("span", { class: "menu-icone", "aria-hidden": "true" }, r.icone), r.titulo, r.selo ? el("small", { class: "menu-selo" }, r.selo) : null);
   const visiveis = Object.entries(ROTAS).filter(([, r]) => liberada(r) && r.menu !== false);
   const principais = visiveis.filter(([, r]) => r.grupo !== "admin" || !ehAdmin()).map(item);
   const busca = el("button", { class: "menu-busca", onClick: abrirBusca, title: "Ctrl+K" },

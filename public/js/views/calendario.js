@@ -2,7 +2,7 @@
 // do cliente em cada post, filtros, planejamento e exportação para aprovação do cliente.
 import * as planejamento from "./planejamento.js";
 import { el, hojeISO, addDias, fmtData, vazio, formulario, dataDe, avisar } from "../ui.js";
-import { dados, marcasDo, porId, opcoesClientes, nomeCliente, atualizar } from "../db.js";
+import { dados, marcasDo, porId, opcoesClientes, nomeCliente, atualizar, registrarAtividade } from "../db.js";
 import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca, mudarEtapa, proximaEtapa } from "./componentes.js";
 import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost, exportarPDF, nomeMes } from "../exportacao.js";
@@ -54,6 +54,7 @@ async function moverPost(id, novoDia) {
   const antes = { dataPublicacao: t.dataPublicacao || "", prazo: t.prazo || "" };
   const delta = Math.round((dataDe(novoDia) - dataDe(dataPost(t))) / 86400000);
   await atualizar("tarefas", id, { dataPublicacao: novoDia, prazo: t.prazo ? addDias(t.prazo, delta) : novoDia });
+  registrarAtividade(id, { texto: `mudou a publicação para ${fmtData(novoDia, true)}` });
   avisar(`"${t.titulo}" foi para ${fmtData(novoDia, true)}.`, "ok", { desfazer: () => atualizar("tarefas", id, antes) });
 }
 

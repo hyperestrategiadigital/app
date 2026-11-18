@@ -90,10 +90,13 @@ export async function sincronizarAdmins() {
   if (!ehAdmin() || !emailAtivo()) return;
   const emails = [...new Set(dados.membros.filter((m) => m.status === "ativo" && (m.papel === "admin" || m.id === espacoInfo.dono)).map((m) => m.email).filter(Boolean))].sort();
   const chave = JSON.stringify(emails);
-  if (configEmail().admins === chave) return;
+  // Membros ativos também: só eles podem receber avisos de menção
+  const membros = [...new Set(dados.membros.filter((m) => m.status === "ativo").map((m) => m.email).filter(Boolean))].sort();
+  const chaveMembros = JSON.stringify(membros);
+  if (configEmail().admins === chave && configEmail().membros === chaveMembros) return;
   const { url, segredo } = configEmail();
-  await chamar(url, { tipo: "admins", segredo, emails });
-  await salvarComId("config", "email", { admins: chave });
+  await chamar(url, { tipo: "admins", segredo, emails, membros });
+  await salvarComId("config", "email", { admins: chave, membros: chaveMembros });
 }
 
 /** Primeira conexão com o script: combina um segredo e guarda a configuração. */
@@ -121,4 +124,20 @@ export async function testarEmail() {
 export async function desconectarEmail() {
   await salvarComId("config", "email", { url: "", segredo: "", conta: "", admins: "" });
   await atualizarEspaco({ emailUrl: "" }).catch(() => {});
+}
+
+/** Avisa por e-mail quem foi mencionado (@nome) num comentário. Qualquer membro pode: o script só manda para membros do espaço. */
+export async function avisarMencao({ para, nomePara, tarefa, texto }) {
+  const assunto = `${eu.nome || "Alguém"} mencionou você: ${tarefa.titulo}`;
+  const html = modelo(`Você foi mencionado`, [
+    `<b>${esc(eu.nome || eu.email)}</b> comentou em <b>${esc(tarefa.titulo)}</b>:`,
+    `<span style="display:block;border-left:4px solid ${MARCA.amarelo};padding-left:12px">${esc(texto).replace(/\n/g, "<br>")}</span>`
+  ], { link: `${LINK_APP}#/tarefa/${tarefa.id}`, botao: "Abrir a tarefa" });
+  try {
+    if (ehAdmin() && emailAtivo()) return await enviarEmail({ para, assunto, html });
+    const url = espacoInfo.emailUrl;
+    if (!url) return false;
+    await chamar(url, { tipo: "aviso-membro", para, nome: nomePara, de: eu.nome || eu.email, titulo: tarefa.titulo, texto, link: `${LINK_APP}#/tarefa/${tarefa.id}` });
+    return true;
+  } catch (e) { console.warn("Menção:", e.message); return false; }
 }

@@ -716,3 +716,18 @@ img.avatar { object-fit: cover; padding: 0; }
 .chip-conteudo:hover .chip-avancar, .chip-conteudo:focus-within .chip-avancar { display: grid; }
 .seletor-etapa { padding: 2px 6px; font-size: 12px; border-radius: 99px; width: auto; }
 @media (hover: none) { .chip-avancar { display: none !important; } }
+
+/* ---------------- Comentários e histórico ---------------- */
+.secao-atividade { margin-top: 8px; }
+.atividade-lista { display: grid; gap: 8px; margin-bottom: 10px; max-height: 320px; overflow-y: auto; }
+.comentario { display: flex; gap: 10px; align-items: flex-start; }
+.comentario > div { flex: 1; background: var(--cor-fundo); border-radius: var(--raio-pequeno); padding: 8px 12px; }
+.comentario p { margin: 4px 0 0; white-space: pre-wrap; }
+.comentario-topo { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.comentario-topo .link { margin-left: auto; font-size: 12px; }
+.mudanca { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--cor-texto-suave); padding-left: 32px; }
+
+/* ---------------- Creators (em breve) ---------------- */
+.menu-selo { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--cor-destaque); color: var(--hyper-preto); padding: 1px 6px; border-radius: 99px; font-weight: 700; }
+.em-breve h2 { margin-top: 10px; }
+.lista-em-breve { display: grid; gap: 8px; padding-left: 18px; }

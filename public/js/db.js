@@ -275,6 +275,21 @@ export const novoId = (col) => doc(ref(col)).id;
 export const salvarComId = (col, id, valores) =>
   comPrazo(setDoc(col === "config" ? docConfig(id) : doc(ref(col), id), valores, { merge: true }));
 export const atualizar = (col, id, valores) => comPrazo(updateDoc(doc(ref(col), id), { ...valores, atualizadoEm: Date.now() }));
+/* ---------------- Comentários e histórico das tarefas ---------------- */
+// espacos/hyper/tarefas/{id}/atividade: { tipo: "comentario" | "mudanca", texto, uid, nome, em, mencoes }
+const refAtividade = (tarefaId) => collection(db, "espacos", ESPACO, "tarefas", tarefaId, "atividade");
+export async function listarAtividade(tarefaId) {
+  const snap = await comPrazo(getDocs(refAtividade(tarefaId)), 30);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.em - b.em);
+}
+/** Registra algo na tarefa (sem esperar: histórico nunca atrapalha o trabalho). */
+export function registrarAtividade(tarefaId, { tipo = "mudanca", texto, mencoes = [] }) {
+  if (!tarefaId || !texto || !db) return Promise.resolve();
+  return setDoc(doc(refAtividade(tarefaId)), { tipo, texto: String(texto).slice(0, 3000), mencoes, uid: eu.uid, nome: eu.nome || eu.email || "", em: Date.now() })
+    .catch((e) => console.warn("Histórico:", e.message));
+}
+export const excluirAtividade = (tarefaId, id) => comPrazo(deleteDoc(doc(refAtividade(tarefaId), id)));
+
 /* ---------------- Lixeira (30 dias) ---------------- */
 // O que é excluído destas coleções vai antes para a lixeira, de onde o administrador pode restaurar.
 export const COM_LIXEIRA = new Set(["tarefas", "compromissos", "clientes", "marcas", "recorrencias", "financeiro", "orcamentos", "contasAds", "manutencoes"]);

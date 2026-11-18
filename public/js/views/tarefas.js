@@ -1,7 +1,7 @@
 // Tarefas: quadro por status (A fazer / Em andamento / Concluído) ou lista, com filtros.
 import { quitarCobranca } from "../recorrencias.js";
 import { el, hojeISO, addDias, normalizar, vazio } from "../ui.js";
-import { dados, atualizar, opcoesClientes } from "../db.js";
+import { dados, atualizar, opcoesClientes, registrarAtividade } from "../db.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas, opcoesResponsaveis } from "./componentes.js";
 import { eu, ehAdmin, tarefaVisivel } from "../permissoes.js";
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, etapaDoStatus } from "../constantes.js";
@@ -61,6 +61,7 @@ export function render({ estado, renderizar }) {
             ...(t.tipo === TIPO_CONTEUDO ? { statusConteudo: etapaDoStatus(st, t.statusConteudo) } : {})
           });
           if (t && (st === "concluido") !== (t.status === "concluido")) quitarCobranca(t, st === "concluido");
+          if (t && t.status !== st) registrarAtividade(id, { texto: `mudou o status para ${STATUS_TAREFA.find(([v]) => v === st)?.[1]}` });
         }
       },
       el("header", {}, el("h2", {}, rotulo, el("span", { class: "contador" }, colunas[st].length)),
