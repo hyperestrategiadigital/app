@@ -2,7 +2,9 @@
  * Automações do app da Hyper, rodando no Google Apps Script DA CONTA DA HYPER (e só nela):
  *  - e-mails: convites, acesso liberado, pedidos de acesso, menções em comentários;
  *  - resumo diário às 8h para cada pessoa da equipe;
- *  - backup semanal compacto (.json.gz, sem imagens) numa pasta do Drive da Hyper, guardando só os 8 mais recentes.
+ *  - backup semanal compacto (.json.gz, sem imagens) numa pasta do Drive da Hyper, guardando só os 8 mais recentes;
+ *  - Google Agenda: a cada 5 minutos cria/atualiza/tira os compromissos marcados para a agenda, numa agenda da conta
+ *    da Hyper ("Hyper · Compromissos"), e manda o convite para o e-mail de cada participante (que recebe na agenda dele).
  *
  * Como instalar (uma vez, logado na conta da Hyper):
  *  1. Abra https://script.google.com → Novo projeto.
@@ -57,6 +59,13 @@ function doPost(e) {
       });
       return resposta({ ok: true });
     }
+    // Sincronizar a agenda agora (qualquer pessoa do app pode pedir; só roda a sincronização normal)
+    if (d.tipo === 'agenda-agora') {
+      const cache = CacheService.getScriptCache();
+      if (cache.get('agenda-agora')) return resposta({ ok: true, ja: true });
+      cache.put('agenda-agora', '1', 20);
+      return resposta({ ok: true, ...sincronizarAgenda() });
+    }
     if (d.tipo === 'aviso-membro') {
       const para = String(d.para || '').toLowerCase();
       if (!lista('MEMBROS').map((x) => x.toLowerCase()).includes(para)) return resposta({ ok: false, erro: 'nao-membro' });
@@ -94,6 +103,7 @@ function instalarGatilhos() {
   ScriptApp.getProjectTriggers().forEach((g) => ScriptApp.deleteTrigger(g));
   ScriptApp.newTrigger('resumoDiario').timeBased().atHour(8).everyDays(1).inTimezone(FUSO).create();
   ScriptApp.newTrigger('backupSemanal').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(3).inTimezone(FUSO).create();
+  ScriptApp.newTrigger('sincronizarAgenda').timeBased().everyMinutes(5).create();
 }
 
 /** Rode esta função no editor se precisar conectar o app de novo (ex.: trocou de conta ou apagou a configuração). */
@@ -144,6 +154,106 @@ function ocorreEm(c, dia) {
   if (c.repetir === 'quinzenal') return dias % 14 === 0;
   if (c.repetir === 'mensal') return dia.slice(8) === c.data.slice(8);
   return false;
+}
+
+/* ---------------- Google Agenda dos compromissos ---------------- */
+
+const NOME_AGENDA = 'Hyper · Compromissos';
+function agendaHyper() {
+  const id = P.getProperty('AGENDA_ID');
+  let cal = id ? CalendarApp.getCalendarById(id) : null;
+  if (!cal) {
+    const achadas = CalendarApp.getCalendarsByName(NOME_AGENDA);
+    cal = achadas.length ? achadas[0] : CalendarApp.createCalendar(NOME_AGENDA, { timeZone: FUSO, color: CalendarApp.Color.PURPLE });
+    P.setProperty('AGENDA_ID', cal.getId());
+  }
+  return cal;
+}
+
+function sincronizarAgenda() {
+  const trava = LockService.getScriptLock();
+  if (!trava.tryLock(20000)) return { ocupado: true };
+  try {
+    const cal = agendaHyper();
+    const hoje = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd');
+    const desde = new Date(Date.now() - 30 * 86400000), ate = new Date(Date.now() + 400 * 86400000);
+    // E-mails: membros (e-mail da agenda escolhido em Minha conta) + equipe sem conta
+    const emailDe = {};
+    lerColecao('membros').filter((m) => m.status === 'ativo').forEach((m) => { if (m.nome) emailDe[m.nome] = m.emailAgenda || m.email; });
+    const equipe = lerColecao('config').find((c) => c.id === 'equipe');
+    ((equipe && equipe.pessoas) || []).forEach((p) => { if (p.nome && p.email && !emailDe[p.nome]) emailDe[p.nome] = p.email; });
+    const clientes = {};
+    lerColecao('clientes').forEach((c) => (clientes[c.id] = c.nome));
+    const conta = Session.getEffectiveUser().getEmail().toLowerCase();
+
+    const desejados = {};
+    lerColecao('compromissos').forEach((c) => {
+      const fim = c.repetir ? (c.repetirAte || '9999-12-31') : c.data;
+      if (c.sincronizar && c.data && fim >= Utilities.formatDate(desde, FUSO, 'yyyy-MM-dd')) desejados[c.id] = c;
+    });
+
+    // O que já foi para a agenda fica anotado nas propriedades do script: ag_<compromisso> = { evento, hash }
+    const anotados = {};
+    const props = P.getProperties();
+    Object.keys(props).filter((k) => k.indexOf('ag_') === 0).forEach((k) => { try { anotados[k.slice(3)] = JSON.parse(props[k]); } catch (e) {} });
+    const buscar = (evento) => { try { return cal.getEventSeriesById(evento) || cal.getEventById(evento); } catch (e) { return null; } };
+
+    let criados = 0, removidos = 0, erros = 0;
+    Object.keys(anotados).forEach((id) => {
+      if (desejados[id]) return;
+      try { const ev = buscar(anotados[id].evento); if (ev) apagarEvento(ev); P.deleteProperty('ag_' + id); removidos++; } catch (e) { erros++; }
+    });
+    Object.keys(desejados).forEach((id) => {
+      const c = desejados[id];
+      const convidados = [...new Set([
+        ...(c.participantes || []).map((n) => emailDe[n]).filter(Boolean),
+        ...String(c.convidados || '').split(/[,;\s]+/).filter((e) => /@/.test(e))
+      ].map((e) => e.trim().toLowerCase()))].filter((e) => e !== conta).sort();
+      const assinatura = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5,
+        JSON.stringify([c.titulo, c.data, c.hora, c.duracao, c.diaInteiro, c.local, c.descricao, c.repetir, c.repetirAte, c.clienteId, convidados])));
+      const anotado = anotados[id];
+      const atual = anotado ? buscar(anotado.evento) : null;
+      if (atual && anotado.hash === assinatura) return;
+      try {
+        if (atual) apagarEvento(atual);
+        const ev = criarEvento(cal, c, convidados, clientes[c.clienteId]);
+        const eventoId = ev.getId();
+        P.setProperty('ag_' + id, JSON.stringify({ evento: eventoId, hash: assinatura }));
+        gravarDocumento('compromissos/' + id, {
+          googleEventId: eventoId, sincronizadoEm: Date.now(), erroSync: '',
+          googleLink: 'https://www.google.com/calendar/event?eid=' + Utilities.base64EncodeWebSafe(eventoId.split('@')[0] + ' ' + cal.getId()).replace(/=+$/, '')
+        });
+        criados++;
+      } catch (e) {
+        erros++;
+        try { gravarDocumento('compromissos/' + id, { erroSync: String(e).slice(0, 300) }); } catch (e2) {}
+      }
+    });
+    const info = { ultimo: Date.now(), conta, calendario: NOME_AGENDA, criados, removidos, erros, hoje };
+    gravarDocumento('config/agendaHyper', info);
+    return info;
+  } finally { trava.releaseLock(); }
+}
+
+function apagarEvento(ev) {
+  if (typeof ev.deleteEventSeries === 'function') ev.deleteEventSeries(); else ev.deleteEvent();
+}
+
+function criarEvento(cal, c, convidados, cliente) {
+  const opcoes = {
+    description: [c.descricao, cliente ? 'Cliente: ' + cliente : '', 'Criado pelo app da Hyper'].filter(Boolean).join('\n\n'),
+    location: c.local || '', guests: convidados.join(','), sendInvites: true
+  };
+  const diaTodo = c.diaInteiro || !c.hora;
+  const inicio = diaTodo ? Utilities.parseDate(c.data, FUSO, 'yyyy-MM-dd') : Utilities.parseDate(c.data + ' ' + c.hora, FUSO, 'yyyy-MM-dd HH:mm');
+  const fim = new Date(inicio.getTime() + (Number(c.duracao) || 60) * 60000);
+  if (c.repetir) {
+    const regra = CalendarApp.newRecurrence();
+    const r = c.repetir === 'mensal' ? regra.addMonthlyRule() : regra.addWeeklyRule().interval(c.repetir === 'quinzenal' ? 2 : 1);
+    if (c.repetirAte) r.until(Utilities.parseDate(c.repetirAte + ' 23:59', FUSO, 'yyyy-MM-dd HH:mm'));
+    return diaTodo ? cal.createAllDayEventSeries(c.titulo, inicio, regra, opcoes) : cal.createEventSeries(c.titulo, inicio, fim, regra, opcoes);
+  }
+  return diaTodo ? cal.createAllDayEvent(c.titulo, inicio, opcoes) : cal.createEvent(c.titulo, inicio, fim, opcoes);
 }
 
 /* ---------------- Backup semanal (compacto) ---------------- */

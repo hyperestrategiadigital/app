@@ -62,7 +62,7 @@ service cloud.firestore {
         // A própria pessoa muda nome, foto e pedidos de acesso; papel, áreas, clientes e liberação só o administrador
         allow update: if admin()
                       || (logado() && request.auth.uid == uid
-                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'email', 'foto', 'pedido', 'resumoDiario', 'atualizadoEm']));
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'email', 'foto', 'pedido', 'resumoDiario', 'emailAgenda', 'atualizadoEm']));
         allow delete: if admin();
       }
 

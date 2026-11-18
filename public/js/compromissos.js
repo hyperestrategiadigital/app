@@ -1,29 +1,17 @@
 // Compromissos: reuniões, gravações externas, visitas — o que mexe na sua rotina.
 // Aparecem no calendário separados dos posts e podem ir para a sua Google Agenda pessoal.
 import { el, formulario, confirmar, avisar, hojeISO, fecharModais } from "./ui.js";
+import { ehAdmin } from "./permissoes.js";
 import { dados, criar, atualizar, excluir, porId, opcoesClientes, salvarComId, desfazerExclusao } from "./db.js";
-import {
-  sincronizar, removerDaAgenda, linkGoogleAgenda, agendaConectada, configEquipe, configAgenda
-} from "./agenda.js";
+import { sincronizar, linkGoogleAgenda, agendaConectada, configEquipe, emailsParticipantes } from "./agenda.js";
 
 export const TIPOS_COMPROMISSO = ["Reunião", "Gravação externa", "Visita", "Evento", "Call", "Pessoal", "Outro"];
-
-async function sincronizarComAviso(c) {
-  try {
-    await sincronizar(c);
-    avisar("Compromisso salvo e enviado para a Google Agenda.");
-  } catch (e) {
-    console.error(e);
-    await atualizar("compromissos", c.id, { erroSync: e.message }).catch(() => {});
-    avisar("Salvo no app, mas não foi para a Google Agenda: " + e.message, "erro");
-  }
-}
 
 export function abrirCompromisso(comp = {}) {
   const editando = !!comp.id;
   const equipe = configEquipe();
   const valores = {
-    tipo: "Reunião", data: hojeISO(), duracao: 60, sincronizar: agendaConectada(), repetir: "",
+    tipo: "Reunião", data: hojeISO(), duracao: 60, sincronizar: true, repetir: "",
     participantes: equipe.length ? [equipe[0].nome] : [], ...comp
   };
   const campos = [
@@ -43,7 +31,9 @@ export function abrirCompromisso(comp = {}) {
       : { tipo: "secao", rotulo: "Cadastre a equipe em Ajustes para escolher participantes." },
     { nome: "convidados", rotulo: "Outros convidados (e-mails)", dica: "cliente@empresa.com, outra@pessoa.com" },
     { nome: "descricao", rotulo: "Pauta / observações", tipo: "textarea", linhas: 3 },
-    { nome: "sincronizar", rotulo: agendaConectada() ? `Enviar para a Google Agenda (${configAgenda().email})` : "Enviar para a Google Agenda (conecte em Ajustes)", tipo: "checkbox" }
+    { nome: "sincronizar", rotulo: agendaConectada()
+      ? "Enviar para a Google Agenda (os participantes recebem o convite por e-mail em até 5 minutos)"
+      : "Enviar para a Google Agenda (vai assim que as automações estiverem ligadas em Ajustes)", tipo: "checkbox" }
   ].filter((c) => !(c.tipo === "secao" && !c.rotulo));
 
   const extras = [];
@@ -53,14 +43,12 @@ export function abrirCompromisso(comp = {}) {
     extras.push(el("button", {
       type: "button", class: "perigo-texto", onClick: async () => {
         if (!(await confirmar(`Excluir "${comp.titulo}"?${comp.googleEventId ? " Ele também sai da Google Agenda (e os convidados são avisados)." : ""}`))) return;
-        if (comp.googleEventId) {
-          try { await removerDaAgenda(comp); } catch (e) { avisar("Não consegui tirar da Google Agenda: " + e.message, "erro"); }
-        }
         const { id, googleEventId, googleLink, ...copia } = porId("compromissos", comp.id) || comp;
         await excluir("compromissos", id);
         fecharModais();
         // Ao desfazer ele volta no app; se estava na Google Agenda, é preciso sincronizar de novo.
-        avisar("Compromisso excluído.", "ok", { desfazer: () => desfazerExclusao("compromissos", id, copia) });
+        sincronizar();
+        avisar("Compromisso excluído.", "ok", { desfazer: async () => { await desfazerExclusao("compromissos", id, copia); sincronizar(); } });
       }
     }, "Excluir"));
   }
@@ -73,13 +61,10 @@ export function abrirCompromisso(comp = {}) {
       let salvo;
       if (editando) { await atualizar("compromissos", comp.id, v); salvo = { ...comp, ...v }; }
       else { const ref = await criar("compromissos", v); salvo = { id: ref.id, ...v }; }
-      if (v.sincronizar) sincronizarComAviso(salvo);
-      else {
-        if (salvo.googleEventId) {
-          try { await removerDaAgenda(salvo); await atualizar("compromissos", salvo.id, { googleEventId: "", googleLink: "" }); } catch (e) { console.warn(e); }
-        }
-        avisar(editando ? "Compromisso atualizado." : "Compromisso criado.");
-      }
+      // A agenda é atualizada pelo script da Hyper (cria, muda ou tira o evento e avisa os convidados)
+      if (v.sincronizar || salvo.googleEventId) sincronizar();
+      const convidados = emailsParticipantes(salvo).length;
+      avisar(`${editando ? "Compromisso atualizado" : "Compromisso criado"}.${v.sincronizar && agendaConectada() ? ` Vai para a Google Agenda${convidados ? ` com convite para ${convidados} pessoa(s)` : ""} em instantes.` : ""}`);
     }
   });
 }
@@ -99,18 +84,13 @@ export function cartaoCompromisso(c) {
 
 /** Faixa de aviso quando há compromissos marcados para a Google Agenda que ainda não foram enviados. */
 export function avisoPendentes() {
-  const pendentes = dados.compromissos.filter((c) => c.sincronizar && !c.googleEventId);
+  const pendentes = dados.compromissos.filter((c) => c.sincronizar && !c.googleEventId && (c.data || "") >= hojeISO());
   if (!pendentes.length) return null;
   if (!agendaConectada()) return el("p", { class: "faixa-aviso" }, `${pendentes.length} compromisso(s) esperando a Google Agenda. `,
-    el("a", { href: "#/conta" }, "Conectar a agenda em Minha conta →"));
-  return el("p", { class: "faixa-aviso" }, `${pendentes.length} compromisso(s) ainda não foram para a Google Agenda. `,
+    ehAdmin() ? el("a", { href: "#/config" }, "Ligar as automações em Ajustes →") : "Peça para um administrador ligar as automações em Ajustes.");
+  return el("p", { class: "faixa-aviso" }, `${pendentes.length} compromisso(s) indo para a Google Agenda (o script da Hyper sincroniza a cada 5 minutos). `,
     el("button", { class: "mini", onClick: async (e) => {
       e.currentTarget.disabled = true;
-      let ok = 0;
-      for (const c of pendentes) {
-        try { await sincronizar(c); ok++; }
-        catch (erro) { avisar(erro.message, "erro"); break; }
-      }
-      if (ok) avisar(`${ok} compromisso(s) enviado(s) para a Google Agenda.`);
-    } }, "Enviar agora"));
+      avisar((await sincronizar()) ? "Sincronização pedida. Os convites saem em instantes." : "O script vai sincronizar nos próximos minutos.");
+    } }, "Sincronizar agora"));
 }

@@ -182,6 +182,9 @@ test("menu do usuário: Minha conta com nome, acesso e conexões", async ({ page
   await page.getByRole("button", { name: "Salvar nome" }).click();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/membros"]?.hyper?.nome)).toBe("Hyper Agência");
   await expect(page.locator("#btn-usuario")).toContainText("Hyper Agência");
+  await page.fill("#conta-email-agenda", "Pessoal@iCloud.com");
+  await page.getByRole("button", { name: "Salvar e-mail da agenda" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/membros"]?.hyper?.emailAgenda)).toBe("pessoal@icloud.com");
 });
 
 test("administrador adiciona usuário por e-mail e ele entra já liberado, só com os clientes escolhidos", async ({ browser }) => {

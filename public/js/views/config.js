@@ -225,8 +225,8 @@ function blocoEmail() {
   return el("section", { class: "bloco" },
     el("h2", {}, "E-mails e automações"),
     emailAtivo()
-      ? el("p", {}, el("span", { class: "etiqueta ok" }, "Conectado"), ` Rodando na conta ${cfg.conta || "da Hyper"}: convites, acesso liberado, avisos de pedidos e menções, resumo diário às 8h para cada pessoa e backup toda segunda às 3h.`)
-      : el("p", {}, "Instale uma vez o script de automações na conta Google da Hyper. Ele manda os e-mails pelo Gmail dela (até 100 por dia, sem custo), envia o resumo diário às 8h e faz o backup semanal no Drive da Hyper."),
+      ? el("p", {}, el("span", { class: "etiqueta ok" }, "Conectado"), ` Rodando na conta ${cfg.conta || "da Hyper"}: convites, acesso liberado, avisos de pedidos e menções, resumo diário às 8h para cada pessoa, backup toda segunda às 3h e Google Agenda dos compromissos (a cada 5 minutos, com convite para os participantes).`)
+      : el("p", {}, "Instale uma vez o script de automações na conta Google da Hyper. Ele manda os e-mails pelo Gmail dela (até 100 por dia, sem custo), envia o resumo diário às 8h, faz o backup semanal no Drive da Hyper e coloca os compromissos na Google Agenda de cada participante (sem precisar do Google Cloud)."),
     emailAtivo() ? el("p", { class: "subtitulo" }, backup.ultimo
       ? ["Último backup: ", new Date(backup.ultimo).toLocaleString("pt-BR"), ` (${kb(backup.tamanho || 0)}, compactado, sem imagens; ficam os ${backup.guardados || 8} mais recentes). `, el("a", { href: backup.pasta, target: "_blank", rel: "noopener" }, "Abrir a pasta no Drive ↗")]
       : "Backup automático: o primeiro sai na próxima segunda às 3h (ou clique em Fazer backup agora).") : null,
@@ -239,7 +239,7 @@ function blocoEmail() {
         el("li", {}, "Abra Código.gs, apague tudo e cole ", el("a", { href: pasta + "Codigo.gs", target: "_blank", rel: "noopener" }, "Codigo.gs"), " (botão Copiar). Salve (Ctrl+S)."),
         el("li", {}, "Implantar → Nova implantação → engrenagem → App da Web. Executar como: Eu. Quem pode acessar: Qualquer pessoa. Implantar e autorize com a conta da Hyper (se aparecer \"app não verificado\": Avançado → Acessar)."),
         el("li", {}, "Copie a URL do app da Web, cole aqui embaixo e clique em Conectar."),
-        el("li", {}, "Para atualizar depois: cole o código novo, salve, Implantar → Gerenciar implantações → lápis → Versão: Nova versão → Implantar, e clique em Conectar de novo aqui."))),
+        el("li", {}, "Para atualizar depois: troque appsscript.json e Código.gs pelo conteúdo novo, salve, Implantar → Gerenciar implantações → lápis → Versão: Nova versão → Implantar. Se o Google pedir, autorize de novo (a agenda é uma permissão nova). Depois clique em Conectar de novo aqui."))),
     el("label", { class: "campo", for: "email-url" }, el("span", {}, "URL do app da Web"), url),
     el("div", { class: "acoes" },
       el("button", { class: emailAtivo() ? "secundario" : "destaque", onClick: async (e) => {

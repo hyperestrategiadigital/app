@@ -254,4 +254,5 @@ test("aprovação por link: cliente sem login vê e responde só os posts do lin
 
 test("resumo diário: a própria pessoa liga e desliga", async () => {
   await assertSucceeds(updateDoc(doc(como("basico"), `${E}/membros/basico`), { resumoDiario: false }));
+  await assertSucceeds(updateDoc(doc(como("basico"), `${E}/membros/basico`), { emailAgenda: "pessoal@icloud.com" }));
 });
