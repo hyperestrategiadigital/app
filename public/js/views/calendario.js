@@ -14,7 +14,8 @@ import { pode } from "../permissoes.js";
 
 const ICONE_FORMATO = {
   "Feed estático": "▣", "Carrossel": "▤", "Reels": "▶", "Story": "◫", "Sequência de stories": "◫",
-  "Vídeo (YouTube)": "▶", "TikTok": "▶", "Anúncio estático": "$", "Anúncio em vídeo": "$", "WhatsApp": "✉", "Blog": "¶"
+  "Vídeo (YouTube)": "▶", "TikTok": "▶", "Anúncio estático": "$", "Anúncio em vídeo": "$", "WhatsApp": "✉", "Blog": "¶",
+  "Artigo": "¶", "E-mail marketing": "✉"
 };
 
 export { corCliente };

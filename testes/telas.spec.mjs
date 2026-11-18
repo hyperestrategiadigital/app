@@ -301,3 +301,27 @@ test("resultados sem a Meta ligada mostram o caminho", async ({ page }) => {
   await page.getByRole("tab", { name: "Resultados" }).click();
   await expect(page.locator("#conteudo")).toContainText("ainda não foram ligados");
 });
+
+test("importar planejamento: cria marcas e posts sem duplicar", async ({ page }) => {
+  await abrir(page);
+  const plano = { tipo: "planejamento-hyper", cliente: "Grupo Exemplo", marcas: [{ nome: "Marca Azul", cor: "#2D6CDF" }], posts: [
+    { data: "2030-03-04", marca: "Marca Azul", formato: "Carrossel", rede: "Instagram", titulo: "Tema A", prazo: "2030-03-01" },
+    { data: "2030-03-05", marca: "", formato: "Artigo", rede: "LinkedIn", titulo: "Tema B (Autor)", prazo: "2030-03-01" },
+    { data: "2030-03-06", marca: "", formato: "E-mail marketing", rede: "E-mail", titulo: "Newsletter", prazo: "2030-03-01" }] };
+  const arquivo = { name: "plano.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(plano)) };
+  for (let vez = 0; vez < 2; vez++) {
+    await page.goto("/#/config");
+    await page.getByRole("button", { name: "Importar planejamento (.json)" }).click();
+    await page.setInputFiles(".modal input[type=file]", arquivo);
+    await expect(page.locator(".modal #imp-cliente")).toHaveValue("grupo");
+    await page.locator(".modal").getByRole("button", { name: "Importar planejamento" }).click();
+    await expect(page).toHaveURL(/#\/calendario\/grupo\/2030-03/);
+  }
+  const s = await page.evaluate(() => window.__store);
+  const posts = Object.values(s["espacos/hyper/tarefas"]).filter((t) => t.origem === "importacao-planejamento");
+  expect(posts).toHaveLength(3);
+  const marca = Object.values(s["espacos/hyper/marcas"]).find((m) => m.nome === "Marca Azul");
+  expect(posts.find((t) => t.titulo === "Tema A")).toMatchObject({ marcaId: expect.any(String), formato: "Carrossel", statusConteudo: "ideia", prazo: "2030-03-01" });
+  expect(posts.find((t) => t.titulo === "Tema A").checklist.length).toBeGreaterThan(0);
+  expect(marca.paleta).toEqual(["#2D6CDF"]);
+});
