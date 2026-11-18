@@ -309,25 +309,30 @@ function blocoModelos() {
 function blocoMeta() {
   const cfg = configMeta();
   const appId = el("input", { id: "meta-app", type: "text", inputmode: "numeric", placeholder: "Ex.: 1234567890123456", value: cfg.appId || "" });
+  const configId = el("input", { id: "meta-config", type: "text", inputmode: "numeric", placeholder: "Ex.: 987654321098765", value: cfg.configId || "" });
+  const li = (...c) => el("li", {}, ...c);
   return el("section", { class: "bloco" },
     el("h2", {}, "Relatórios do Instagram e Facebook"),
     cfg.appId ? el("p", {}, el("span", { class: "etiqueta ok" }, "Ligado"), " Cada pessoa conecta o próprio Facebook na aba Resultados do cliente (ou em Minha conta).")
-      : el("p", {}, "Para puxar os números das contas e de cada post, crie uma vez um app gratuito na Meta e cole o App ID aqui."),
-    el("details", { class: "passo-a-passo", open: !cfg.appId },
-      el("summary", {}, "Como criar o app da Meta (10 minutos)"),
+      : el("p", {}, "Para puxar os números das contas e de cada post, crie uma vez um app gratuito na Meta e cole os IDs aqui."),
+    el("details", { class: "passo-a-passo", open: !cfg.appId || !cfg.configId },
+      el("summary", {}, "Como configurar o app da Meta (tipo Negócio)"),
       el("ol", { class: "passos" },
-        el("li", {}, "Logado no Facebook que administra as páginas dos clientes, abra ", el("a", { href: "https://developers.facebook.com/apps/create/", target: "_blank", rel: "noopener" }, "developers.facebook.com → Criar app"), ". Se pedir, cadastre-se como desenvolvedor (é grátis)."),
-        el("li", {}, "Caso de uso: escolha \"Outro\" e depois o tipo \"Empresa\". Nome: Hyper App. Ligue ao portfólio empresarial da Hyper, se aparecer."),
-        el("li", {}, "No painel do app, adicione o produto \"Login do Facebook\" (Facebook Login) e escolha \"Web\". Em Site, coloque ", el("code", {}, location.origin), "."),
-        el("li", {}, "Em Configurações do app → Básico: em Domínios do app coloque ", el("code", {}, location.hostname), " e salve. Copie o \"ID do aplicativo\"."),
-        el("li", {}, "Em Login do Facebook → Configurações, em URIs de redirecionamento OAuth válidos coloque ", el("code", {}, location.origin + "/"), " e salve."),
-        el("li", {}, "Pode deixar o app em modo de desenvolvimento. Quem for usar os relatórios precisa ter função no app: em Funções do app → Funções, adicione as pessoas da equipe como Testadoras (elas aceitam o convite no Facebook)."),
-        el("li", {}, "Cole o ID do aplicativo aqui embaixo e salve. Depois abra um cliente → aba Resultados → Conectar."))),
-    el("label", { class: "campo", for: "meta-app" }, el("span", {}, "ID do aplicativo (App ID)"), appId),
+        li("Em ", el("a", { href: "https://developers.facebook.com/apps/", target: "_blank", rel: "noopener" }, "developers.facebook.com → Meus apps"), ", abra o app (tipo Negócio) e copie o App ID do topo."),
+        li("Produto \"Login do Facebook para Empresas\" → Definições (Settings): deixe Login no OAuth do cliente, Login no OAuth da Web e Login com o SDK do JavaScript em Sim. Em \"Domínios permitidos para o SDK do JavaScript\" e em \"URIs de redirecionamento do OAuth válidos\" coloque ", el("code", {}, location.origin + "/"), ". Salve."),
+        li("Se aparecer o aviso \"requires advanced access\": clique em Get Advanced Access e peça o acesso avançado de ", el("code", {}, "public_profile"), " (é automático)."),
+        li("Em Configurações do app → Básico: Domínios do app = ", el("code", {}, location.hostname), ". Salve."),
+        li("Login do Facebook para Empresas → Configurações (Configurations) → Criar configuração. Nome: Relatórios Hyper. Variação: Login geral. Token: Token de acesso do usuário. Permissões: ",
+          el("code", {}, "pages_show_list, pages_read_engagement, read_insights, instagram_basic, instagram_manage_insights, business_management"), ". Crie e copie o ID da configuração."),
+        li("Em Funções do app → Funções, adicione como Testadoras as pessoas da equipe que vão ver os relatórios (o app pode ficar em modo de desenvolvimento)."),
+        li("Cole o App ID e o ID da configuração aqui embaixo e salve. Depois: um cliente → aba Resultados → Conectar."))),
+    el("div", { class: "form-grade" },
+      el("label", { class: "campo metade", for: "meta-app" }, el("span", {}, "App ID"), appId),
+      el("label", { class: "campo metade", for: "meta-config" }, el("span", {}, "ID da configuração (Login para Empresas)"), configId)),
     el("div", { class: "acoes" }, el("button", { onClick: async () => {
-      const v = appId.value.replace(/\D/g, "");
-      if (appId.value && !v) { avisar("O App ID tem só números.", "erro"); return; }
-      await salvarComId("config", "meta", { appId: v });
-      avisar(v ? "App da Meta salvo." : "Relatórios desligados.");
+      const a = appId.value.replace(/\D/g, ""), c = configId.value.replace(/\D/g, "");
+      if ((appId.value && !a) || (configId.value && !c)) { avisar("Os IDs têm só números.", "erro"); return; }
+      await salvarComId("config", "meta", { appId: a, configId: c });
+      avisar(a ? "App da Meta salvo." : "Relatórios desligados.");
     } }, "Salvar")));
 }
