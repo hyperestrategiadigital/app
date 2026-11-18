@@ -5,8 +5,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes } from "./db.js";
 import { avisarAdmins, sincronizarAdmins } from "./emails.js";
-import { avatar } from "./views/componentes.js";
-import { el, avisar } from "./ui.js";
+import { avatar, abrirTarefa } from "./views/componentes.js";
+import { el, avisar, hojeISO } from "./ui.js";
 import { eu, pode, ehAdmin, AREAS } from "./permissoes.js";
 import { gerarRecorrencias } from "./recorrencias.js";
 import { abrirBusca, definirTelas, ativarAtalhoBusca } from "./busca.js";
@@ -76,10 +76,20 @@ function montarMenu() {
   $("menu").replaceChildren(busca, ...principais, grupo);
 }
 
+/** Celular: atalhos fixos embaixo (Hoje, Tarefas, + Nova, Calendário, Clientes). */
+function montarNavMovel(nome) {
+  const item = (rota, icone, titulo) => el("a", { href: `#/${rota}`, class: rota === nome ? "ativo" : "" }, el("span", { "aria-hidden": "true" }, icone), titulo);
+  $("nav-movel").replaceChildren(
+    item("hoje", "☀", "Hoje"), item("tarefas", "✓", "Tarefas"),
+    el("button", { class: "nav-novo", onClick: () => abrirTarefa({ prazo: hojeISO() }) }, el("span", { "aria-hidden": "true" }, "+"), "Nova"),
+    item("calendario", "▦", "Calendário"), item("clientes", "◉", "Clientes"));
+}
+
 function renderizar() {
   const { nome, params } = rotaAtual();
   const r = ROTAS[nome];
   montarMenu();
+  montarNavMovel(nome);
   document.title = `${r.titulo} · Hyper`;
   const area = $("conteudo");
   const rolagem = area.scrollTop;
@@ -245,4 +255,5 @@ onAuthStateChanged(auth, async (usuario) => {
 
 /* Menu no celular */
 $("btn-menu").addEventListener("click", () => document.body.classList.toggle("menu-aberto"));
+$("btn-busca-movel").addEventListener("click", abrirBusca);
 $("menu").addEventListener("click", () => document.body.classList.remove("menu-aberto"));

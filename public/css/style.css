@@ -644,3 +644,39 @@ img.avatar { object-fit: cover; padding: 0; }
 .lista-clientes-acesso { margin-top: 8px; max-height: 220px; overflow-y: auto; }
 .passo-a-passo summary { cursor: pointer; font-weight: 600; color: var(--cor-primaria); margin-bottom: 8px; }
 .modal form > .campo { margin-top: 14px; }
+
+/* ---------------- Celular: para "quebrar um galho" fora do computador ---------------- */
+.nav-movel { display: none; }
+@media (max-width: 760px) {
+  .principal, .ficha > *, .bloco { min-width: 0; }
+  .abas { display: flex; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .abas::-webkit-scrollbar { display: none; }
+  .abas button { white-space: nowrap; flex: none; }
+  .tela-topo { flex-wrap: wrap; }
+  .tela-acoes { flex-wrap: wrap; }
+  .tela-acoes > * { flex: 1 1 auto; }
+  table { display: block; max-width: 100%; overflow-x: auto; }
+  .links-cliente, .com-acao { flex-wrap: wrap; }
+  .cartao-titulo, .linha-tabela { overflow-wrap: anywhere; }
+  .linha-tabela { flex-wrap: wrap; }
+  /* Modais ocupam a tela inteira e rolam por dentro */
+  .modal-fundo { padding: 0; align-items: stretch; }
+  .modal, .modal.modal-largo { width: 100%; max-width: none; max-height: 100dvh; height: 100dvh; border-radius: 0; overflow-y: auto; }
+  .modal .acoes { position: sticky; bottom: 0; background: var(--cor-superficie); padding: 10px 0; flex-wrap: wrap; }
+  input, select, textarea { font-size: 16px; } /* evita o zoom automático do iPhone */
+  .barra-movel .busca-movel { margin-left: auto; color: var(--hyper-branco); font-size: 22px; }
+  /* Barra de atalhos embaixo */
+  .nav-movel {
+    display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
+    background: var(--cor-superficie); border-top: 1px solid var(--cor-borda); padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+  .nav-movel a, .nav-movel button {
+    display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; background: none; border: 0;
+    color: var(--cor-texto-suave); font: inherit; font-size: 11px; text-decoration: none; border-radius: var(--raio-pequeno);
+  }
+  .nav-movel span[aria-hidden] { font-size: 20px; line-height: 1; }
+  .nav-movel a.ativo { color: var(--hyper-roxo); font-weight: 700; }
+  .nav-movel .nav-novo span[aria-hidden] { background: var(--cor-destaque); color: var(--hyper-preto); border-radius: 50%; width: 32px; height: 32px; display: grid; place-items: center; }
+  body.logado #conteudo { padding-bottom: 72px; }
+  .aviso { bottom: 84px; }
+}

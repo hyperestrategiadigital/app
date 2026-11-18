@@ -25,6 +25,10 @@ service cloud.firestore {
       function doCliente(cid) { return todosClientes() || cid == '' || cid in eu().get('clientes', []); }
       function doClienteEstrito(cid) { return todosClientes() || (cid != '' && cid in eu().get('clientes', [])); }
       function cli(d) { return d.get('clienteId', ''); }
+      // Leitura (inclusive de listas/consultas): compara o campo direto, para o Firestore conseguir
+      // conferir a consulta filtrada por clienteId. Documento sem clienteId não aparece para quem vê só alguns.
+      function podeLer(d) { return todosClientes() || d.clienteId == '' || d.clienteId in eu().get('clientes', []); }
+      function podeLerEstrito(d) { return todosClientes() || d.clienteId in eu().get('clientes', []); }
       // Convite: o administrador cadastra o e-mail antes; no primeiro acesso a pessoa já entra liberada
       function emailLogado() { return request.auth.token.email.lower(); }
       function caminhoConvite() { return /databases/$(database)/documents/espacos/$(esp)/convites/$(emailLogado()); }
@@ -74,28 +78,30 @@ service cloud.firestore {
         allow write: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(id);
       }
       match /marcas/{id} {
-        allow read: if ativo() && doCliente(cli(resource.data));
+        allow read: if ativo() && podeLerEstrito(resource.data);
         allow create: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(request.resource.data));
         allow update: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
         allow delete: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(resource.data));
       }
       match /tarefas/{id} {
-        allow read, delete: if ativo() && doCliente(cli(resource.data));
+        allow read: if ativo() && podeLer(resource.data);
+        allow delete: if ativo() && doCliente(cli(resource.data));
         allow create: if ativo() && doCliente(cli(request.resource.data));
         allow update: if ativo() && doCliente(cli(resource.data)) && doCliente(cli(request.resource.data));
       }
       // Tarefas concluídas há mais de 90 dias: leitura como as tarefas; só o administrador arquiva e mexe
       match /tarefasArquivo/{id} {
-        allow read: if ativo() && doCliente(cli(resource.data));
+        allow read: if ativo() && podeLer(resource.data);
         allow write: if admin();
       }
       match /compromissos/{id} {
-        allow read, delete: if ativo() && doCliente(cli(resource.data));
+        allow read: if ativo() && podeLer(resource.data);
+        allow delete: if ativo() && doCliente(cli(resource.data));
         allow create: if ativo() && doCliente(cli(request.resource.data));
         allow update: if ativo() && doCliente(cli(resource.data)) && doCliente(cli(request.resource.data));
       }
       match /recorrencias/{id} {
-        allow read: if ativo() && doCliente(cli(resource.data));
+        allow read: if ativo() && podeLer(resource.data);
         allow write: if admin();
       }
 
@@ -104,12 +110,14 @@ service cloud.firestore {
 
       // Tráfego pago
       match /contasAds/{id} {
-        allow read, delete: if pode('trafego') && doClienteEstrito(cli(resource.data));
+        allow read: if pode('trafego') && podeLerEstrito(resource.data);
+        allow delete: if pode('trafego') && doClienteEstrito(cli(resource.data));
         allow create: if pode('trafego') && doClienteEstrito(cli(request.resource.data));
         allow update: if pode('trafego') && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
       }
       match /manutencoes/{id} {
-        allow read, delete: if pode('trafego') && doClienteEstrito(cli(resource.data));
+        allow read: if pode('trafego') && podeLerEstrito(resource.data);
+        allow delete: if pode('trafego') && doClienteEstrito(cli(resource.data));
         allow create: if pode('trafego') && doClienteEstrito(cli(request.resource.data));
         allow update: if pode('trafego') && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
       }
@@ -117,12 +125,14 @@ service cloud.firestore {
       // Financeiro (valores dos clientes)
       match /contratos/{id} { allow read, write: if pode('financeiro') && doClienteEstrito(id); }
       match /financeiro/{id} {
-        allow read, delete: if pode('financeiro') && doClienteEstrito(cli(resource.data));
+        allow read: if pode('financeiro') && podeLerEstrito(resource.data);
+        allow delete: if pode('financeiro') && doClienteEstrito(cli(resource.data));
         allow create: if pode('financeiro') && doClienteEstrito(cli(request.resource.data));
         allow update: if pode('financeiro') && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
       }
       match /orcamentos/{id} {
-        allow read, delete: if pode('financeiro') && doClienteEstrito(cli(resource.data));
+        allow read: if pode('financeiro') && podeLerEstrito(resource.data);
+        allow delete: if pode('financeiro') && doClienteEstrito(cli(resource.data));
         allow create: if pode('financeiro') && doClienteEstrito(cli(request.resource.data));
         allow update: if pode('financeiro') && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
       }

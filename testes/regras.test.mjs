@@ -175,6 +175,10 @@ test("acesso só a alguns clientes", async () => {
   // Sem filtro: ou a leitura é negada, ou não traz nada de outro cliente
   const tudo = await getDocs(collection(db, `${E}/tarefas`)).catch(() => null);
   assert.ok(!tudo || tudo.docs.every((d) => d.data().clienteId !== "c2"), "vazou tarefa de outro cliente");
+  const clientes = await getDocs(collection(db, `${E}/clientes`)).catch(() => null);
+  assert.ok(!clientes || clientes.docs.every((d) => d.id !== "c2"), "vazou outro cliente");
+  const lancamentos = await getDocs(collection(db, `${E}/financeiro`)).catch(() => null);
+  assert.ok(!lancamentos || lancamentos.docs.every((d) => d.data().clienteId === "c1"), "vazou lançamento de outro cliente");
   await assertFails(gravar("luisa", `${E}/tarefas/t9`, { titulo: "x", clienteId: "c2" }));
   await assertSucceeds(gravar("luisa", `${E}/tarefas/t9`, { titulo: "x", clienteId: "c1" }));
   await assertFails(updateDoc(doc(db, `${E}/tarefas/t1`), { clienteId: "c2" }));
