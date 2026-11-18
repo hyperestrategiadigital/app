@@ -3,7 +3,7 @@ import { pode } from "../permissoes.js";
 import { abrirCriarArte } from "./criar.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
-import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo } from "../db.js";
+import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo, desfazerExclusao } from "../db.js";
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
 import { promptCopy } from "../prompts.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
@@ -106,7 +106,7 @@ export function abrirTarefa(tarefa = {}) {
           const { id, ...copia } = porId("tarefas", tarefa.id) || tarefa;
           await excluir("tarefas", id);
           fecharModais();
-          avisar("Tarefa excluída.", "ok", { desfazer: () => salvarComId("tarefas", id, copia) });
+          avisar("Tarefa excluída.", "ok", { desfazer: () => desfazerExclusao("tarefas", id, copia) });
         }
       }
     }, "Excluir") : null
@@ -128,7 +128,7 @@ export function abrirTarefa(tarefa = {}) {
     const v = form.lerValores();
     fecharModais();
     const salvo = await abrirCompromisso({ titulo: v.titulo, clienteId: v.clienteId, data: v.prazo || hojeISO(), descricao: v.notas, tipo: "Reunião" });
-    if (salvo && tarefa.id) await excluir("tarefas", tarefa.id);
+    if (salvo && tarefa.id) await excluir("tarefas", tarefa.id, { lixeira: false });
   };
   form?.querySelector("#f-tipo")?.addEventListener("change", (e) => {
     if (e.target.value === "Reunião") { avisar("Reuniões entram como compromisso: aparecem no calendário e podem ir para a Google Agenda."); virarCompromisso(); }

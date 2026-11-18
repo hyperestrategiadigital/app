@@ -680,3 +680,7 @@ img.avatar { object-fit: cover; padding: 0; }
   body.logado #conteudo { padding-bottom: 72px; }
   .aviso { bottom: 84px; }
 }
+
+.erro-item { border-bottom: 1px solid var(--cor-borda-suave); padding: 6px 0; }
+.erro-item summary { cursor: pointer; }
+.erro-item pre, .prompt-final pre { white-space: pre-wrap; font-size: 12px; }

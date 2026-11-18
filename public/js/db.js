@@ -275,7 +275,73 @@ export const novoId = (col) => doc(ref(col)).id;
 export const salvarComId = (col, id, valores) =>
   comPrazo(setDoc(col === "config" ? docConfig(id) : doc(ref(col), id), valores, { merge: true }));
 export const atualizar = (col, id, valores) => comPrazo(updateDoc(doc(ref(col), id), { ...valores, atualizadoEm: Date.now() }));
-export const excluir = (col, id) => comPrazo(deleteDoc(doc(ref(col), id)));
+/* ---------------- Lixeira (30 dias) ---------------- */
+// O que é excluído destas coleções vai antes para a lixeira, de onde o administrador pode restaurar.
+export const COM_LIXEIRA = new Set(["tarefas", "compromissos", "clientes", "marcas", "recorrencias", "financeiro", "orcamentos", "contasAds", "manutencoes"]);
+export const DIAS_LIXEIRA = 30;
+
+/** Exclui. Com lixeira (padrão nas coleções acima), guarda uma cópia por 30 dias. */
+export async function excluir(col, id, { lixeira = true } = {}) {
+  const item = porId(col, id);
+  if (!lixeira || !COM_LIXEIRA.has(col) || !item) return comPrazo(deleteDoc(doc(ref(col), id)));
+  const { id: _, ...valores } = item;
+  const lote = writeBatch(db);
+  lote.set(doc(ref("lixeira"), `${col}__${id}`), {
+    colecao: col, idOriginal: id, dados: valores, clienteId: col === "clientes" ? id : (valores.clienteId || ""),
+    titulo: valores.titulo || valores.nome || valores.descricao || valores.plataforma || "(sem título)",
+    excluidoEm: Date.now(), excluidoPor: eu.nome || eu.email || "", excluidoPorUid: eu.uid
+  });
+  lote.delete(doc(ref(col), id));
+  await comPrazo(lote.commit());
+}
+
+/** Lista a lixeira (só administrador). */
+export const listarLixeira = async () => (await comPrazo(getDocs(ref("lixeira")), 30)).docs.map((d) => ({ id: d.id, ...d.data() }));
+/** Devolve o item ao lugar de origem. */
+export async function restaurarDaLixeira(item) {
+  const lote = writeBatch(db);
+  lote.set(doc(ref(item.colecao), item.idOriginal), item.dados);
+  lote.delete(doc(ref("lixeira"), item.id));
+  await comPrazo(lote.commit());
+}
+/** "Desfazer" logo depois de excluir: devolve o item e tira da lixeira. */
+export async function desfazerExclusao(col, id, valores) {
+  await salvarComId(col, id, valores);
+  await comPrazo(deleteDoc(doc(ref("lixeira"), `${col}__${id}`))).catch(() => {});
+}
+export const excluirDaLixeira = (id) => comPrazo(deleteDoc(doc(ref("lixeira"), id)));
+/** Apaga de vez o que está na lixeira há mais de 30 dias, e erros antigos (administrador, ao entrar). */
+export async function limparAntigos() {
+  const limite = Date.now() - DIAS_LIXEIRA * 86400000;
+  for (const col of ["lixeira", "erros"]) {
+    const snap = await comPrazo(getDocs(ref(col)), 30).catch(() => null);
+    const velhos = (snap?.docs || []).filter((d) => (d.data().excluidoEm || d.data().em || 0) < limite);
+    for (let i = 0; i < velhos.length; i += 400) {
+      const lote = writeBatch(db);
+      velhos.slice(i, i + 400).forEach((d) => lote.delete(d.ref));
+      await comPrazo(lote.commit());
+    }
+  }
+}
+
+/* ---------------- Registro de erros ---------------- */
+let errosEnviados = 0;
+const errosVistos = new Set();
+/** Guarda um erro (para o administrador e o Claude diagnosticarem). Limitado a 15 por sessão. */
+export async function registrarErro(msg, detalhe = "") {
+  try {
+    if (!db || !eu.uid) return;
+    const chave = String(msg).slice(0, 200);
+    if (errosVistos.has(chave) || ++errosEnviados > 15) return;
+    errosVistos.add(chave);
+    await setDoc(doc(ref("erros")), {
+      msg: chave, detalhe: String(detalhe || "").slice(0, 1500), rota: location.hash.slice(0, 120),
+      uid: eu.uid, email: eu.email || "", navegador: navigator.userAgent.slice(0, 200), em: Date.now()
+    });
+  } catch { /* registrar erro nunca pode gerar outro erro */ }
+}
+export const listarErros = async () => (await comPrazo(getDocs(ref("erros")), 30)).docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.em - a.em);
+export const excluirErro = (id) => comPrazo(deleteDoc(doc(ref("erros"), id)));
 
 /** Grava muitos documentos em lotes de 400 (limite do Firestore é 500 por lote). */
 export async function gravarEmLote(col, itens, aoProgredir) {

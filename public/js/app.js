@@ -3,10 +3,10 @@ import { auth } from "./firebase.js";
 import {
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes } from "./db.js";
+import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes, registrarErro, limparAntigos } from "./db.js";
 import { avisarAdmins, sincronizarAdmins } from "./emails.js";
 import { avatar, abrirTarefa } from "./views/componentes.js";
-import { el, avisar, hojeISO } from "./ui.js";
+import { el, avisar, hojeISO, quandoErro } from "./ui.js";
 import { eu, pode, ehAdmin, AREAS } from "./permissoes.js";
 import { gerarRecorrencias } from "./recorrencias.js";
 import { abrirBusca, definirTelas, ativarAtalhoBusca } from "./busca.js";
@@ -25,6 +25,7 @@ import * as rotinas from "./views/rotinas.js";
 import * as relatorios from "./views/relatorios.js";
 import * as usuarios from "./views/usuarios.js";
 import * as conta from "./views/conta.js";
+import * as lixeira from "./views/lixeira.js";
 
 // `area`: quem não tem essa área não vê a tela ("admin" = só administradores)
 // `grupo: "admin"`: fica dentro de "Administração" no menu. `menu: false`: tela sem item no menu.
@@ -38,6 +39,7 @@ const ROTAS = {
   rotinas: { titulo: "Rotinas", icone: "↻", view: rotinas, area: "admin", grupo: "admin" },
   relatorios: { titulo: "Relatórios", icone: "▤", view: relatorios, area: "admin", grupo: "admin" },
   usuarios: { titulo: "Usuários e equipe", icone: "☺", view: usuarios, area: "admin", grupo: "admin" },
+  lixeira: { titulo: "Lixeira", icone: "⌫", view: lixeira, area: "admin", grupo: "admin" },
   config: { titulo: "Ajustes", icone: "⚙", view: config, area: "admin", grupo: "admin" },
   conta: { titulo: "Minha conta", icone: "☺", view: conta, menu: false },
   // Abertas a partir do calendário e do post
@@ -118,6 +120,16 @@ function tarefasDeAdmin() {
     sincronizarNomesClientes().catch((e) => console.warn("Nomes dos clientes:", e.message));
     sincronizarAdmins().catch((e) => console.warn("Admins no script de e-mail:", e.message));
   }, 3000);
+}
+
+/* ---------------- Registro de erros ---------------- */
+quandoErro((msg) => registrarErro(msg, "aviso mostrado na tela"));
+window.addEventListener("error", (e) => registrarErro(e.message || "Erro", `${e.filename || ""}:${e.lineno || ""} ${e.error?.stack || ""}`));
+window.addEventListener("unhandledrejection", (e) => registrarErro(e.reason?.message || String(e.reason), e.reason?.stack || ""));
+
+/* ---------------- App instalável (celular e computador) ---------------- */
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Service worker:", e.message));
 }
 
 /* ---------------- Login ---------------- */
@@ -228,7 +240,7 @@ async function entrar(usuario) {
   // Rotinas automáticas e ajustes de dados antigos: só o administrador roda
   if (ehAdmin()) {
     gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
-    completarPostsSemFormato().then(migrarReunioes).then(migrarTipos).then(alinharStatusPosts).then(arquivarAntigas).catch((e) => console.error("Migração:", e));
+    completarPostsSemFormato().then(migrarReunioes).then(migrarTipos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).catch((e) => console.error("Migração:", e));
   }
 }
 

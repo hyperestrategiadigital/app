@@ -1,7 +1,7 @@
 // Compromissos: reuniões, gravações externas, visitas — o que mexe na sua rotina.
 // Aparecem no calendário separados dos posts e podem ir para a sua Google Agenda pessoal.
 import { el, formulario, confirmar, avisar, hojeISO, fecharModais } from "./ui.js";
-import { dados, criar, atualizar, excluir, porId, opcoesClientes, salvarComId } from "./db.js";
+import { dados, criar, atualizar, excluir, porId, opcoesClientes, salvarComId, desfazerExclusao } from "./db.js";
 import {
   sincronizar, removerDaAgenda, linkGoogleAgenda, agendaConectada, configEquipe, configAgenda
 } from "./agenda.js";
@@ -60,7 +60,7 @@ export function abrirCompromisso(comp = {}) {
         await excluir("compromissos", id);
         fecharModais();
         // Ao desfazer ele volta no app; se estava na Google Agenda, é preciso sincronizar de novo.
-        avisar("Compromisso excluído.", "ok", { desfazer: () => salvarComId("compromissos", id, copia) });
+        avisar("Compromisso excluído.", "ok", { desfazer: () => desfazerExclusao("compromissos", id, copia) });
       }
     }, "Excluir"));
   }

@@ -4,7 +4,7 @@ import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes,
 import { cabecalho } from "./componentes.js";
 import { analisarPlanilha } from "../importacao.js";
 import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
-import { salvarComId, carregarArquivo } from "../db.js";
+import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail } from "../emails.js";
 
@@ -86,6 +86,7 @@ export function render() {
     cabecalho("Ajustes", "E-mails automáticos, OpenAI, importação e backup. Sua Google Agenda fica em Minha conta (clique no seu nome)."),
 
     blocoEmail(),
+    blocoErros(),
     ehAdmin() ? blocoOpenAI() : null,
 
     ehAdmin() ? blocoImportarMarcas() : null,
@@ -233,4 +234,31 @@ function blocoEmail() {
       emailAtivo() ? el("button", { class: "perigo-texto", onClick: async () => {
         if (await confirmar("Desligar os e-mails automáticos?")) { await desconectarEmail(); avisar("E-mails desligados."); }
       } }, "Desligar") : null));
+}
+
+/** Erros que aconteceram com alguém da equipe (para diagnosticar sem depender de print). */
+function blocoErros() {
+  const lista = el("div", { class: "lista-erros" });
+  let erros = [];
+  const fmt = (e) => `${new Date(e.em).toLocaleString("pt-BR")} · ${e.email || "?"} · ${e.rota || "-"}\n${e.msg}${e.detalhe ? `\n${e.detalhe}` : ""}`;
+  const carregar = async (botao) => {
+    botao.disabled = true;
+    try {
+      erros = await listarErros();
+      lista.replaceChildren(...(erros.length ? [
+        el("div", { class: "acoes" },
+          el("button", { class: "secundario mini", onClick: async () => { await navigator.clipboard.writeText(erros.map(fmt).join("\n\n")).catch(() => {}); avisar("Copiado. Cole na conversa com o Claude."); } }, "Copiar todos para o Claude"),
+          el("button", { class: "perigo-texto", onClick: async () => { for (const e of erros) await excluirErro(e.id); lista.replaceChildren(el("p", { class: "subtitulo" }, "Lista limpa.")); } }, "Limpar lista")),
+        ...erros.slice(0, 50).map((e) => el("details", { class: "erro-item" },
+          el("summary", {}, el("strong", {}, e.msg.slice(0, 120)), el("span", { class: "subtitulo" }, ` · ${e.email || "?"} · ${new Date(e.em).toLocaleString("pt-BR")}`)),
+          el("pre", {}, fmt(e))))
+      ] : [el("p", { class: "subtitulo" }, "Nenhum erro registrado nos últimos 30 dias. 🎉")]));
+    } catch (erro) { avisar(erro.message, "erro"); }
+    botao.disabled = false;
+  };
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Erros recentes"),
+    el("p", {}, "Quando algo dá errado para alguém da equipe, o app guarda o erro aqui por 30 dias. Se algo estranho acontecer, copie e mande para o Claude."),
+    el("button", { class: "secundario", onClick: (e) => carregar(e.currentTarget) }, "Ver erros"),
+    lista);
 }
