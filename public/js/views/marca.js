@@ -172,7 +172,7 @@ export function juntarClientes(c) {
           avisar("Parou no meio: " + erro.message + " Rode de novo para terminar (o que já foi movido não duplica).", "erro");
           e.currentTarget.disabled = false;
         }
-      } }, "Juntar")))), { largo: true });
+      } }, "Juntar"))), { largo: true });
 }
 
 async function juntarUm(destino, origem, progresso) {

@@ -17,8 +17,14 @@ Toda interface deste repositório segue `docs/identidade-visual.md`.
 - Valores de contrato (mensalidade, dia de vencimento) ficam em `contratos/{clienteId}`, nunca na ficha do cliente. Use `contrato(clienteId)` de `db.js`.
 - Coisas pessoais de cada usuário (Google Agenda conectada) ficam em `espacos/hyper/pessoal/{uid}/...`.
 - Datas são texto `AAAA-MM-DD`; use as funções de data de `ui.js`.
-- Formulários usam `formulario()` de `ui.js` (campos podem ter `mostrarSe(valores)`).
-- Post = tarefa com `tipo: "Conteúdo"` (`TIPO_CONTEUDO`). Não recrie uma coleção separada de conteúdos.
+- Formulários usam `formulario()` de `ui.js` (campos podem ter `mostrarSe(valores)` e selects podem ter `opcoesDe(valores)`).
+- Post = tarefa com `tipo: "Conteúdo"` (`TIPO_CONTEUDO`). Não recrie uma coleção separada de conteúdos. O post tem um status só: a etapa (`statusConteudo`); o `status` de tarefa sai dela (`statusDaEtapa`/`etapaDoStatus` em `constantes.js`).
+- Marcas: um cliente pode ter várias marcas (`marcas`, com `clienteId`). Post/tarefa guarda `marcaId`. Para copy, imagem, Canva e PDF use `identidade(clienteId, marcaId)` de `db.js` (marca com o que faltar vindo do cliente). Identidade (cores, fontes, tom de voz, persona…) só se edita na aba Marca; o "Editar" do cliente é só cadastro, contato e contrato.
+- Tipos de tarefa: os 8 de `TIPOS_TAREFA` (+ "Reunião", que vira compromisso). Tipos antigos são convertidos por `migrarTipos()`.
+- Tarefas concluídas há mais de 90 dias vão para `tarefasArquivo` (`arquivarAntigas()`, só admin). Telas que olham meses antigos usam `todasTarefas()` e `garantirArquivo(data)`/`carregarArquivo()`.
+- Ações que apagam ou concluem oferecem desfazer: `avisar(msg, "ok", { desfazer })`.
+- Planejamento é um modo do Calendário (`#/calendario/<cliente>/<mês>/planejar`) e o Criar abre dentro do post (`abrirCriarArte`). As rotas `#/planejamento` e `#/criar` só redirecionam.
+- Rotina de cobrança cria a receita `mens-<cliente>-<mês>` (`garantirMensalidade`) e concluir a tarefa marca como paga (`quitarCobranca`).
 - Arquivos da marca (logos, fontes, referências) ficam na pasta do Drive do cliente (`linkDrive`). Criativos dos posts ficam em base64 em `clientes/{id}/artes` (`arquivos.js`), não no Firebase Storage (plano Spark).
 - Rotinas (`recorrencias`) têm `modelo`: `livre`, `producao` (semana seguinte), `planejamento` (mês seguinte) ou `cobranca` (vencimento do cliente). A lógica fica em `recorrencias.js`.
 - Compromissos (`compromissos`, `agenda.js`, `compromissos.js`) são a única coisa que vai para a Google Agenda. A conexão usa um app Firebase secundário ("agenda") para permitir outra conta Google; o token dura ~1 h e não é salvo no banco. Posts nunca vão para a agenda.
@@ -29,7 +35,8 @@ Toda interface deste repositório segue `docs/identidade-visual.md`.
 
 ## Publicação
 
-- Um push no `main` publica o Hosting pelo GitHub Actions (`.github/workflows/deploy.yml`, secret `FIREBASE_SERVICE_ACCOUNT`).
+- Um push no `main` roda os testes e publica o Hosting pelo GitHub Actions (`.github/workflows/deploy.yml`, secret `FIREBASE_SERVICE_ACCOUNT`). Pull requests rodam só os testes.
+- Testes: `testes/regras.test.mjs` (regras no emulador) e `testes/telas.spec.mjs` (Playwright com o Firebase em memória de `testes/mocks`). Ao mudar `firestore.rules` ou uma tela, atualize os testes. Os dados de teste são fictícios: nunca coloque dados de clientes no repositório.
 - A conta de serviço não publica regras do Firestore. Quando `firestore.rules` mudar, avise o usuário para colar as regras em Firestore → Segurança no console.
 - Evite consultas que exijam índice composto, ou avise o usuário para criar o índice.
 
