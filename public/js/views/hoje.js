@@ -1,6 +1,6 @@
 // Tela inicial: o que está atrasado, o que vence hoje, a semana e os conteúdos próximos.
 import { el, hojeISO, addDias, fmtData, fmtDiaSemana, fmtMoeda, vazio } from "../ui.js";
-import { dados, nomeCliente } from "../db.js";
+import { dados, nomeCliente, marcasDo } from "../db.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, seloCliente, abas } from "./componentes.js";
 import { emailAtivo } from "../emails.js";
 import { configOpenAI } from "../openai.js";
@@ -18,13 +18,15 @@ const guardar = (chave, valor) => { try { localStorage.setItem(chave, valor); } 
 function primeirosPassos(renderizar) {
   if (!ehAdmin()) return null;
   try { if (localStorage.getItem("hyper-primeiros-passos") === "ok") return null; } catch {}
+  // Identidade: em grupos conta cada marca; nos clientes de uma marca só, o próprio cliente
   const ativos = dados.clientes.filter((c) => c.ativo !== false);
-  const comMarca = ativos.filter((c) => c.tomDeVoz && (c.paleta || []).length).length;
+  const unidades = ativos.flatMap((c) => (marcasDo(c.id).length ? marcasDo(c.id) : [c]));
+  const comMarca = unidades.filter((u) => u.tomDeVoz && (u.paleta || []).length).length;
   const passos = [
     ["Ligar os e-mails automáticos (convites, avisos, resumo diário)", emailAtivo(), "#/config"],
     ["Cadastrar a chave da OpenAI (imagens e sugestões)", !!configOpenAI().chave, "#/config"],
-    ["Google Agenda automática funcionando", agendaConectada(), "#/config"],
-    [`Preencher a identidade das marcas (${comMarca} de ${ativos.length} clientes)`, ativos.length > 0 && comMarca >= ativos.length, "#/clientes"],
+    ["Google Agenda automática funcionando (Ajustes → Testar agenda)", agendaConectada(), "#/config"],
+    [`Preencher a identidade das marcas: tom de voz e cores (${comMarca} de ${unidades.length})`, unidades.length > 0 && comMarca >= unidades.length, "#/clientes"],
     ["Convidar a equipe", dados.membros.length > 1, "#/usuarios"],
     ["Criar as rotinas (produção, planejamento, cobrança)", dados.recorrencias.length > 0, "#/rotinas"],
     ["Ligar os relatórios do Instagram e Facebook", !!(dados.config.find((c) => c.id === "meta")?.appId), "#/config"]
@@ -47,7 +49,7 @@ function dicas(renderizar) {
     el("div", { class: "com-acao" }, el("h2", {}, "Dicas rápidas"), el("button", { class: "link", onClick: () => { guardar("hyper-dicas", "ok"); renderizar(); } }, "Entendi")),
     el("ul", {},
       item("Ctrl+K", "(⌘K no Mac) busca qualquer cliente, post, tarefa ou tela."),
-      item("Clique no seu nome", "(embaixo, no menu) para pôr foto, conectar a sua Google Agenda e pedir mais acesso."),
+      item("Clique no seu nome", "(embaixo, no menu) para pôr foto, escolher o e-mail da sua agenda e pedir mais acesso."),
       item("Minhas × Equipe:", "aqui no Hoje você vê primeiro o que é seu."),
       item("No celular,", "use \"Adicionar à tela de início\" no navegador para ter o app da Hyper como um aplicativo.")));
 }

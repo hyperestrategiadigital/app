@@ -13,6 +13,21 @@ export const configAgenda = () => dados.config.find((c) => c.id === "agendaHyper
 /** A agenda automática está rodando (o script sincronizou nas últimas 24 horas). */
 export const agendaConectada = () => (configAgenda().ultimo || 0) > Date.now() - 24 * 3600 * 1000;
 
+/** Testa a agenda agora e explica o que deu errado (Ajustes). */
+export async function testarAgenda() {
+  const url = espacoInfo.emailUrl || dados.config.find((c) => c.id === "email")?.url;
+  if (!url) throw new Error("Ligue as automações (E-mails e automações) primeiro.");
+  let r;
+  try { r = await (await fetch(url, { method: "POST", body: JSON.stringify({ tipo: "agenda-agora" }) })).json(); }
+  catch { throw new Error("O script não respondeu. Confira se a URL está certa e se a implantação está como \"Qualquer pessoa\"."); }
+  if (r.ok) return r;
+  const erro = String(r.erro || "");
+  if (erro === "tipo") throw new Error("O script ainda está na versão antiga. Cole os dois arquivos novos (appsscript.json e Código.gs) e implante uma Nova versão.");
+  if (/Calendar is not defined|Calendar não está definido/i.test(erro)) throw new Error("Falta o serviço de agenda no script: troque também o appsscript.json pelo novo e implante uma Nova versão.");
+  if (/permission|autoriza|authoriz/i.test(erro)) throw new Error("O script precisa ser autorizado de novo: no Apps Script, rode a função sincronizarAgenda uma vez (botão Executar) e aceite as permissões.");
+  throw new Error("Erro do script: " + erro.slice(0, 300));
+}
+
 let ultimoPedido = 0;
 let pedidoAgendado = null;
 /**

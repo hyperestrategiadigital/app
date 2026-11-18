@@ -347,3 +347,18 @@ test("organizar grupos: cliente separado vira marca e posts soltos vão para a p
   await expect(page.locator(".marcas-seletor")).toContainText("Grupo Exemplo (institucional)");
   await expect(page.locator(".marca-cabeca h3")).toHaveText("Grupo Exemplo · Exemplo Principal");
 });
+
+test("juntar cliente solto numa marca de mesmo nome não duplica a marca", async ({ page }) => {
+  await abrir(page);
+  await page.evaluate(async () => { const db = await import("/js/db.js"); await db.salvarComId("marcas", "m-loja-ja", { clienteId: "grupo", nome: "Loja Exemplo", ativo: true, paleta: [] }); });
+  await page.goto("/#/clientes/grupo");
+  await page.getByRole("tab", { name: "Marca" }).click();
+  await page.getByRole("button", { name: /Juntar outros clientes/ }).click();
+  await page.check(".modal input[value=loja]");
+  await page.locator(".modal").getByRole("button", { name: "Juntar" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.ativo)).toBe(false);
+  const s = await page.evaluate(() => window.__store);
+  expect(Object.values(s["espacos/hyper/marcas"]).filter((m) => m.nome === "Loja Exemplo")).toHaveLength(1);
+  expect(s["espacos/hyper/marcas"]["m-loja-ja"].tomDeVoz).toBe("Leve e direto");
+  expect(s["espacos/hyper/tarefas"].p1.marcaId).toBe("m-loja-ja");
+});
