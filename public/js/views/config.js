@@ -7,7 +7,7 @@ import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } 
 import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
 import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO } from "../constantes.js";
-import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail } from "../emails.js";
+import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
 
 
 function abrirImportacao() {
@@ -202,39 +202,48 @@ function blocoImportarMarcas() {
     entrada, previa);
 }
 
-/** E-mails automáticos pelo Gmail da Hyper (Google Apps Script em docs/email/Codigo.gs). */
+/** E-mails e automações pelo Google Apps Script da conta da Hyper (docs/email). */
 function blocoEmail() {
   const cfg = configEmail();
+  const backup = dados.config.find((c) => c.id === "backup") || {};
   const url = el("input", { id: "email-url", type: "url", placeholder: "https://script.google.com/macros/s/.../exec", value: cfg.url || "" });
-  const codigo = "https://github.com/hyperestrategiadigital/app/blob/main/docs/email/Codigo.gs";
+  const pasta = "https://github.com/hyperestrategiadigital/app/blob/main/docs/email/";
+  const kb = (n) => n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+  const acao = (rotulo, fn) => el("button", { class: "secundario", onClick: async (e) => {
+    e.currentTarget.disabled = true;
+    try { avisar(await fn()); } catch (erro) { avisar(erro.message, "erro"); }
+    e.currentTarget.disabled = false;
+  } }, rotulo);
   return el("section", { class: "bloco" },
-    el("h2", {}, "E-mails automáticos"),
+    el("h2", {}, "E-mails e automações"),
     emailAtivo()
-      ? el("p", {}, el("span", { class: "etiqueta ok" }, "Conectado"), ` Os e-mails saem de ${cfg.conta || "a conta que instalou o script"}: convite para quem você adiciona, aviso de acesso liberado e aviso aos administradores quando alguém pede acesso.`)
-      : el("p", {}, "Para o app mandar e-mails (convites, acesso liberado, pedidos de acesso), instale uma vez o script de e-mail na conta Google da Hyper. Ele envia pelo Gmail dela, sem custo (até 100 e-mails por dia)."),
+      ? el("p", {}, el("span", { class: "etiqueta ok" }, "Conectado"), ` Rodando na conta ${cfg.conta || "da Hyper"}: convites, acesso liberado, avisos de pedidos e menções, resumo diário às 8h para cada pessoa e backup toda segunda às 3h.`)
+      : el("p", {}, "Instale uma vez o script de automações na conta Google da Hyper. Ele manda os e-mails pelo Gmail dela (até 100 por dia, sem custo), envia o resumo diário às 8h e faz o backup semanal no Drive da Hyper."),
+    emailAtivo() ? el("p", { class: "subtitulo" }, backup.ultimo
+      ? ["Último backup: ", new Date(backup.ultimo).toLocaleString("pt-BR"), ` (${kb(backup.tamanho || 0)}, compactado, sem imagens; ficam os ${backup.guardados || 8} mais recentes). `, el("a", { href: backup.pasta, target: "_blank", rel: "noopener" }, "Abrir a pasta no Drive ↗")]
+      : "Backup automático: o primeiro sai na próxima segunda às 3h (ou clique em Fazer backup agora).") : null,
     el("details", { class: "passo-a-passo", open: !emailAtivo() },
-      el("summary", {}, "Como instalar (5 minutos)"),
+      el("summary", {}, emailAtivo() ? "Como instalar ou atualizar o script" : "Como instalar (5 minutos)"),
       el("ol", { class: "passos" },
         el("li", {}, "Logado na conta da Hyper, abra ", el("a", { href: "https://script.google.com/home/projects/create", target: "_blank", rel: "noopener" }, "script.google.com → Novo projeto"), "."),
-        el("li", {}, "Apague o texto que aparece, copie o código de ", el("a", { href: codigo, target: "_blank", rel: "noopener" }, "docs/email/Codigo.gs"), " (botão Copiar) e cole. Salve (Ctrl+S)."),
-        el("li", {}, "Clique em Implantar → Nova implantação → engrenagem → App da Web. Executar como: Eu. Quem pode acessar: Qualquer pessoa. Implantar."),
-        el("li", {}, "Autorize com a conta da Hyper (se aparecer \"app não verificado\": Avançado → Acessar). Copie a URL do app da Web."),
-        el("li", {}, "Cole a URL aqui embaixo e clique em Conectar."))),
+        el("li", {}, "Engrenagem (Configurações do projeto) → marque \"Mostrar o arquivo de manifesto appsscript.json\"."),
+        el("li", {}, "Volte ao editor, abra appsscript.json e troque tudo pelo conteúdo de ", el("a", { href: pasta + "appsscript.json", target: "_blank", rel: "noopener" }, "appsscript.json"), "."),
+        el("li", {}, "Abra Código.gs, apague tudo e cole ", el("a", { href: pasta + "Codigo.gs", target: "_blank", rel: "noopener" }, "Codigo.gs"), " (botão Copiar). Salve (Ctrl+S)."),
+        el("li", {}, "Implantar → Nova implantação → engrenagem → App da Web. Executar como: Eu. Quem pode acessar: Qualquer pessoa. Implantar e autorize com a conta da Hyper (se aparecer \"app não verificado\": Avançado → Acessar)."),
+        el("li", {}, "Copie a URL do app da Web, cole aqui embaixo e clique em Conectar."),
+        el("li", {}, "Para atualizar depois: cole o código novo, salve, Implantar → Gerenciar implantações → lápis → Versão: Nova versão → Implantar, e clique em Conectar de novo aqui."))),
     el("label", { class: "campo", for: "email-url" }, el("span", {}, "URL do app da Web"), url),
     el("div", { class: "acoes" },
       el("button", { class: emailAtivo() ? "secundario" : "destaque", onClick: async (e) => {
         e.currentTarget.disabled = true;
-        try { const conta = await conectarEmail(url.value); avisar(`E-mails conectados${conta ? ` (${conta})` : ""}.`); }
+        try { const conta = await conectarEmail(url.value); avisar(`Automações conectadas${conta ? ` (${conta})` : ""}.`); }
         catch (erro) { avisar(erro.message, "erro"); e.currentTarget.disabled = false; }
       } }, emailAtivo() ? "Conectar de novo" : "Conectar"),
-      emailAtivo() ? el("button", { class: "secundario", onClick: async (e) => {
-        e.currentTarget.disabled = true;
-        try { const r = await testarEmail(); avisar(`E-mail de teste enviado para você. Restam ${r.restantes ?? "?"} envios hoje.`); }
-        catch (erro) { avisar(erro.message, "erro"); }
-        e.currentTarget.disabled = false;
-      } }, "Enviar e-mail de teste") : null,
+      emailAtivo() ? acao("E-mail de teste", async () => { const r = await testarEmail(); return `E-mail de teste enviado para você. Restam ${r.restantes ?? "?"} envios hoje.`; }) : null,
+      emailAtivo() ? acao("Meu resumo agora", async () => { await resumoAgora(); return "Resumo do dia enviado para o seu e-mail."; }) : null,
+      emailAtivo() ? acao("Fazer backup agora", async () => { const r = await backupAgora(); return `Backup feito (${kb(r.tamanho || 0)}).`; }) : null,
       emailAtivo() ? el("button", { class: "perigo-texto", onClick: async () => {
-        if (await confirmar("Desligar os e-mails automáticos?")) { await desconectarEmail(); avisar("E-mails desligados."); }
+        if (await confirmar("Desligar os e-mails e automações?")) { await desconectarEmail(); avisar("Desligado."); }
       } }, "Desligar") : null));
 }
 

@@ -2,7 +2,7 @@
 // através de um Google Apps Script (docs/email/Codigo.gs). O app não tem servidor (plano Spark).
 // - config/email { url, segredo }: só administradores leem; com o segredo o app manda qualquer e-mail.
 // - espacos/hyper.emailUrl: só a URL, para quem ainda não tem acesso avisar os administradores de um pedido.
-import { dados, espacoInfo, salvarComId, atualizarEspaco } from "./db.js";
+import { dados, espacoInfo, salvarComId, atualizarEspaco, bancoInfo } from "./db.js";
 import { ehAdmin, eu } from "./permissoes.js";
 
 const LINK_APP = location.origin + location.pathname.replace(/index\.html$/, "");
@@ -105,7 +105,7 @@ export async function conectarEmail(url) {
   if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) throw new Error("Cole a URL do app da Web do Apps Script (começa com https://script.google.com/).");
   const segredo = configEmail().url === url && configEmail().segredo ? configEmail().segredo
     : [...crypto.getRandomValues(new Uint8Array(24))].map((b) => b.toString(16).padStart(2, "0")).join("");
-  const r = await chamar(url, { tipo: "configurar", segredo }).catch((e) => {
+  const r = await chamar(url, { tipo: "configurar", segredo, projeto: "hyper-9e023", banco: bancoInfo.id || "(default)", linkApp: LINK_APP }).catch((e) => {
     if (/ja-configurado/.test(e.message)) throw new Error("Este script já está ligado a outro segredo. No Apps Script, rode a função apagarSegredo e tente de novo.");
     throw e;
   });
@@ -140,4 +140,15 @@ export async function avisarMencao({ para, nomePara, tarefa, texto }) {
     await chamar(url, { tipo: "aviso-membro", para, nome: nomePara, de: eu.nome || eu.email, titulo: tarefa.titulo, texto, link: `${LINK_APP}#/tarefa/${tarefa.id}` });
     return true;
   } catch (e) { console.warn("Menção:", e.message); return false; }
+}
+
+/** Backup agora (normalmente roda sozinho toda segunda às 3h, só no Drive da Hyper). */
+export async function backupAgora() {
+  const { url, segredo } = configEmail();
+  return chamar(url, { tipo: "backup-agora", segredo });
+}
+/** Manda o resumo diário agora só para mim (para testar). */
+export async function resumoAgora() {
+  const { url, segredo } = configEmail();
+  return chamar(url, { tipo: "resumo-agora", segredo, para: eu.email });
 }

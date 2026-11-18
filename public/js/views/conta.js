@@ -44,6 +44,11 @@ function blocoPerfil(m) {
     el("div", { class: "conta-dados" },
       el("label", { class: "campo", for: "conta-nome" }, el("span", {}, "Seu nome (aparece nas tarefas e reuniões)"), nome),
       el("p", { class: "subtitulo" }, `Conta Google: ${eu.email}`),
+      el("label", { class: "check-inline" },
+        el("input", { type: "checkbox", checked: m.resumoDiario !== false, onChange: async (e) => {
+          await atualizarMeuCadastro({ resumoDiario: e.target.checked });
+          avisar(e.target.checked ? "Você vai receber o resumo do dia às 8h." : "Resumo diário desligado.");
+        } }), "Receber o resumo do dia por e-mail às 8h (o que vence, o que está atrasado e as reuniões)"),
       el("div", { class: "acoes" }, el("button", { onClick: async () => {
         if (!nome.value.trim()) { avisar("Digite seu nome.", "erro"); return; }
         await atualizarMeuCadastro({ nome: nome.value.trim() });

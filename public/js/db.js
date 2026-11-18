@@ -15,6 +15,8 @@ export const espacoInfo = { dono: "", emailUrl: "" };
 // O console do Firebase pode criar o banco com o id "(default)" ou com o nome "default".
 const BANCOS = ["(default)", "default"];
 let db = null;
+/** Id do banco em uso ("(default)" ou "default"): o script de e-mail precisa saber para ler os dados. */
+export const bancoInfo = { id: "" };
 // Cache no navegador: abre na hora com os dados da última visita e só busca o que mudou.
 function abrirBanco(id) {
   try {
@@ -90,7 +92,7 @@ async function escolherBanco() {
       const espaco = await comPrazo(getDoc(doc(candidato, "espacos", ESPACO)), 15);
       if (espaco.exists()) {
         try { localStorage.setItem("hyper-banco", id); } catch {}
-        return { banco: candidato, espaco };
+        return { banco: candidato, espaco, id };
       }
       semEspaco ??= { banco: candidato, espaco, id };
     } catch (e) {
@@ -112,8 +114,9 @@ async function escolherBanco() {
  */
 export async function conectar(usuario, aoErro) {
   desconectar();
-  const { banco, espaco } = await escolherBanco();
+  const { banco, espaco, id } = await escolherBanco();
   db = banco;
+  bancoInfo.id = id;
   definirEu({ uid: usuario.uid, email: usuario.email, nome: usuario.displayName || usuario.email });
   if (!espaco.exists()) {
     const antigos = await comPrazo(getDocs(collection(db, "users", usuario.uid, "clientes")), 30).catch(() => null);
@@ -217,7 +220,7 @@ function ouvirTudo(aoErro) {
     }, (erro) => { aoErro?.(traduzirErro(erro)); if (primeira) { primeira = false; pronto(); } }));
   }));
   // Documentos de configuração (lidos um a um, porque cada um tem uma regra)
-  const docs = ["equipe", "agenda", "clientes", ...(pode("conteudo") ? ["openai"] : []), ...(ehAdmin() ? ["email"] : [])].map((id) => new Promise((pronto) => {
+  const docs = ["equipe", "agenda", "clientes", ...(pode("conteudo") ? ["openai"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
     let primeira = true;
     cancelamentos.push(onSnapshot(docConfig(id), (snap) => {
       dados.config = [...dados.config.filter((c) => c.id !== id), ...(snap.exists() ? [{ id, ...snap.data() }] : [])];
