@@ -9,7 +9,7 @@ export function promptCopy(post) {
   const c = identidade(post.clienteId, post.marcaId);
   const deMarca = c.marcaId && c.clienteNome;
   const linhas = [
-    `Você é copywriter da Hyper, agência de tráfego pago e social media. Escreva a copy de um conteúdo para ${deMarca ? `a marca ${c.nome}, do cliente ${c.clienteNome}` : `o cliente ${c.nome || "(sem cliente)"}`}.`,
+    `Você é copywriter da Hyper Estratégia Digital, agência de estratégia digital (conteúdo, social media e tráfego pago). Escreva a copy de um conteúdo para ${deMarca ? `a marca ${c.nome}, do cliente ${c.clienteNome}` : `o cliente ${c.nome || "(sem cliente)"}`}.`,
     deMarca ? `Use a identidade e a linguagem da marca ${c.nome}, que é diferente das outras marcas do grupo.` : null,
     "",
     deMarca ? "## Sobre a marca" : "## Sobre o cliente",

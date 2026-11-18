@@ -24,7 +24,7 @@
  * membros cadastrados, com limite por hora.
  */
 const P = PropertiesService.getScriptProperties();
-const NOME = 'Hyper';
+const NOME = 'Hyper Estratégia Digital';
 const FUSO = 'America/Sao_Paulo';
 const LIMITE_AVISOS_POR_HORA = 30;
 const BACKUPS_GUARDADOS = 8;
@@ -363,7 +363,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 function modelo(titulo, corpo, link, rotulo) {
   return `<div style="font-family:Montserrat,Arial,sans-serif;max-width:560px;margin:auto;color:#1A1A1A">
     <div style="background:#4E2CA3;color:#fff;padding:18px 24px;border-radius:12px 12px 0 0">
-      <div style="font-size:12px;letter-spacing:2px;opacity:.8">HYPER</div>
+      <div style="font-size:12px;letter-spacing:2px;opacity:.8">HYPER ESTRATÉGIA DIGITAL</div>
       <div style="font-size:21px;font-weight:bold;font-style:italic">${esc(titulo)}</div></div>
     <div style="border:1px solid #C9D5E3;border-top:0;padding:24px;border-radius:0 0 12px 12px;line-height:1.5">${corpo}
     ${link ? `<p style="margin-top:24px"><a href="${esc(link)}" style="background:#FFC130;color:#000;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold">${esc(rotulo)}</a></p>` : ''}</div></div>`;

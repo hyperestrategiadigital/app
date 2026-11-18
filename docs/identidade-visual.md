@@ -16,7 +16,7 @@ Todos têm fundo transparente. Variações oficiais em outras cores (petróleo, 
 Regras:
 - Não distorcer, girar, recolorir fora da paleta nem aplicar sombra ou contorno no logo.
 - Manter uma área de respiro em volta do logo de pelo menos a altura da letra "e".
-- A assinatura "TRÁFEGO PAGO" acompanha o logo em contextos institucionais: caixa alta, peso fino, espaçamento largo.
+- A assinatura "ESTRATÉGIA DIGITAL" acompanha o logo em contextos institucionais: caixa alta, peso fino, espaçamento largo. A Hyper não é só tráfego pago: não use mais a assinatura antiga "TRÁFEGO PAGO".
 - Logo branco sobre amarelo não funciona. Sobre amarelo, use o preto (`docs/marca/28` a `30`).
 
 ## Cores
@@ -42,7 +42,7 @@ Combinações de contraste:
 O wordmark usa uma letra própria, condensada, pesada e inclinada. A assinatura usa uma sans geométrica fina. No site usamos fontes do Google Fonts que seguem esse espírito:
 
 - **Títulos:** Barlow Condensed, peso 800, itálico (`--fonte-titulo`).
-- **Texto:** Montserrat 300/400/600/700 (`--fonte-texto`). Use o peso 300 em caixa alta com espaçamento largo para assinaturas no estilo "TRÁFEGO PAGO".
+- **Texto:** Montserrat 300/400/600/700 (`--fonte-texto`). Use o peso 300 em caixa alta com espaçamento largo para assinaturas no estilo "ESTRATÉGIA DIGITAL".
 
 Essas fontes são uma aproximação escolhida para o site, não as fontes oficiais da marca. Se a Hyper tiver as fontes oficiais, troque as variáveis.
 

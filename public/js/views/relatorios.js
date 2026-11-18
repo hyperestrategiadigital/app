@@ -141,7 +141,7 @@ ${linhasPosts ? `<table><thead><tr><th>Data</th><th>Formato</th><th>Tema</th>${c
 ${r.manutencoes.length ? `<section class="secao"><h2>Tráfego pago</h2>${r.investimento ? `<p>Investimento registrado no período: <b>${esc(fmtMoeda(r.investimento))}</b></p>` : ""}<table><thead><tr><th>Data</th><th>Plataforma</th><th>O que foi feito</th><th>Resultados</th><th>Investido</th></tr></thead><tbody>${linhasTP}</tbody></table></section>` : ""}
 ${Object.keys(r.porTipo).length ? `<section class="secao"><h2>Outras entregas</h2><div class="formatos">${Object.entries(r.porTipo).map(([t, n]) => `<span>${esc(t)}: ${n}</span>`).join("")}</div></section>` : ""}
 ${r.reunioes.length ? `<section class="secao"><h2>Reuniões e compromissos</h2><table><tbody>${r.reunioes.map(({ c, data }) => `<tr><td>${fmtData(data, true)}</td><td>${esc(c.titulo)}</td><td>${esc(c.tipo || "")}</td></tr>`).join("")}</tbody></table></section>` : ""}
-<footer>Hyper · Tráfego pago — relatório gerado em ${fmtData(hojeISO())}.</footer>
+<footer>Hyper Estratégia Digital — relatório gerado em ${fmtData(hojeISO())}.</footer>
 <script>window.onload=()=>setTimeout(()=>window.print(),800)<\/script></body></html>`;
   janela.location.href = URL.createObjectURL(new Blob([html], { type: "text/html" }));
 }
