@@ -94,7 +94,7 @@ export function avisoPendentes() {
   const pendentes = dados.compromissos.filter((c) => c.sincronizar && !c.googleEventId && (c.data || "") >= hojeISO());
   if (!pendentes.length) return null;
   if (!agendaConectada()) return el("p", { class: "faixa-aviso" }, `${pendentes.length} compromisso(s) esperando a Google Agenda. `,
-    ehAdmin() ? el("a", { href: "#/config" }, "Ligar as automações em Ajustes →") : "Peça para um administrador ligar as automações em Ajustes.");
+    ehAdmin() ? el("a", { href: "#/config" }, "A agenda automática ainda não sincronizou: Ajustes → E-mails e automações → Testar agenda →") : "A agenda automática ainda não está funcionando: avise um administrador.");
   return el("p", { class: "faixa-aviso" }, `${pendentes.length} compromisso(s) indo para a Google Agenda (o script da Hyper sincroniza a cada 5 minutos). `,
     el("button", { class: "mini", onClick: async (e) => {
       e.currentTarget.disabled = true;

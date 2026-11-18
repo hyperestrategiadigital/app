@@ -142,7 +142,9 @@ body.logado #app { display: flex; }
 }
 .marca { padding: 22px 22px 18px; }
 .marca img { height: 34px; display: block; }
-#menu { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; flex: 1; }
+/* O menu rola por dentro: abrir "Administração" nunca empurra o seu nome (embaixo) para fora da tela */
+#menu { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.3) transparent; }
+.lateral-menu .marca, .lateral-menu .usuario { flex: none; }
 #menu a {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 12px; border-radius: var(--raio-pequeno);
@@ -764,3 +766,9 @@ img.avatar { object-fit: cover; padding: 0; }
 .logo-ficha { width: 56px; height: 56px; object-fit: contain; border-radius: var(--raio-pequeno); background: var(--cor-superficie); }
 .marca-etiqueta { border-left: 3px solid var(--selo); display: inline-flex; align-items: center; gap: 4px; }
 .legenda-grupo { opacity: 0.8; border-style: dashed; }
+
+/* Cartão do cliente: marcas do grupo quebram linha dentro da caixa */
+.cartao-cliente { min-width: 0; overflow: hidden; }
+.cartao-cliente h3 { overflow-wrap: anywhere; }
+.marcas-cartao { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
+.marcas-cartao .etiqueta { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 3px solid var(--selo); }

@@ -2,7 +2,7 @@
 // Comportamento, Integra Culture, MeuCPTO, CuidaTech), cada uma com identidade e linguagem próprias.
 // A "marca principal" é a identidade do próprio cliente; as demais ficam em `marcas` e, onde um campo
 // estiver vazio, usam o do cliente. Alimenta a copy, o prompt de imagem e o pedido de arte no Canva.
-import { el, avisar, linkExterno, campoCor, abrirModal, confirmar, formulario, fecharModais } from "../ui.js";
+import { el, avisar, linkExterno, campoCor, abrirModal, confirmar, formulario, fecharModais, normalizar } from "../ui.js";
 import { dados, atualizar, criar, excluir, porId, marcasDo, salvarComId, gravarEmLote, contrato, listarSub, salvarSub, identidade, carregarArquivo } from "../db.js";
 import { gerarTexto, temChave } from "../openai.js";
 import { ehAdmin, pode } from "../permissoes.js";
@@ -177,7 +177,7 @@ export function juntarClientes(c) {
   const status = el("p", { class: "subtitulo" });
   const fechar = abrirModal(`Juntar clientes em ${c.nome}`, el("div", {},
     el("p", {}, "Os clientes marcados viram marcas de ", el("strong", {}, c.nome), ", cada um com a própria identidade (cores, tom de voz, persona…). Posts, tarefas, compromissos, rotinas, lançamentos, contas de anúncio e criativos passam para cá. O cliente antigo fica inativo, não é apagado."),
-    el("p", { class: "subtitulo" }, "O contrato (mensalidade) do cliente antigo só é copiado se este cliente ainda não tiver um. Confira depois em Editar."),
+    el("p", { class: "subtitulo" }, "Se o grupo já tem uma marca com o mesmo nome (ex.: o cliente \"Comportamento\" e a marca Comportamento), tudo vai para essa marca, sem duplicar. O contrato (mensalidade) do cliente antigo só é copiado se este cliente ainda não tiver um."),
     el("div", { class: "multi" }, caixas),
     status,
     el("div", { class: "acoes" },
@@ -199,13 +199,28 @@ export function juntarClientes(c) {
       } }, "Juntar"))), { largo: true });
 }
 
-export async function juntarUm(destino, origem, progresso) {
-  const marcaId = `m-${origem.id}`;
-  progresso(`${origem.nome}: criando a marca…`);
-  const marca = { clienteId: destino.id, nome: origem.nome, origemClienteId: origem.id, ativo: true, criadoEm: Date.now(), descricao: origem.observacoes || "" };
-  for (const k of CAMPOS_COPIADOS) if (origem[k] != null && origem[k] !== "") marca[k] = origem[k];
-  marca.paleta ||= origem.cor ? [origem.cor] : [];
-  await salvarComId("marcas", marcaId, marca);
+/**
+ * O cliente "origem" vira marca do "destino". Se o grupo já tem uma marca com o mesmo nome (ou a indicada em
+ * marcaExistente), junta nela (sem duplicar) e só completa os campos de identidade que estiverem vazios.
+ */
+export async function juntarUm(destino, origem, progresso, marcaExistente) {
+  const chaveNome = (s) => normalizar(s).replace(/[^a-z0-9]/g, "");
+  const existente = marcaExistente || (dados.marcas || []).find((m) => m.clienteId === destino.id && chaveNome(m.nome) === chaveNome(origem.nome));
+  const marcaId = existente?.id || `m-${origem.id}`;
+  progresso(`${origem.nome}: ${existente ? "juntando na marca " + existente.nome : "criando a marca"}…`);
+  if (existente) {
+    const completar = { origemClienteId: origem.id };
+    for (const k of CAMPOS_COPIADOS) {
+      const vazio = existente[k] == null || existente[k] === "" || (Array.isArray(existente[k]) && !existente[k].filter(Boolean).length);
+      if (vazio && origem[k] != null && origem[k] !== "" && (!Array.isArray(origem[k]) || origem[k].length)) completar[k] = origem[k];
+    }
+    await atualizar("marcas", marcaId, completar);
+  } else {
+    const marca = { clienteId: destino.id, nome: origem.nome, origemClienteId: origem.id, ativo: true, criadoEm: Date.now(), descricao: origem.observacoes || "" };
+    for (const k of CAMPOS_COPIADOS) if (origem[k] != null && origem[k] !== "") marca[k] = origem[k];
+    marca.paleta ||= origem.cor ? [origem.cor] : [];
+    await salvarComId("marcas", marcaId, marca);
+  }
 
   progresso(`${origem.nome}: movendo posts e tarefas…`);
   const mover = (lista, extra = {}) => lista.filter((x) => x.clienteId === origem.id).map(({ id, ...x }) => ({ id, ...x, clienteId: destino.id, ...extra }));
@@ -233,6 +248,7 @@ export async function juntarUm(destino, origem, progresso) {
     for (const { id, ...a } of artes) await salvarSub(caminhoArtes(destino.id), a, id);
   }
   await atualizar("clientes", origem.id, { ativo: false, viraMarcaDe: destino.id, marcaId });
+  return marcaId;
 }
 
 /* ---------------- Aba ---------------- */

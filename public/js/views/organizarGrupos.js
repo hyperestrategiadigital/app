@@ -24,7 +24,8 @@ function planejar(g) {
   const marcas = (g.marcas || []).map((m) => {
     const nomes = [m.nome, ...(m.aliases || [])].map(chave);
     const existente = cliente ? (dados.marcas || []).find((x) => x.clienteId === cliente.id && nomes.includes(chave(x.nome))) : null;
-    const separado = !existente ? acharCliente([...(m.juntarCliente || []), m.nome, ...(m.aliases || [])]) : null;
+    // Um cliente solto com o nome da marca (ou em juntarCliente) é juntado nela, exista a marca ou não
+    const separado = acharCliente([...(m.juntarCliente || []), m.nome, ...(m.aliases || [])]);
     return { ...m, existente, separado: separado && separado.id !== cliente?.id ? separado : null };
   });
   return { g, cliente, marcas };
@@ -48,7 +49,8 @@ export function abrirOrganizarGrupos() {
           ? (chave(cliente.nome) === chave(g.cliente) ? `Cliente "${cliente.nome}" encontrado.` : `Cliente "${cliente.nome}" será renomeado para "${g.cliente}".`)
           : `Cliente não encontrado: "${g.cliente}" será criado.`),
         el("ul", {}, marcas.map((m) => el("li", {}, el("strong", {}, m.nome), m.principal ? " (principal)" : "", " — ",
-          m.existente ? "já existe" : m.separado ? `o cliente "${m.separado.nome}" vira esta marca (com posts e tarefas)` : "será criada"))),
+          m.existente && m.separado ? `já existe; o cliente solto "${m.separado.nome}" é juntado nela (com posts e tarefas)`
+            : m.existente ? "já existe" : m.separado ? `o cliente "${m.separado.nome}" vira esta marca (com posts e tarefas)` : "será criada"))),
         g.moverPostsSemMarca ? el("p", { class: "subtitulo" }, "Os posts sem marca vão para a marca principal.") : null)),
       el("div", { class: "acoes" }, el("button", { class: "destaque", onClick: (e) => executar(e.currentTarget, planos) }, "Organizar")));
   });
@@ -72,9 +74,8 @@ export function abrirOrganizarGrupos() {
         for (const m of marcas) {
           status(`${g.cliente}: ${m.nome}…`);
           let id = m.existente?.id;
-          if (!id && m.separado) {
-            await juntarUm(cliente, m.separado, status);
-            id = `m-${m.separado.id}`;
+          if (m.separado) {
+            id = await juntarUm(cliente, m.separado, status, m.existente || undefined);
             if (chave(m.separado.nome) !== chave(m.nome)) await atualizar("marcas", id, { nome: m.nome });
           }
           if (!id) {

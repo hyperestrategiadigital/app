@@ -9,6 +9,7 @@ import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } 
 import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
 import { configMeta } from "../meta.js";
+import { configAgenda, agendaConectada, testarAgenda } from "../agenda.js";
 import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO } from "../constantes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
 
@@ -236,6 +237,9 @@ function blocoEmail() {
     emailAtivo() ? el("p", { class: "subtitulo" }, backup.ultimo
       ? ["Último backup: ", new Date(backup.ultimo).toLocaleString("pt-BR"), ` (${kb(backup.tamanho || 0)}, compactado, sem imagens; ficam os ${backup.guardados || 8} mais recentes). `, el("a", { href: backup.pasta, target: "_blank", rel: "noopener" }, "Abrir a pasta no Drive ↗")]
       : "Backup automático: o primeiro sai na próxima segunda às 3h (ou clique em Fazer backup agora).") : null,
+    emailAtivo() ? el("p", { class: "subtitulo" }, agendaConectada()
+      ? `Google Agenda: funcionando (última sincronização ${new Date(configAgenda().ultimo).toLocaleString("pt-BR")}, agenda "${configAgenda().calendario || "Hyper · Compromissos"}").`
+      : el("span", { class: "erro" }, "Google Agenda: ainda não sincronizou. Clique em Testar agenda para ver o que falta.")) : null,
     el("details", { class: "passo-a-passo", open: !emailAtivo() },
       el("summary", {}, emailAtivo() ? "Como instalar ou atualizar o script" : "Como instalar (5 minutos)"),
       el("ol", { class: "passos" },
@@ -255,6 +259,7 @@ function blocoEmail() {
       } }, emailAtivo() ? "Conectar de novo" : "Conectar"),
       emailAtivo() ? acao("E-mail de teste", async () => { const r = await testarEmail(); return `E-mail de teste enviado para você. Restam ${r.restantes ?? "?"} envios hoje.`; }) : null,
       emailAtivo() ? acao("Meu resumo agora", async () => { await resumoAgora(); return "Resumo do dia enviado para o seu e-mail."; }) : null,
+      emailAtivo() ? acao("Testar agenda", async () => { const r = await testarAgenda(); return r.ja ? "A agenda acabou de sincronizar." : `Agenda sincronizada: ${r.criados || 0} criado(s), ${r.atualizados || 0} atualizado(s), ${r.removidos || 0} removido(s)${r.erros ? `, ${r.erros} com erro (veja no compromisso)` : ""}.`; }) : null,
       emailAtivo() ? acao("Fazer backup agora", async () => { const r = await backupAgora(); return `Backup feito (${kb(r.tamanho || 0)}).`; }) : null,
       emailAtivo() ? el("button", { class: "perigo-texto", onClick: async () => {
         if (await confirmar("Desligar os e-mails e automações?")) { await desconectarEmail(); avisar("Desligado."); }
