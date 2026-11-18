@@ -3,6 +3,7 @@
 // Garantem que dados sensíveis ficam protegidos no banco, não só escondidos na tela.
 import { test, before, after, beforeEach } from "node:test";
 import { readFileSync } from "node:fs";
+import assert from "node:assert/strict";
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
 import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where } from "firebase/firestore";
 
@@ -171,7 +172,9 @@ test("acesso só a alguns clientes", async () => {
   await assertSucceeds(ler("luisa", `${E}/tarefas/t3`));
   await assertFails(ler("luisa", `${E}/tarefas/t2`));
   await assertSucceeds(getDocs(query(collection(db, `${E}/tarefas`), where("clienteId", "in", ["c1", ""]))));
-  await assertFails(getDocs(collection(db, `${E}/tarefas`)));
+  // Sem filtro: ou a leitura é negada, ou não traz nada de outro cliente
+  const tudo = await getDocs(collection(db, `${E}/tarefas`)).catch(() => null);
+  assert.ok(!tudo || tudo.docs.every((d) => d.data().clienteId !== "c2"), "vazou tarefa de outro cliente");
   await assertFails(gravar("luisa", `${E}/tarefas/t9`, { titulo: "x", clienteId: "c2" }));
   await assertSucceeds(gravar("luisa", `${E}/tarefas/t9`, { titulo: "x", clienteId: "c1" }));
   await assertFails(updateDoc(doc(db, `${E}/tarefas/t1`), { clienteId: "c2" }));
