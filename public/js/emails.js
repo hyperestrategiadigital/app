@@ -27,14 +27,15 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 export function modelo(titulo, paragrafos, { link = LINK_APP, botao = "Abrir o Hyper Studio" } = {}) {
   return `<div style="font-family:Montserrat,Arial,sans-serif;max-width:560px;margin:auto;color:${MARCA.texto}">
   <div style="background:${MARCA.roxo};color:#fff;padding:20px 24px;border-radius:12px 12px 0 0">
-    <div style="font-size:13px;letter-spacing:2px;opacity:.8">HYPER ESTRATÉGIA DIGITAL</div>
+    <div style="font-size:13px;letter-spacing:2px;opacity:.8">HYPER STUDIO</div>
     <div style="font-size:22px;font-weight:bold;font-style:italic">${esc(titulo)}</div>
   </div>
   <div style="border:1px solid ${MARCA.gelo};border-top:0;padding:24px;border-radius:0 0 12px 12px;line-height:1.5">
     ${paragrafos.map((p) => `<p>${p}</p>`).join("")}
     ${link ? `<p style="margin:28px 0 8px"><a href="${esc(link)}" style="background:${MARCA.amarelo};color:#000;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:bold">${esc(botao)}</a></p>` : ""}
     <p style="color:${MARCA.cinza};font-size:12px;margin-top:24px">Entre sempre com a sua conta Google (o mesmo e-mail que recebeu esta mensagem).</p>
-  </div></div>`;
+  </div>
+  <p style="color:${MARCA.cinza};font-size:11px;text-align:center;margin-top:14px"><b>Hyper Studio</b> · desenvolvido pela Hyper Estratégia Digital</p></div>`;
 }
 
 /** Envia um e-mail (só administradores). Sem e-mail configurado, não faz nada e devolve false. */
