@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hyper Estratégia Digital</title>
+  <title>Hyper Studio</title>
   <meta name="theme-color" content="#4E2CA3" />
   <link rel="icon" type="image/png" href="img/favicon.png" />
   <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Hyper" />
+  <meta name="apple-mobile-web-app-title" content="Hyper Studio" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,700;1,800&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -20,8 +20,10 @@
   <!-- Tela de login -->
   <section id="tela-login">
     <div class="login-caixa">
-      <img src="img/logo-branco.png" alt="Hyper" class="login-logo" />
-      <h1>Bem-vindo à Hyper.</h1>
+      <div class="assinatura-studio assinatura-grande">
+        <img src="img/logo-branco.png" alt="Hyper" class="login-logo" /><span class="selo-studio">Studio</span>
+      </div>
+      <h1>Bem-vindo ao Hyper Studio.</h1>
       <button id="btn-entrar" class="destaque">Entrar com Google</button>
       <p class="login-nota">Primeira vez? Entre com sua conta Google e peça acesso.</p>
     </div>
@@ -31,7 +33,7 @@
   <div id="app">
     <aside class="lateral-menu">
       <a class="marca" href="#/hoje" title="Ir para Hoje">
-        <img src="img/logo-branco.png" alt="Hyper — ir para Hoje" />
+        <span class="assinatura-studio"><img src="img/logo-branco.png" alt="Hyper Studio — ir para Hoje" /><span class="selo-studio" aria-hidden="true">Studio</span></span>
       </a>
       <nav id="menu" aria-label="Menu principal"></nav>
       <div class="usuario">
@@ -46,7 +48,7 @@
     <div class="principal">
       <header class="barra-movel">
         <button id="btn-menu" class="icone" aria-label="Abrir menu">☰</button>
-        <a class="logo-movel" href="#/hoje" title="Ir para Hoje"><img src="img/logo-branco.png" alt="Hyper — ir para Hoje" /></a>
+        <a class="logo-movel" href="#/hoje" title="Ir para Hoje"><span class="assinatura-studio"><img src="img/logo-branco.png" alt="Hyper Studio — ir para Hoje" /><span class="selo-studio" aria-hidden="true">Studio</span></span></a>
         <button id="btn-busca-movel" class="icone busca-movel" aria-label="Buscar">⌕</button>
       </header>
       <nav id="nav-movel" class="nav-movel" aria-label="Atalhos"></nav>

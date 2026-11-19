@@ -882,3 +882,11 @@ a.marca:focus-visible, .logo-movel:focus-visible { outline: 2px solid var(--hype
   .filtros-tarefas.aberto { display: flex; }
   .filtros-tarefas input[type="search"] { width: 100%; }
 }
+
+/* Assinatura do produto: logo da Hyper + "Studio" */
+.assinatura-studio { display: inline-flex; align-items: flex-end; gap: 6px; }
+.selo-studio { font-family: var(--fonte-titulo); font-style: italic; font-weight: 800; font-size: 22px; line-height: 0.8; color: var(--hyper-amarelo); letter-spacing: 0.01em; }
+.assinatura-grande { gap: 10px; }
+.assinatura-grande .selo-studio { font-size: 46px; }
+.barra-movel .selo-studio { font-size: 17px; }
+.aprovacao-topo .selo-studio { font-size: 20px; }

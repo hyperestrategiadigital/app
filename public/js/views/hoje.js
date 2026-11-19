@@ -51,7 +51,7 @@ function dicas(renderizar) {
       item("Ctrl+K", "(⌘K no Mac) busca qualquer cliente, post, tarefa ou tela."),
       item("Clique no seu nome", "(embaixo, no menu) para pôr foto, escolher o e-mail da sua agenda e pedir mais acesso."),
       item("Minhas × Equipe:", "aqui no Hoje você vê primeiro o que é seu."),
-      item("No celular,", "use \"Adicionar à tela de início\" no navegador para ter o app da Hyper como um aplicativo.")));
+      item("No celular,", "use \"Adicionar à tela de início\" no navegador para ter o Hyper Studio como um aplicativo.")));
 }
 
 export function render({ estado = {}, renderizar = () => {} } = {}) {

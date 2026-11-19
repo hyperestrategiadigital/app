@@ -24,7 +24,7 @@ async function chamar(url, corpo) {
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 /** Modelo com a identidade da Hyper. */
-export function modelo(titulo, paragrafos, { link = LINK_APP, botao = "Abrir o app da Hyper" } = {}) {
+export function modelo(titulo, paragrafos, { link = LINK_APP, botao = "Abrir o Hyper Studio" } = {}) {
   return `<div style="font-family:Montserrat,Arial,sans-serif;max-width:560px;margin:auto;color:${MARCA.texto}">
   <div style="background:${MARCA.roxo};color:#fff;padding:20px 24px;border-radius:12px 12px 0 0">
     <div style="font-size:13px;letter-spacing:2px;opacity:.8">HYPER ESTRATÉGIA DIGITAL</div>
@@ -53,9 +53,9 @@ const descreverAcesso = ({ papel, permissoes = [], acessoClientes, nomesClientes
 
 export const emailConvite = (c) => enviarEmail({
   para: c.email,
-  assunto: "Você foi adicionado ao app da Hyper",
+  assunto: "Você foi adicionado ao Hyper Studio",
   html: modelo(`Olá${c.nome ? `, ${c.nome}` : ""}!`, [
-    `${esc(eu.nome || "A Hyper")} adicionou você ao app de trabalho da Hyper.`,
+    `${esc(eu.nome || "A Hyper")} adicionou você ao Hyper Studio.`,
     descreverAcesso(c),
     `Para entrar, abra o app e clique em <b>Entrar com Google</b> usando <b>${esc(c.email)}</b>. Seu acesso já está liberado.`
   ], { botao: "Entrar no app" })
@@ -63,9 +63,9 @@ export const emailConvite = (c) => enviarEmail({
 
 export const emailLiberado = (m) => enviarEmail({
   para: m.email,
-  assunto: "Seu acesso ao app da Hyper foi liberado",
+  assunto: "Seu acesso ao Hyper Studio foi liberado",
   html: modelo(`Acesso liberado${m.nome ? `, ${m.nome.split(" ")[0]}` : ""}!`, [
-    "Seu pedido de acesso ao app da Hyper foi aprovado.", descreverAcesso(m)
+    "Seu pedido de acesso ao Hyper Studio foi aprovado.", descreverAcesso(m)
   ], { botao: "Entrar no app" })
 });
 
@@ -73,8 +73,8 @@ export const emailMaisAcesso = (m, aprovado) => enviarEmail({
   para: m.email,
   assunto: aprovado ? "Seu pedido de acesso foi aprovado" : "Sobre o seu pedido de acesso",
   html: modelo(aprovado ? "Pedido aprovado" : "Pedido não aprovado", aprovado
-    ? ["Seu pedido de mais acesso no app da Hyper foi aprovado. Seu acesso agora:", descreverAcesso(m)]
-    : ["Seu pedido de mais acesso no app da Hyper não foi aprovado desta vez. Se tiver dúvida, fale com o administrador."])
+    ? ["Seu pedido de mais acesso no Hyper Studio foi aprovado. Seu acesso agora:", descreverAcesso(m)]
+    : ["Seu pedido de mais acesso no Hyper Studio não foi aprovado desta vez. Se tiver dúvida, fale com o administrador."])
 });
 
 /** Avisa os administradores de um pedido (funciona até para quem ainda não foi liberado). */
@@ -117,7 +117,7 @@ export async function conectarEmail(url) {
 export async function testarEmail() {
   const { url, segredo } = configEmail();
   const r = await chamar(url, { tipo: "testar", segredo });
-  await enviarEmail({ para: eu.email, assunto: "Teste do app da Hyper", html: modelo("Tudo certo!", ["Os e-mails automáticos do app da Hyper estão funcionando."]) });
+  await enviarEmail({ para: eu.email, assunto: "Teste do Hyper Studio", html: modelo("Tudo certo!", ["Os e-mails automáticos do Hyper Studio estão funcionando."]) });
   return r;
 }
 

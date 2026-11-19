@@ -226,7 +226,7 @@ test("primeiro acesso sem convite: pede acesso e o administrador libera", async 
   const ctx = await browser.newContext();
   const novo = await ctx.newPage();
   await abrir(novo, { usuario: { uid: "matheus", displayName: "Matheus", email: "matheus@exemplo.com" }, semMenu: true });
-  await expect(novo.locator("#conteudo h1")).toContainText("Bem-vindo à Hyper");
+  await expect(novo.locator("#conteudo h1")).toContainText("Bem-vindo ao Hyper Studio");
   await novo.locator(".chip-check", { hasText: "Administração" }).locator("input").check();
   await novo.fill("#acesso-clientes", "todos");
   await novo.getByRole("button", { name: "Pedir acesso" }).click();
@@ -606,14 +606,14 @@ test("topo de Tarefas igual nas quatro visões e logo leva para o Hoje", async (
   const medidas = [];
   for (const visao of ["Calendário", "Quadro", "Lista", "Equipe"]) {
     await page.locator(".visoes-tarefas").getByRole("tab", { name: new RegExp(visao) }).click();
+    await expect(page.locator(".visoes-tarefas [aria-selected=true]")).toContainText(visao);
     await expect(page.locator("#conteudo h1")).toHaveText("Tarefas");
     await expect(page.getByRole("button", { name: /\+ Novo/ })).toBeVisible();
     await expect(page.locator("#busca-tarefas")).toBeVisible();
-    const caixa = await page.locator(".filtros-tarefas").boundingBox();
-    medidas.push(Math.round(caixa.y));
+    medidas.push(await page.locator(".filtros-tarefas").evaluate((e) => Math.round(e.getBoundingClientRect().top)));
     await expect(page.locator(".navegador-mes")).toBeVisible({ visible: visao === "Calendário" });
   }
-  expect(new Set(medidas).size).toBe(1); // os filtros não mudam de lugar
+  expect(new Set(medidas).size, JSON.stringify(medidas)).toBe(1); // os filtros não mudam de lugar
   await page.getByRole("button", { name: /\+ Novo/ }).click();
   await expect(page.getByRole("menuitem")).toHaveCount(3);
   await page.locator("#conteudo h1").click();
