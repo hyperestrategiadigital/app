@@ -930,3 +930,13 @@ a.marca:focus-visible, .logo-movel:focus-visible { outline: 2px solid var(--hype
 .grade-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 14px; }
 .studio-dicas { margin: 6px 0 0; padding-left: 18px; line-height: 1.6; }
 .studio-referencia { max-height: 420px; border-radius: var(--raio-pequeno); }
+
+/* Assinatura do produto (o logo é sempre só o da Hyper; "Hyper Studio" vai em texto) */
+.login-caixa h1 { font-weight: 400; }
+.login-caixa h1 strong { font-weight: 800; }
+.assinatura { margin-top: 28px; font-size: 12px; letter-spacing: 0.02em; color: var(--cor-texto-suave); }
+.assinatura strong { font-weight: 700; }
+#tela-login .assinatura { color: rgba(255, 255, 255, 0.6); }
+.lateral-menu .assinatura { margin: 8px 0 0; padding: 0 12px; font-size: 10px; color: rgba(255, 255, 255, 0.55); }
+.assinatura-pagina { text-align: center; padding: 24px 16px 32px; }
+.lateral-menu .assinatura strong { display: block; font-size: 11px; color: rgba(255, 255, 255, 0.8); }

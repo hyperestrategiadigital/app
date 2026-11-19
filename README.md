@@ -1,6 +1,6 @@
-# Hyper App
+# Hyper Studio
 
-Central de trabalho da Hyper Estratégia Digital: tarefas, clientes, calendário de conteúdo, tráfego pago e financeiro. Roda no Firebase (projeto `hyper-9e023`) e está publicado em https://hyper-9e023.web.app.
+O Hyper Studio é a central de trabalho da Hyper Estratégia Digital, e no futuro também dos clientes: tarefas, clientes, calendário de conteúdo, tráfego pago e financeiro. Roda no Firebase (projeto `hyper-9e023`) e está publicado em https://hyper-9e023.web.app.
 
 ## Telas
 

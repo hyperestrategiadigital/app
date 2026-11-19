@@ -231,7 +231,7 @@ test("primeiro acesso sem convite: pede acesso e o administrador libera", async 
   const ctx = await browser.newContext();
   const novo = await ctx.newPage();
   await abrir(novo, { usuario: { uid: "matheus", displayName: "Matheus", email: "matheus@exemplo.com" }, semMenu: true });
-  await expect(novo.locator("#conteudo h1")).toContainText("Bem-vindo à Hyper");
+  await expect(novo.locator("#conteudo h1")).toContainText("Bem-vindo ao Hyper Studio");
   await novo.locator(".chip-check", { hasText: "Administração" }).locator("input").check();
   await novo.fill("#acesso-clientes", "todos");
   await novo.getByRole("button", { name: "Pedir acesso" }).click();

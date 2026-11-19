@@ -130,7 +130,7 @@ function renderizar() {
   document.body.classList.toggle("modo-cliente", ehCliente());
   montarMenu();
   montarNavMovel(nome);
-  document.title = `${r.titulo} · Hyper`;
+  document.title = `${r.titulo} · Hyper Studio`;
   const area = $("conteudo");
   const rolagem = area.scrollTop;
   const foco = document.activeElement?.id && area.contains(document.activeElement) ? document.activeElement : null;
@@ -248,7 +248,7 @@ async function entrar(usuario) {
     const clientes = el("textarea", { id: "acesso-clientes", rows: 2, placeholder: "Ex.: os nomes dos clientes com quem vai trabalhar. Deixe em branco se for trabalhar com todos." });
     const mensagem = el("textarea", { id: "acesso-mensagem", rows: 2, placeholder: "Ex.: sou a nova social media, começo segunda" });
     return telaCheia(
-      el("h1", {}, "Bem-vindo à Hyper"),
+      el("h1", {}, "Bem-vindo ao Hyper Studio"),
       el("p", {}, `Você entrou como ${usuario.email}. Para usar o app, peça acesso: um administrador da Hyper aprova e você recebe um e-mail.`),
       el("label", { class: "campo", for: "acesso-nome" }, el("span", {}, "Seu nome"), nome),
       el("div", { class: "campo" }, el("span", {}, "O que você precisa acessar?"), funcoes),
