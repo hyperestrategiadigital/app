@@ -362,7 +362,7 @@ export function cabecalho(titulo, subtitulo, ...acoes) {
 export function visoesTarefas(estado, renderizar) {
   const noCalendario = location.hash.startsWith("#/calendario");
   const atual = noCalendario ? "calendario" : estado.visao && estado.visao !== "calendario" ? estado.visao : "quadro";
-  return el("div", { class: "visoes-tarefas" }, abas([["calendario", "▦ Calendário"], ["quadro", "▥ Quadro"], ["lista", "☰ Lista"], ["equipe", "☺ Carga da equipe"]], atual, (v) => {
+  return el("div", { class: "visoes-tarefas" }, abas([["calendario", "▦ Calendário"], ["quadro", "▥ Quadro"], ["lista", "☰ Lista"], ["equipe", "☺ Equipe"]], atual, (v) => {
     estado.visao = v;
     if (v === "equipe") estado.responsavel = "";
     const destino = v === "calendario" ? "#/calendario" : "#/tarefas";
