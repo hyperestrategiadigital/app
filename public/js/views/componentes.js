@@ -60,6 +60,14 @@ export function modeloChecklist(t = {}) {
   return passos.map((texto) => ({ texto, feito: false }));
 }
 
+/** Clientes ativos + o cliente atual da tarefa, mesmo que esteja inativo (para não sumir da lista). */
+function opcoesClientesCom(clienteId) {
+  const opcoes = opcoesClientes();
+  const c = clienteId && porId("clientes", clienteId);
+  if (c && !opcoes.some(([id]) => id === c.id)) opcoes.push([c.id, `${c.nome} (inativo)`]);
+  return opcoes;
+}
+
 export function abrirTarefa(tarefa = {}) {
   const editando = !!tarefa.id;
   const conteudo = (v) => v.tipo === TIPO_CONTEUDO;
@@ -68,7 +76,9 @@ export function abrirTarefa(tarefa = {}) {
   if (!editando && !valores.checklist?.length) valores.checklist = modeloChecklist({ formato: "Feed estático", ...valores });
   const campos = [
     { nome: "titulo", rotulo: "Tarefa / tema do post", obrigatorio: true, dica: "Ex.: Black Week — plano anual" },
-    { nome: "clienteId", rotulo: "Cliente", tipo: "select", opcoes: opcoesClientes(), largura: "metade" },
+    { nome: "status", rotulo: "Status", tipo: "botoes", opcoes: STATUS_TAREFA, padrao: "a_fazer", mostrarSe: (v) => !conteudo(v) },
+    { nome: "statusConteudo", rotulo: "Etapa do post", tipo: "botoes", opcoes: STATUS_CONTEUDO, padrao: "ideia", mostrarSe: conteudo },
+    { nome: "clienteId", rotulo: "Cliente", tipo: "select", opcoes: opcoesClientesCom(tarefa.clienteId), largura: "metade" },
     { nome: "tipo", rotulo: "Tipo", tipo: "select", opcoes: TIPOS_TAREFA, largura: "metade" },
     { nome: "marcaId", rotulo: "Marca", tipo: "select", largura: "metade",
       opcoesDe: (v) => [...marcasDo(v.clienteId).map((m) => [m.id, m.nome]), ["", `${porId("clientes", v.clienteId)?.nome || "Grupo"} (institucional)`]],
@@ -79,14 +89,12 @@ export function abrirTarefa(tarefa = {}) {
     { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: REDES, padrao: "Instagram", largura: "metade", mostrarSe: conteudo },
     { nome: "dataPublicacao", rotulo: "Data de publicação", tipo: "date", padrao: tarefa.prazo || hojeISO(), obrigatorio: true, largura: "metade", mostrarSe: conteudo },
     { nome: "hora", rotulo: "Horário", tipo: "time", largura: "metade", mostrarSe: conteudo },
-    { nome: "statusConteudo", rotulo: "Etapa do post", tipo: "select", opcoes: STATUS_CONTEUDO, padrao: "ideia", largura: "metade", mostrarSe: conteudo },
     { nome: "objetivo", rotulo: "Objetivo", dica: "Ex.: vender plano anual, gerar leads", largura: "metade", mostrarSe: conteudo },
     { nome: "roteiro", rotulo: "Briefing / roteiro", tipo: "textarea", linhas: 3, mostrarSe: conteudo },
     { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 4, dica: "Cole aqui a copy aprovada", mostrarSe: conteudo },
 
     { tipo: "secao", rotulo: "Tarefa" },
     { nome: "responsavel", rotulo: "Responsável", tipo: "select", opcoes: opcoesResponsaveis(tarefa.responsavel), padrao: responsavelPadrao(), largura: "metade" },
-    { nome: "status", rotulo: "Status", tipo: "select", opcoes: STATUS_TAREFA, padrao: "a_fazer", largura: "metade", mostrarSe: (v) => !conteudo(v) },
     { nome: "prazo", rotulo: "Prazo de entrega", tipo: "date", padrao: hojeISO(), largura: "metade" },
     { nome: "checklist", rotulo: "Checklist", tipo: "checklist" },
     { nome: "linkCanva", rotulo: "Link do Canva (criativo)", dica: "https://www.canva.com/design/...", largura: "metade" },

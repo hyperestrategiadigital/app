@@ -124,7 +124,8 @@ test("post com marca, status único, planejar no calendário e criar dentro do p
   await page.getByRole("button", { name: "+ Novo post" }).click();
   await page.fill("#f-titulo", "Post da marca X");
   await page.selectOption("#f-marcaId", { label: "Marca X" });
-  await page.selectOption("#f-statusConteudo", "aprovacao");
+  await page.locator("#f-statusConteudo").getByRole("radio", { name: "Em aprovação" }).click();
+  await expect(page.locator("#f-statusConteudo .escolha.ativo")).toHaveText("Em aprovação");
   await expect(page.locator("#f-status")).toBeHidden();
   await page.click(".modal button[type=submit]");
   const post = await page.evaluate(() => Object.entries(window.__store["espacos/hyper/tarefas"]).find(([, t]) => t.titulo === "Post da marca X"));
@@ -570,3 +571,28 @@ test("importar marcas: acha o cliente por nome parecido e manda para a marca com
   expect(s["espacos/hyper/clientes"].grupo.tomDeVoz).not.toBe("Próximo");
   expect(Object.keys(s["espacos/hyper/clientes"])).toHaveLength(2);
 });
+
+test("status da tarefa em botões e grupo que sumiu volta para a lista", async ({ page }) => {
+  await abrir(page);
+  // grupo que foi "juntado nele mesmo" pelo Organizar grupos antigo
+  await page.evaluate(async () => {
+    const db = await import("/js/db.js");
+    await db.salvarComId("marcas", "m-grupo", { nome: "Grupo Exemplo", clienteId: "grupo", ativo: true, paleta: [] });
+    await db.atualizar("clientes", "grupo", { ativo: false, viraMarcaDe: "grupo" });
+    const m = await import("/js/migracoes.js");
+    await m.reativarGruposSumidos();
+  });
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].grupo.ativo)).toBe(true);
+  await page.goto("/#/tarefas");
+  await page.getByRole("button", { name: "+ Nova tarefa" }).click();
+  await page.fill("#f-titulo", "Estúdio");
+  await page.selectOption("#f-tipo", { index: 1 });
+  await expect(page.locator("#f-clienteId option", { hasText: "Grupo Exemplo" })).toHaveCount(1);
+  await page.selectOption("#f-clienteId", "grupo");
+  const status = page.locator("#f-status");
+  await expect(status).toBeVisible();
+  await status.getByRole("radio", { name: "Em andamento" }).click();
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Estúdio")?.status)).toBe("andamento");
+});
+
