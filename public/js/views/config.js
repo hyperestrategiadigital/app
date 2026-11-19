@@ -66,63 +66,105 @@ function blocoOpenAI() {
 }
 
 
-const CAMPOS_MARCA = ["tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "fontes", "observacoes", "descricao", "instagram", "linkDrive", "linkCanva", "paleta"];
-const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", estiloVisual: "estilo de imagem", identidadeVisual: "diagramação", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
+const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "diretrizes", "estiloVisual", "identidadeVisual", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];
+const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", diretrizes: "diretrizes de conteúdo", estiloVisual: "estilo de imagem", identidadeVisual: "diagramação", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
 const preenchido = (x) => (Array.isArray(x) ? x.filter(Boolean).length : String(x ?? "").trim());
+const chaveNome = (s) => normalizar(s || "").replace(/[^a-z0-9]/g, "");
+/** Cliente pelo nome, aceitando pequenas diferenças ("Domo" acha "Domo Empório"; "Jocelene" acha "Jocelene Fernandes"). */
+function acharClientePorNome(nome) {
+  const k = chaveNome(nome);
+  if (!k) return null;
+  const ativos = dados.clientes.filter((c) => c.ativo !== false);
+  return ativos.find((c) => chaveNome(c.nome) === k) || ativos.find((c) => chaveNome(c.nome).includes(k) || k.includes(chaveNome(c.nome))) || null;
+}
+/** Marca do cliente pelo nome (mesma tolerância). */
+function acharMarca(clienteId, nome) {
+  const k = chaveNome(nome);
+  const lista = (dados.marcas || []).filter((m) => m.clienteId === clienteId);
+  return lista.find((m) => chaveNome(m.nome) === k) || lista.find((m) => chaveNome(m.nome).includes(k) || k.includes(chaveNome(m.nome))) || null;
+}
 
 /**
  * Importa definições de marca (arquivo .json preparado pelo Claude a partir do ChatGPT).
- * Cada item: { cliente, marca?, tomDeVoz, persona, ... }. Sem "marca" (ou marca = nome do cliente),
- * vai para a identidade do próprio cliente; com "marca", cria ou atualiza a marca dentro do cliente.
+ * Cada item: { cliente, marca?, descricao, tomDeVoz, publico, persona, diretrizes, ... }. Sem "marca", vai para o próprio
+ * cliente; com "marca", vai para a marca do cliente com esse nome (mesmo que ela tenha o nome do grupo) ou cria a marca.
+ * O cliente de cada linha é escolhido na prévia (já vem sugerido pelo nome); nada cria cliente sem você escolher.
  */
 function previaMarcas(lista) {
-  const previa = el("div", { class: "importacao-previa" });
-  let fechar = () => {};
-  {
-    const itens = lista.map((m) => {
-      const nomeCli = m.cliente || m.nome || "";
-      const cliente = dados.clientes.find((c) => normalizar(c.nome) === normalizar(nomeCli));
-      const nomeMarca = m.marca && normalizar(m.marca) !== normalizar(nomeCli) ? m.marca : "";
-      const marca = nomeMarca && cliente ? (dados.marcas || []).find((x) => x.clienteId === cliente.id && normalizar(x.nome) === normalizar(nomeMarca)) : null;
-      const campos = CAMPOS_MARCA.filter((k) => preenchido(m[k]));
-      return { m, nomeCli, cliente, nomeMarca, marca, campos };
-    });
-    const sobrescrever = el("input", { type: "checkbox", id: "marcas-sobrescrever" });
-    const destino = ({ nomeCli, cliente, nomeMarca, marca }) => nomeMarca
-      ? `${cliente ? cliente.nome : `${nomeCli} (cliente novo)`} › ${marca ? marca.nome : `${nomeMarca} (marca nova)`}`
-      : cliente ? cliente.nome : `${nomeCli} (cliente novo)`;
-    previa.replaceChildren(el("div", {},
-      el("ul", {}, itens.map((i) => el("li", {},
-        el("strong", {}, destino(i)), ": ", i.campos.map((k) => ROTULO_CAMPO[k]).join(", ") || "nada para importar"))),
-      el("label", { class: "check-inline", for: "marcas-sobrescrever" }, sobrescrever, "Substituir o que já está preenchido (sem marcar, só preenche campos vazios)"),
-      el("div", { class: "acoes" }, el("button", { class: "secundario negar", onClick: () => fechar() }, "Cancelar"), el("button", { class: "confirmar", onClick: async (e) => {
-        e.currentTarget.disabled = true;
+  const NOVO = "__novo";
+  const nomesCli = [...new Set(lista.map((m) => m.cliente || m.nome || "").filter(Boolean))];
+  const seletores = new Map(nomesCli.map((n) => {
+    const achado = acharClientePorNome(n);
+    return [n, el("select", { "aria-label": `Cliente para ${n}`, onChange: () => desenhar() },
+      el("option", { value: "" }, "— não importar —"),
+      el("option", { value: NOVO }, `+ Criar cliente "${n}"`),
+      dados.clientes.filter((c) => c.ativo !== false).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+        .map((c) => el("option", { value: c.id, selected: c.id === achado?.id }, c.nome)))];
+  }));
+  const sobrescrever = el("input", { type: "checkbox", id: "marcas-sobrescrever", checked: true });
+  const lista_ = el("ul", { class: "lista-importar-marcas" });
+  const status = el("p", { class: "subtitulo" });
+  /** Para onde vai cada item com o cliente escolhido agora. */
+  const destino = (m) => {
+    const nomeCli = m.cliente || m.nome || "";
+    const clienteId = seletores.get(nomeCli)?.value || "";
+    const cliente = clienteId && clienteId !== NOVO ? dados.clientes.find((c) => c.id === clienteId) : null;
+    let marca = null, criarMarca = "";
+    if (m.marca) {
+      marca = cliente ? acharMarca(cliente.id, m.marca) : null;
+      // marca com o nome do próprio cliente e cliente sem marcas: vai para o cliente
+      if (!marca && !(chaveNome(m.marca) === chaveNome(cliente?.nome || nomeCli) && !(cliente && (dados.marcas || []).some((x) => x.clienteId === cliente.id)))) criarMarca = m.marca;
+    }
+    return { nomeCli, clienteId, cliente, marca, criarMarca, campos: CAMPOS_MARCA.filter((k) => preenchido(m[k])) };
+  };
+  function desenhar() {
+    lista_.replaceChildren(...lista.map((m) => {
+      const d = destino(m);
+      const onde = !d.clienteId ? "não importar"
+        : `${d.cliente ? d.cliente.nome : `${d.nomeCli} (cliente novo)`}${d.marca ? ` › ${d.marca.nome}` : d.criarMarca ? ` › ${d.criarMarca} (marca nova)` : ""}`;
+      return el("li", { class: d.clienteId ? "" : "apagado" }, el("strong", {}, onde), ": ", d.campos.map((k) => ROTULO_CAMPO[k]).join(", ") || "nada para importar");
+    }));
+  }
+  desenhar();
+  const fechar = abrirModal("Importar definições de marca", el("div", { class: "importacao-previa" },
+    el("p", {}, "Confira de qual cliente é cada bloco. O app já sugere pelo nome."),
+    el("div", { class: "lista" }, nomesCli.map((n) => el("div", { class: "linha-importar" }, el("strong", {}, n), seletores.get(n)))),
+    el("h3", { class: "form-secao" }, "O que vai ser preenchido"),
+    lista_,
+    el("label", { class: "check-inline", for: "marcas-sobrescrever" }, sobrescrever, "Substituir o que já está preenchido (desmarcado: só preenche os campos vazios)"),
+    status,
+    el("div", { class: "acoes" },
+      el("button", { class: "secundario negar", onClick: () => fechar() }, "Cancelar"),
+      el("button", { class: "confirmar", onClick: async (e) => {
+        const botao = e.currentTarget;
+        botao.disabled = true;
         let n = 0;
         const criados = {};
         try {
-          for (const { m, nomeCli, cliente, nomeMarca, marca, campos } of itens) {
-            const atual = marca || (!nomeMarca ? cliente : null);
-            const v = {};
-            for (const k of campos) if (sobrescrever.checked || !atual || !preenchido(atual[k])) v[k] = m[k];
-            if (v.paleta) v.cor = v.paleta[0];
-            let clienteId = cliente?.id || criados[normalizar(nomeCli)];
+          for (const m of lista) {
+            const d = destino(m);
+            if (!d.clienteId || !d.campos.length) continue;
+            status.textContent = `${d.nomeCli}${m.marca ? ` › ${m.marca}` : ""}…`;
+            let clienteId = d.cliente?.id || criados[d.nomeCli];
             if (!clienteId) {
-              clienteId = (await criar("clientes", { nome: nomeCli, ativo: true, servicos: [], ...(nomeMarca ? {} : v) })).id;
-              criados[normalizar(nomeCli)] = clienteId;
-              if (!nomeMarca) { n++; continue; }
+              clienteId = (await criar("clientes", { nome: d.nomeCli, ativo: true, servicos: [], paleta: [] })).id;
+              criados[d.nomeCli] = clienteId;
             }
-            if (!Object.keys(v).length && (marca || !nomeMarca)) continue;
-            if (!nomeMarca) await atualizar("clientes", clienteId, v);
-            else if (marca) await atualizar("marcas", marca.id, v);
-            else await criar("marcas", { nome: nomeMarca, clienteId, ativo: true, paleta: [], criadoEm: Date.now(), ...v });
+            const marca = d.marca || (d.criarMarca ? acharMarca(clienteId, d.criarMarca) : null);
+            const atual = marca || (d.criarMarca ? null : dados.clientes.find((c) => c.id === clienteId));
+            const v = {};
+            for (const k of d.campos) if (sobrescrever.checked || !atual || !preenchido(atual[k])) v[k] = m[k];
+            if (v.paleta) v.cor = v.paleta[0];
+            if (!Object.keys(v).length) continue;
+            if (marca) await atualizar("marcas", marca.id, v);
+            else if (d.criarMarca) await criar("marcas", { nome: d.criarMarca, clienteId, ativo: true, paleta: [], criadoEm: Date.now(), ...v });
+            else await atualizar("clientes", clienteId, v);
             n++;
           }
-          avisar(`${n} cliente(s)/marca(s) atualizados. Revise cada um na aba Marca.`);
-        } catch (erro) { avisar("Parou no meio: " + erro.message, "erro"); }
-        fechar();
-      } }, "Importar definições"))));
-  }
-  fechar = abrirModal("Importar definições de marca", previa, { largo: true });
+          avisar(`${n} cliente(s)/marca(s) atualizados. Confira cada um na aba Marca.`);
+          fechar();
+        } catch (erro) { avisar("Parou no meio: " + erro.message, "erro"); botao.disabled = false; }
+      } }, "Importar definições"))), { largo: true });
 }
 
 /** Um lugar só para os arquivos .json que o Claude prepara: reconhece o tipo e mostra tudo antes de aplicar. */
