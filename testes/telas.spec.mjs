@@ -98,7 +98,10 @@ test("ficha do cliente: editar só cadastro e contrato; marcas com identidade pr
   await page.getByRole("button", { name: "+ Marca" }).click();
   await page.fill("#f-nome", "Marca Um");
   await page.click(".modal button[type=submit]");
-  await page.locator(".marcas-seletor button", { hasText: "Marca Um" }).click();
+  // virou grupo: a ficha abre direto na marca nova
+  await expect(page).toHaveURL(/#\/clientes\/grupo\/marca\//);
+  await expect(page.locator("#conteudo h1")).toHaveText("Marca Um");
+  await page.getByRole("tab", { name: "Marca" }).click();
   await page.fill("#marca-tomDeVoz", "Técnico e acolhedor");
   await page.locator(".campo-marca", { has: page.locator("#marca-tomDeVoz") }).getByRole("button", { name: "Salvar" }).click();
   await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/marcas"] || {}).find((m) => m.nome === "Marca Um")?.tomDeVoz)).toBe("Técnico e acolhedor");
@@ -335,7 +338,6 @@ test("juntar cliente solto numa marca de mesmo nome não duplica a marca", async
   await abrir(page);
   await page.evaluate(async () => { const db = await import("/js/db.js"); await db.salvarComId("marcas", "m-loja-ja", { clienteId: "grupo", nome: "Loja Exemplo", ativo: true, paleta: [] }); });
   await page.goto("/#/clientes/grupo");
-  await page.getByRole("tab", { name: "Marca" }).click();
   await page.getByRole("button", { name: /Juntar outros clientes/ }).click();
   await page.check(".modal input[value=loja]");
   await page.locator(".modal").getByRole("button", { name: "Juntar" }).click();
@@ -370,7 +372,8 @@ test("separar uma marca do grupo devolve o cliente com os posts dele", async ({ 
   await page.check(".modal input[value=loja]");
   await page.locator(".modal").getByRole("button", { name: "Juntar" }).click();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].p1.marcaId)).toBe("m-loja");
-  await page.locator(".marcas-seletor").getByRole("button", { name: /Loja Exemplo/ }).click();
+  await page.locator(".cartao-marca", { hasText: "Loja Exemplo" }).click();
+  await page.getByRole("tab", { name: "Marca" }).click();
   await page.getByRole("button", { name: "Separar em cliente próprio…" }).click();
   await page.locator(".modal").getByRole("button", { name: "Confirmar" }).click();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.ativo)).toBe(true);
@@ -606,18 +609,60 @@ test("topo de Tarefas igual nas quatro visões e logo leva para o Hoje", async (
   const medidas = [];
   for (const visao of ["Calendário", "Quadro", "Lista", "Equipe"]) {
     await page.locator(".visoes-tarefas").getByRole("tab", { name: new RegExp(visao) }).click();
+    await expect(page.locator(".visoes-tarefas [aria-selected=true]")).toContainText(visao);
     await expect(page.locator("#conteudo h1")).toHaveText("Tarefas");
     await expect(page.getByRole("button", { name: /\+ Novo/ })).toBeVisible();
     await expect(page.locator("#busca-tarefas")).toBeVisible();
-    const caixa = await page.locator(".filtros-tarefas").boundingBox();
-    medidas.push(Math.round(caixa.y));
+    medidas.push(await page.locator(".filtros-tarefas").evaluate((e) => Math.round(e.getBoundingClientRect().top)));
     await expect(page.locator(".navegador-mes")).toBeVisible({ visible: visao === "Calendário" });
   }
-  expect(new Set(medidas).size).toBe(1); // os filtros não mudam de lugar
+  expect(new Set(medidas).size, JSON.stringify(medidas)).toBe(1); // os filtros não mudam de lugar
   await page.getByRole("button", { name: /\+ Novo/ }).click();
   await expect(page.getByRole("menuitem")).toHaveCount(3);
   await page.locator("#conteudo h1").click();
   await expect(page.getByRole("menuitem")).toHaveCount(0);
   await page.locator(".lateral-menu a.marca").click();
   await expect(page).toHaveURL(/#\/hoje/);
+});
+
+test("grupo: escolhe a marca antes e a ficha fica igual à de um cliente comum", async ({ page }) => {
+  await abrir(page);
+  await page.evaluate(async () => {
+    const db = await import("/js/db.js");
+    await db.salvarComId("marcas", "ma", { nome: "Marca A", clienteId: "grupo", ativo: true, paleta: ["#2D6CDF"] });
+    await db.salvarComId("marcas", "mb", { nome: "Marca B", clienteId: "grupo", ativo: true, paleta: ["#B4415A"], instagram: "@marcab" });
+  });
+  await page.goto("/#/clientes/grupo");
+  await expect(page.locator("#conteudo")).toContainText("Qual marca você quer abrir?");
+  await expect(page.locator(".cartao-marca")).toHaveCount(3); // Marca A, Marca B e o geral do grupo
+  await page.locator(".cartao-marca", { hasText: "Marca A" }).click();
+  await expect(page).toHaveURL(/#\/clientes\/grupo\/marca\/ma/);
+  await expect(page.locator("#conteudo h1")).toHaveText("Marca A");
+  const abas = await page.locator(".ficha .abas [role=tab]").allTextContents();
+  expect(abas).toEqual(["Marca", "Contas", "Resultados"]); // contrato, tráfego e financeiro ficam no geral do grupo
+  await page.getByRole("tab", { name: "Contas" }).click();
+  await expect(page.locator(".cartao-conta")).toHaveCount(1);
+  await page.getByRole("button", { name: "Editar redes" }).click();
+  await page.fill("#f-googleMeuNegocio", "https://g.page/marca-a");
+  await page.fill("#f-linkedin", "linkedin.com/company/marca-a");
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/marcas"].ma.googleMeuNegocio)).toBe("https://g.page/marca-a");
+  expect(await page.evaluate(() => window.__store["espacos/hyper/clientes"].grupo.linkedin || "")).toBe("");
+  await expect(page.locator(".cartao-conta")).toContainText("Google Meu Negócio");
+
+  // Tarefas da marca: abre Tarefas filtrado pelo cliente e pela marca
+  await page.getByRole("link", { name: /Tarefas \(/ }).click();
+  await expect(page).toHaveURL(/#\/tarefas\/grupo\/ma/);
+  await expect(page.locator(".filtros-tarefas select[aria-label=Marca]")).toHaveValue("ma");
+
+  // Geral do grupo: tem tráfego e financeiro
+  await page.goto("/#/clientes/grupo/marca/grupo");
+  await expect(page.locator(".ficha .abas").getByRole("tab", { name: "Financeiro" })).toHaveCount(1);
+
+  // Cliente comum: abre direto, mesmas abas de redes, sem Tarefas/Conteúdo
+  await page.goto("/#/clientes/loja");
+  await expect(page.locator(".ficha .abas").getByRole("tab", { name: "Tarefas" })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Contas" }).click();
+  await page.getByRole("button", { name: "Editar redes" }).click();
+  await expect(page.locator("#f-googleMeuNegocio")).toBeVisible();
 });

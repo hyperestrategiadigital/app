@@ -1,11 +1,12 @@
 // Aba "Resultados" da ficha do cliente: números do Instagram e do Facebook (Meta) da marca escolhida,
 // no período, e de cada post — ligando cada post do Instagram ao post do calendário do app.
 import { el, avisar, hojeISO, addDias, fmtData, vazio } from "../ui.js";
-import { dados, porId, atualizar, marcasDo } from "../db.js";
+import { dados, porId, atualizar } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
 import { TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
 import { abrirTarefa, corCliente } from "./componentes.js";
+import { marcaEscolhida } from "./marca.js";
 import { metaDisponivel, metaConectada, conectarMeta, contaMeta, paginas, resultados } from "../meta.js";
 
 const fmtNum = (n) => (typeof n === "number" ? n.toLocaleString("pt-BR") : "—");
@@ -25,16 +26,12 @@ function periodo(chave) {
 const cache = new Map(); // chave → { carregando, dados, erro }
 
 export function abaResultados(c, estado, renderizar) {
-  const marcas = marcasDo(c.id);
-  estado.resMarca ??= marcas[0]?.id || "";
   estado.resPeriodo ??= "30";
-  const marca = estado.resMarca ? porId("marcas", estado.resMarca) : null;
+  // A marca é a escolhida ao abrir a ficha (num grupo); vale para as abas Marca, Contas e Resultados
+  const { marca } = marcaEscolhida(c, estado);
+  const seletorMarca = null;
   const alvo = marca || c;
   const pageId = alvo.facebookPageId || "";
-  const seletorMarca = marcas.length ? el("div", { class: "marcas-seletor" },
-    [...marcas.map((m) => [m.id, m.nome, m]), ["", `${c.nome} (institucional)`, c]].map(([id, nome, obj]) =>
-      el("button", { class: `legenda-item ${estado.resMarca === id ? "ativo" : ""}`, style: { "--selo": corCliente(obj) }, onClick: () => { estado.resMarca = id; renderizar(); } },
-        el("span", { class: "bolinha" }), nome))) : null;
 
   if (!metaDisponivel()) return el("div", {}, seletorMarca,
     vazio("Os relatórios do Instagram e do Facebook ainda não foram ligados.",

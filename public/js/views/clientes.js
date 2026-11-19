@@ -1,16 +1,12 @@
 // Clientes: lista com indicadores e ficha completa de cada cliente.
 import { textoVencimento } from "../comercial.js";
-import { linkPlano } from "./planejamento.js";
 import { el, formulario, confirmar, avisar, fmtMoeda, fmtData, linkExterno, vazio, hojeISO, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, porId, contrato, salvarComId, marcasDo } from "../db.js";
 import { pode, ehAdmin, tarefaVisivel } from "../permissoes.js";
-import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, abas, corCliente } from "./componentes.js";
-import { SERVICOS, rotuloStatusConteudo } from "../constantes.js";
-import { novoPost } from "./calendario.js";
-import { dataPost } from "../exportacao.js";
-import { TIPO_CONTEUDO } from "../constantes.js";
+import { atrasada, cabecalho, abas, corCliente } from "./componentes.js";
+import { SERVICOS } from "../constantes.js";
 import { abrirConta, abrirManutencao } from "./trafego.js";
-import { abaMarca } from "./marca.js";
+import { abaMarca, abrirMarca, juntarClientes, GRUPO } from "./marca.js";
 import { abaResultados } from "./resultados.js";
 import { abaContas, linkGoogleAds, linkGerenciadorMeta } from "./contas.js";
 
@@ -106,23 +102,54 @@ export function render({ params, estado, renderizar }) {
       : vazio("Nenhum cliente ainda. Clique em + Novo cliente para cadastrar."));
 }
 
+/** Grupo: antes de abrir a ficha, escolher a marca (ou o geral do grupo). */
+function escolherMarca(c) {
+  const marcas = marcasDo(c.id);
+  const inativas = (dados.marcas || []).filter((m) => m.clienteId === c.id && m.ativo === false);
+  const abertasDe = (mid) => dados.tarefas.filter((t) => t.clienteId === c.id && tarefaVisivel(t) && t.status !== "concluido" && (t.marcaId || "") === mid).length;
+  const cartao = (m) => el("a", { class: `cartao-cliente cartao-marca ${m.ativo === false ? "inativo" : ""}`, href: `#/clientes/${c.id}/marca/${m.id}`, style: { "--selo": corCliente(m) } },
+    el("div", { class: "ficha-titulo" }, m.logo ? el("img", { class: "logo-chip", src: m.logo, alt: "" }) : null, el("h3", {}, m.nome, m.ativo === false ? " (inativa)" : "")),
+    m.instagram ? el("p", { class: "subtitulo" }, `@${String(m.instagram).replace(/^@/, "")}`) : null,
+    el("div", { class: "numeros-cliente" }, el("span", {}, el("strong", {}, abertasDe(m.id)), " abertas")));
+  const podeGerir = ehAdmin() || pode("conteudo");
+  return el("div", { class: "tela" },
+    el("a", { href: "#/clientes", class: "voltar" }, "← Clientes"),
+    cabecalho(c.nome, "É um grupo. Qual marca você quer abrir?",
+      podeGerir ? el("button", { class: "secundario", onClick: () => abrirMarca(c.id) }, "+ Marca") : null,
+      podeEditar() ? el("button", { class: "secundario", onClick: () => abrirCliente(c) }, "Editar grupo") : null),
+    el("div", { class: "grade-clientes" },
+      marcas.map(cartao),
+      el("a", { class: "cartao-cliente cartao-marca cartao-geral", href: `#/clientes/${c.id}/marca/grupo`, style: { "--selo": corCliente(c) } },
+        el("h3", {}, `${c.nome} · geral`),
+        el("p", { class: "subtitulo" }, "Posts institucionais do grupo, contrato, tráfego pago e financeiro."),
+        el("div", { class: "numeros-cliente" }, el("span", {}, el("strong", {}, abertasDe("")), " abertas")))),
+    inativas.length ? [el("h2", {}, "Marcas inativas"), el("div", { class: "grade-clientes" }, inativas.map(cartao))] : null,
+    ehAdmin() ? el("p", {}, el("button", { class: "link", onClick: () => juntarClientes(c) }, "Juntar outros clientes como marcas deste grupo…")) : null);
+}
+
 function ficha(id, estado, renderizar, resto = []) {
   const c = porId("clientes", id);
-  // #/clientes/<id>/marca/<marcaId> (busca rápida): abre a aba Marca naquela marca
-  const chave = [id, ...resto].join("/");
-  if (resto[0] === "marca" && estado.atalho !== chave) { estado.atalho = chave; estado.aba = "marca"; estado.marcaSel = resto[1] || ""; }
   if (!c) return el("div", { class: "tela" }, vazio("Cliente não encontrado.", el("a", { href: "#/clientes", class: "link" }, "← Voltar")));
-  const abasPermitidas = [["tarefas", "Tarefas"],
-    ...(pode("conteudo") ? [["conteudo", "Conteúdo"], ["marca", "Marca"]] : []),
+  // Grupo: primeiro escolhe a marca (#/clientes/<id>), depois a ficha abre igual à de um cliente comum
+  // (#/clientes/<id>/marca/<marcaId>, ou /marca/grupo para o geral: contrato, tráfego, financeiro e institucional).
+  const marcas = marcasDo(c.id);
+  const grupo = marcas.length > 0;
+  if (grupo && resto[0] !== "marca") return escolherMarca(c);
+  const escolhida = grupo && resto[1] !== "grupo" ? porId("marcas", resto[1]) : null;
+  if (grupo && resto[1] !== "grupo" && !escolhida) return escolherMarca(c);
+  estado.marcaSel = !grupo ? "" : escolhida ? escolhida.id : GRUPO;
+  const geral = !escolhida; // cliente comum ou o geral do grupo: tem contrato, tráfego e financeiro
+  // A ficha é a configuração do cliente. Tarefas e posts ficam na tela Tarefas (filtrada pelo cliente/marca).
+  const abasPermitidas = [
+    ...(pode("conteudo") ? [["marca", "Marca"]] : []),
     ...(pode("conteudo") || pode("trafego") ? [["contas", "Contas"]] : []),
     ...(pode("conteudo") || pode("trafego") ? [["resultados", "Resultados"]] : []),
-    ...(pode("trafego") ? [["trafego", "Tráfego pago"]] : []),
-    ...(pode("financeiro") ? [["financeiro", "Financeiro"]] : [])];
-  if (!abasPermitidas.some(([v]) => v === estado.aba)) estado.aba = "tarefas";
-  const ts = dados.tarefas.filter((t) => t.clienteId === id && tarefaVisivel(t));
-  const abertas = ts.filter((t) => t.status !== "concluido").sort((a, b) => (a.prazo || "9").localeCompare(b.prazo || "9"));
-  const feitas = ts.filter((t) => t.status === "concluido").sort((a, b) => (b.concluidoEm || b.prazo || "").localeCompare(a.concluidoEm || a.prazo || ""));
-  const conts = ts.filter((x) => x.tipo === TIPO_CONTEUDO).sort((a, b) => dataPost(b).localeCompare(dataPost(a)));
+    ...(geral && pode("trafego") ? [["trafego", "Tráfego pago"]] : []),
+    ...(geral && pode("financeiro") ? [["financeiro", "Financeiro"]] : [])];
+  if (!abasPermitidas.some(([v]) => v === estado.aba)) estado.aba = abasPermitidas[0]?.[0] || "";
+  const ts = dados.tarefas.filter((t) => t.clienteId === id && tarefaVisivel(t) && (!escolhida || t.marcaId === escolhida.id));
+  const abertas = ts.filter((t) => t.status !== "concluido");
+  const atrasadas = abertas.filter(atrasada).length;
   const contas = dados.contasAds.filter((x) => x.clienteId === id);
   const mans = dados.manutencoes.filter((x) => x.clienteId === id).sort((a, b) => b.data.localeCompare(a.data));
   const fins = dados.financeiro.filter((x) => x.clienteId === id).sort((a, b) => (b.vencimento || "").localeCompare(a.vencimento || ""));
@@ -133,25 +160,8 @@ function ficha(id, estado, renderizar, resto = []) {
 
   const conteudoAba = {
     marca: () => abaMarca(c, estado, renderizar),
-    contas: () => abaContas(c),
+    contas: () => abaContas(c, estado),
     resultados: () => abaResultados(c, estado, renderizar),
-    tarefas: () => [
-      el("div", { class: "com-acao" }, el("h2", {}, `Abertas (${abertas.length})`),
-        el("button", { onClick: () => abrirTarefa({ clienteId: id, prazo: hojeISO() }) }, "+ Tarefa")),
-      abertas.length ? abertas.map((t) => cartaoTarefa(t, { mostrarCliente: false })) : vazio("Nenhuma tarefa aberta."),
-      el("h2", {}, `Concluídas (${feitas.length})`),
-      feitas.slice(0, 50).map((t) => cartaoTarefa(t, { mostrarCliente: false })),
-      feitas.length > 50 ? el("p", { class: "subtitulo" }, `Mostrando as 50 mais recentes. Use a tela Tarefas para ver todas.`) : null],
-    conteudo: () => [
-      el("div", { class: "com-acao" }, el("h2", {}, `Conteúdos (${conts.length})`),
-        el("div", { class: "tela-acoes" },
-          el("a", { class: "botao-link secundario mini", href: linkPlano(id, hojeISO().slice(0, 7)) }, "☷ Planejar mês"),
-          el("button", { class: "mini", onClick: () => novoPost({ clienteId: id }) }, "+ Post"))),
-      conts.length ? conts.slice(0, 60).map((x) => el("div", { class: "linha-tabela", onClick: () => abrirTarefa(x) },
-        el("span", { class: "data-mini" }, fmtData(dataPost(x), true)), el("strong", {}, x.titulo),
-        x.marcaId ? el("span", { class: "etiqueta" }, porId("marcas", x.marcaId)?.nome || "") : null,
-        el("span", { class: "etiqueta" }, x.formato || "Post"), el("span", { class: `etiqueta st-${x.statusConteudo || "ideia"}` }, rotuloStatusConteudo(x.statusConteudo || "ideia"))))
-        : vazio("Nenhum conteúdo programado.")],
     trafego: () => [
       el("div", { class: "com-acao" }, el("h2", {}, "Contas de anúncio"),
         el("button", { onClick: () => abrirConta({ clienteId: id }) }, "+ Conta")),
@@ -172,26 +182,28 @@ function ficha(id, estado, renderizar, resto = []) {
         : vazio("Nenhum lançamento. Gere as mensalidades na tela Financeiro.")]
   };
 
+  const quem = escolhida || c;
   return el("div", { class: "tela" },
-    el("a", { href: "#/clientes", class: "voltar" }, "← Clientes"),
-    el("header", { class: "tela-topo ficha-topo", style: { "--selo": corCliente(c) } },
+    el("a", { href: grupo ? `#/clientes/${id}` : "#/clientes", class: "voltar" }, grupo ? `← ${c.nome}: trocar marca` : "← Clientes"),
+    el("header", { class: "tela-topo ficha-topo", style: { "--selo": corCliente(quem) } },
       el("div", { class: "ficha-titulo" },
-        c.logo ? el("img", { class: "logo-ficha", src: c.logo, alt: "" }) : null,
+        quem.logo ? el("img", { class: "logo-ficha", src: quem.logo, alt: "" }) : null,
         el("div", {},
-          el("h1", {}, c.nome, c.ativo === false ? el("span", { class: "etiqueta" }, "Inativo") : null),
-          el("div", { class: "cartao-meta" }, (c.servicos || []).map((s) => el("span", { class: "etiqueta" }, s)),
-            marcasDo(c.id).map((m) => el("span", { class: "etiqueta marca-etiqueta", style: { "--selo": corCliente(m) } },
-              m.logo ? el("img", { class: "logo-chip", src: m.logo, alt: "" }) : null, m.nome))))),
-      el("div", { class: "tela-acoes" }, podeEditar() ? el("button", { class: "secundario", onClick: () => abrirCliente(c) }, "Editar") : null)),
+          grupo ? el("p", { class: "sobre-titulo" }, escolhida ? `${c.nome} › marca` : "Geral do grupo: institucional, contrato e financeiro") : null,
+          el("h1", {}, quem.nome, c.ativo === false ? el("span", { class: "etiqueta" }, "Inativo") : null),
+          el("div", { class: "cartao-meta" }, (c.servicos || []).map((s) => el("span", { class: "etiqueta" }, s))))),
+      el("div", { class: "tela-acoes" },
+        el("a", { class: "botao-link secundario", href: `#/tarefas/${id}${escolhida ? `/${escolhida.id}` : ""}` }, `✓ Tarefas (${abertas.length} abertas${atrasadas ? `, ${atrasadas} atrasadas` : ""}) →`),
+        podeEditar() ? el("button", { class: "secundario", onClick: () => abrirCliente(c) }, grupo ? "Editar grupo" : "Editar") : null)),
     el("div", { class: "ficha" },
       el("aside", { class: "bloco lateral" },
         info("Contato", c.contato), c.whatsapp ? el("div", { class: "info" }, el("span", {}, "WhatsApp"), zap) : null,
         info("E-mail", c.email), c.instagram ? el("div", { class: "info" }, el("span", {}, "Instagram"), insta) : null,
         el("div", { class: "links-cliente" }, linkExterno(c.linkDrive, "📁 Drive"), linkExterno(c.linkCanva, "🎨 Canva")),
-        info("Mensalidade", contrato(c.id).mensalidade ? `${fmtMoeda(contrato(c.id).mensalidade)} · ${textoVencimento(contrato(c.id)).replace(" de cada mês", "")}` : null),
+        info("Mensalidade", geral && contrato(c.id).mensalidade ? `${fmtMoeda(contrato(c.id).mensalidade)} · ${textoVencimento(contrato(c.id)).replace(" de cada mês", "")}` : null),
         info("Segmento", c.segmento), info("Observações", c.observacoes),
-        !c.contato ? el("p", { class: "subtitulo" }, "Complete o contato em Editar. Cores, fontes e tom de voz ficam na aba Marca.") : null),
+        !c.contato && geral ? el("p", { class: "subtitulo" }, "Complete o contato em Editar. Cores, fontes e tom de voz ficam na aba Marca.") : null),
       el("section", { class: "bloco" },
-        abas(abasPermitidas, estado.aba, (a) => { estado.aba = a; renderizar(); }),
-        conteudoAba[estado.aba]())));
+        abasPermitidas.length ? [abas(abasPermitidas, estado.aba, (a) => { estado.aba = a; renderizar(); }), conteudoAba[estado.aba]()]
+          : el("p", { class: "subtitulo" }, "As tarefas deste cliente ficam na tela Tarefas."))));
 }

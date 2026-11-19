@@ -882,3 +882,12 @@ a.marca:focus-visible, .logo-movel:focus-visible { outline: 2px solid var(--hype
   .filtros-tarefas.aberto { display: flex; }
   .filtros-tarefas input[type="search"] { width: 100%; }
 }
+
+/* Aba Contas: um cartão por conta (cliente ou cada marca do grupo) */
+.cartao-conta { border: 1px solid var(--hyper-gelo); border-left: 4px solid var(--selo); border-radius: var(--raio-pequeno); padding: 12px 14px; display: grid; gap: 6px; align-content: start; }
+.cartao-conta h3 { margin: 0; }
+.cartao-conta .atalhos-agendamento { margin-top: 6px; }
+.sobre-titulo { margin: 0 0 2px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cor-texto-suave); }
+.cartao-marca .ficha-titulo { display: flex; align-items: center; gap: 8px; }
+.cartao-marca h3 { margin: 0; }
+.cartao-geral { border: 2px dashed var(--hyper-gelo); box-shadow: none; }
