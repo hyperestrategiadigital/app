@@ -252,7 +252,7 @@ test("Hoje pessoal, primeiros passos e carga da equipe", async ({ page }) => {
   await expect(page.locator("#conteudo")).toContainText("Revisar campanhas");
   await expect(page.locator(".primeiros-passos")).toContainText("Primeiros passos");
   await page.goto("/#/tarefas");
-  await page.getByRole("tab", { name: "Carga da equipe" }).click();
+  await page.getByRole("tab", { name: "☺ Equipe" }).click();
   await expect(page.locator(".tabela-carga")).toBeVisible();
   expect(erros).toEqual([]);
 });
@@ -532,3 +532,16 @@ test("confirmar é verde e cancelar é vermelho", async ({ page }) => {
   expect(await page.locator(".modal").getByRole("button", { name: "Cancelar" }).evaluate((b) => getComputedStyle(b).color)).toBe("rgb(179, 38, 30)");
 });
 
+
+
+test("celular: barra de baixo com 5 atalhos e o + no meio", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await abrir(page);
+  const itens = page.locator("#nav-movel > *");
+  await expect(itens).toHaveCount(5);
+  await expect(itens.nth(2)).toHaveClass(/nav-novo/);
+  const caixa = await itens.nth(2).boundingBox();
+  expect(Math.abs(caixa.x + caixa.width / 2 - 195)).toBeLessThan(6);
+  await page.goto("/#/financeiro");
+  for (const n of await page.locator(".numero strong").all()) expect(await n.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+});

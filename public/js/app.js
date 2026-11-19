@@ -92,13 +92,14 @@ function montarMenu() {
 /** Volta para a última visão usada de Tarefas (calendário, quadro…). */
 const ultimaVisao = () => { const v = estadoTela.calendario?.visao; return v && v !== "calendario" ? "tarefas" : "calendario"; };
 
-/** Celular: atalhos fixos embaixo (Hoje, Tarefas, + Nova, Clientes). */
+/** Celular: atalhos fixos embaixo (Hoje, Tarefas, + Nova, Clientes e Financeiro ou Minha conta), com o "+" no meio. */
 function montarNavMovel(nome) {
   const item = (rota, icone, titulo, ativo = rota === nome) => el("a", { href: `#/${rota}`, class: ativo ? "ativo" : "" }, el("span", { "aria-hidden": "true" }, icone), titulo);
   $("nav-movel").replaceChildren(
-    item("hoje", "☀", "Hoje"), item(ultimaVisao(), "✓", "Tarefas", ["tarefas", "calendario"].includes(nome)),
+    item("hoje", "☀\uFE0E", "Hoje"), item(ultimaVisao(), "✓\uFE0E", "Tarefas", ["tarefas", "calendario"].includes(nome)),
     el("button", { class: "nav-novo", onClick: () => abrirTarefa({ prazo: hojeISO() }) }, el("span", { "aria-hidden": "true" }, "+"), "Nova"),
-    item("clientes", "◉", "Clientes"));
+    item("clientes", "◉\uFE0E", "Clientes"),
+    pode("financeiro") ? item("financeiro", "$", "Financeiro") : item("conta", "☺\uFE0E", "Conta"));
 }
 
 function renderizar() {
