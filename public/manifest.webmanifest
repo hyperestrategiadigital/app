@@ -1,7 +1,7 @@
 {
-  "name": "Hyper · Central de trabalho",
-  "short_name": "Hyper",
-  "description": "Tarefas, clientes, conteúdo, tráfego e financeiro da Hyper.",
+  "name": "Hyper Studio",
+  "short_name": "Hyper Studio",
+  "description": "Hyper Studio: marca, conteúdo, aprovação e resultados num lugar só.",
   "lang": "pt-BR",
   "start_url": "./#/hoje",
   "scope": "./",

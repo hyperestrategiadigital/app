@@ -7,10 +7,11 @@ import { dados, atualizar, criar, excluir, porId, marcasDo, salvarComId, gravarE
 import { gerarTexto, temChave } from "../openai.js";
 import { ehAdmin, pode } from "../permissoes.js";
 import { caminhoArtes, comprimirImagem } from "../arquivos.js";
+import { CAMPOS_REDES } from "../constantes.js";
 
 // Texto digitado e ainda não salvo sobrevive às atualizações de tela
 const rascunhos = new Map();
-const GRUPO = "__grupo"; // no seletor: a identidade institucional do próprio grupo
+export const GRUPO = "__grupo"; // no seletor: a identidade institucional do próprio grupo
 
 /** Onde gravar: o próprio cliente (marca principal) ou um documento de `marcas`. */
 const alvoDe = (c, marca) => marca
@@ -141,8 +142,6 @@ export function abrirMarca(clienteId, marca = {}) {
   const editando = !!marca.id;
   return formulario(editando ? `Marca · ${marca.nome}` : "Nova marca", [
     { nome: "nome", rotulo: "Nome da marca", obrigatorio: true, largura: "metade" },
-    { nome: "instagram", rotulo: "Instagram", dica: "@perfil", largura: "metade" },
-    { nome: "facebookPageId", rotulo: "ID da página do Facebook", dica: "Para agendar e ver os resultados (dá para escolher na aba Resultados)", largura: "metade" },
     { nome: "ativo", rotulo: "Marca ativa", tipo: "checkbox", padrao: true }
   ], marca, {
     extras: editando ? [el("button", { type: "button", class: "perigo-texto", onClick: async () => {
@@ -156,14 +155,16 @@ export function abrirMarca(clienteId, marca = {}) {
     aoSalvar: async (v) => {
       if (editando) await atualizar("marcas", marca.id, v);
       else {
-        await criar("marcas", { ...v, clienteId, paleta: [], criadoEm: Date.now() });
+        const nova = await criar("marcas", { ...v, clienteId, paleta: [], criadoEm: Date.now() });
+        // Abre a ficha na marca nova (o cliente vira grupo, se ainda não era)
+        if (nova?.id && location.hash.startsWith(`#/clientes/${clienteId}`)) location.hash = `#/clientes/${clienteId}/marca/${nova.id}`;
       }
       avisar(editando ? "Marca salva." : "Marca criada. Preencha a identidade dela abaixo.");
     }
   });
 }
 
-const CAMPOS_COPIADOS = ["paleta", "cor", "fontes", "tomDeVoz", "persona", "publico", "diretrizes", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva", "instagram", "facebook", "facebookPageId", "linkedin", "tiktok", "youtube", "site"];
+const CAMPOS_COPIADOS = ["paleta", "cor", "fontes", "tomDeVoz", "persona", "publico", "diretrizes", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva", ...CAMPOS_REDES.map(([k]) => k)];
 
 /**
  * Transforma outros clientes em marcas deste (ex.: duas empresas soltas viram marcas de um grupo).
@@ -246,7 +247,7 @@ export async function juntarUm(destino, origem, progresso, marcaExistente) {
   if (pode("conteudo")) {
     progresso(`${origem.nome}: copiando criativos…`);
     const artes = await listarSub(caminhoArtes(origem.id)).catch(() => []);
-    for (const { id, ...a } of artes) await salvarSub(caminhoArtes(destino.id), a, id);
+    for (const { id, ...a } of artes) await salvarSub(caminhoArtes(destino.id), { ...a, marcaId }, id);
   }
   await atualizar("clientes", origem.id, { ativo: false, viraMarcaDe: destino.id, marcaId });
   return marcaId;
@@ -286,7 +287,7 @@ export async function separarMarca(grupo, marca, progresso = () => {}) {
     progresso(`${marca.nome}: movendo criativos…`);
     const ids = new Set([...tarefas, ...arquivo].map((t) => t.id));
     const artes = (await listarSub(caminhoArtes(grupo.id)).catch(() => [])).filter((a) => ids.has(a.tarefaId));
-    for (const { id: i, ...a } of artes) { await salvarSub(caminhoArtes(id), a, i); await excluirSub(caminhoArtes(grupo.id), i); }
+    for (const { id: i, ...a } of artes) { await salvarSub(caminhoArtes(id), { ...a, marcaId: "" }, i); await excluirSub(caminhoArtes(grupo.id), i); }
   }
   await excluir("marcas", marca.id, { lixeira: false });
   return id;
@@ -294,32 +295,27 @@ export async function separarMarca(grupo, marca, progresso = () => {}) {
 
 /* ---------------- Aba ---------------- */
 
+/**
+ * Marca escolhida na ficha. Num grupo a ficha abre já numa marca (ou no geral do grupo), escolhida antes
+ * na tela de escolha (`#/clientes/<id>/marca/<marcaId|grupo>`). Retorna { marca (null = o próprio cliente), grupo }.
+ */
+export function marcaEscolhida(c, estado = {}) {
+  const grupo = marcasDo(c.id).length > 0;
+  const marca = grupo && estado.marcaSel && estado.marcaSel !== GRUPO ? porId("marcas", estado.marcaSel) : null;
+  return { marca, grupo };
+}
+
 export function abaMarca(c, estado = {}, renderizar = () => {}) {
-  const marcas = marcasDo(c.id);
-  const inativas = (dados.marcas || []).filter((m) => m.clienteId === c.id && m.ativo === false);
   // Cliente com marcas = grupo (guarda-chuva): a identidade se configura em cada marca.
   // A identidade do próprio grupo é só para os posts institucionais dele (ex.: avisos, datas comemorativas).
-  const grupo = marcas.length > 0;
-  if (estado.marcaSel && estado.marcaSel !== GRUPO && !porId("marcas", estado.marcaSel)) estado.marcaSel = "";
-  if (grupo && !estado.marcaSel) estado.marcaSel = marcas[0].id;
-  if (!grupo) estado.marcaSel = "";
-  const marca = estado.marcaSel && estado.marcaSel !== GRUPO ? porId("marcas", estado.marcaSel) : null;
+  const podeGerir = ehAdmin() || pode("conteudo");
+  const { marca, grupo } = marcaEscolhida(c, estado);
+  // Cliente sem marcas: daqui ele pode virar grupo. Num grupo, essas ações ficam na tela de escolha da marca.
+  const seletor = !grupo && (podeGerir || ehAdmin()) ? el("div", { class: "marcas-seletor" },
+    podeGerir ? el("button", { class: "secundario mini", onClick: async () => { await abrirMarca(c.id); } }, "+ Marca") : null,
+    ehAdmin() ? el("button", { class: "link", onClick: () => juntarClientes(c) }, "Juntar outros clientes como marcas…") : null) : null;
   const alvo = alvoDe(c, marca);
   const contar = (mid) => dados.tarefas.filter((t) => t.clienteId === c.id && (t.marcaId || "") === mid).length;
-  const escolher = (id) => { estado.marcaSel = id; renderizar(); };
-  const podeGerir = ehAdmin() || pode("conteudo");
-
-  const seletor = el("div", { class: "marcas-seletor" },
-    ...(grupo ? [] : [el("button", { class: "legenda-item ativo", style: { "--selo": c.paleta?.[0] || c.cor || "#4E2CA3" } },
-      el("span", { class: "bolinha" }), c.nome, el("small", {}, contar("")))]),
-    ...[...marcas, ...inativas].map((m) => el("button", {
-      class: `legenda-item ${marca?.id === m.id ? "ativo" : ""}`, style: { "--selo": m.paleta?.[0] || m.cor || "#606060" }, onClick: () => escolher(m.id),
-      title: m.ativo === false ? "Marca inativa" : ""
-    }, m.logo ? el("img", { class: "logo-chip", src: m.logo, alt: "" }) : el("span", { class: "bolinha" }), m.nome, m.ativo === false ? " (inativa)" : "", el("small", {}, contar(m.id)))),
-    grupo ? el("button", { class: `legenda-item legenda-grupo ${estado.marcaSel === GRUPO ? "ativo" : ""}`, style: { "--selo": c.paleta?.[0] || c.cor || "#606060" }, onClick: () => escolher(GRUPO),
-      title: "Identidade dos posts do próprio grupo" }, el("span", { class: "bolinha" }), `${c.nome} (institucional)`, el("small", {}, contar(""))) : null,
-    podeGerir ? el("button", { class: "secundario mini", onClick: async () => { await abrirMarca(c.id); } }, "+ Marca") : null,
-    ehAdmin() ? el("button", { class: "link", onClick: () => juntarClientes(c) }, "Juntar outros clientes como marcas…") : null);
 
   return el("div", { class: "aba-marca" },
     seletor,
@@ -328,9 +324,9 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
     marca ? el("div", { class: "marca-cabeca" },
       el("div", {},
         el("h3", {}, `${c.nome} · ${marca.nome}`),
-        el("p", { class: "subtitulo" }, marca.instagram || "Campos vazios usam o que estiver no grupo (institucional).")),
+        el("p", { class: "subtitulo" }, "Campos vazios usam o que estiver no grupo (institucional). Redes sociais na aba Contas.")),
       el("div", { class: "acoes" },
-        podeGerir ? el("button", { class: "secundario mini", onClick: () => abrirMarca(c.id, marca) }, "Editar nome, Instagram e status") : null,
+        podeGerir ? el("button", { class: "secundario mini", onClick: () => abrirMarca(c.id, marca) }, "Editar nome e status") : null,
         ehAdmin() ? el("button", { class: "link", onClick: async (e) => {
           const botao = e.currentTarget;
           if (!(await confirmar(`Tirar ${marca.nome} de ${c.nome} e transformar num cliente próprio? Os ${contar(marca.id)} post(s) e tarefas dela, a identidade (logo, cores, tom de voz…), contas de anúncio e criativos vão junto. O contrato de ${c.nome} continua no grupo; o de ${marca.nome} você preenche depois no Editar do cliente novo.`))) return;

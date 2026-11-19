@@ -24,17 +24,18 @@ async function chamar(url, corpo) {
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 /** Modelo com a identidade da Hyper. */
-export function modelo(titulo, paragrafos, { link = LINK_APP, botao = "Abrir o app da Hyper" } = {}) {
+export function modelo(titulo, paragrafos, { link = LINK_APP, botao = "Abrir o Hyper Studio" } = {}) {
   return `<div style="font-family:Montserrat,Arial,sans-serif;max-width:560px;margin:auto;color:${MARCA.texto}">
   <div style="background:${MARCA.roxo};color:#fff;padding:20px 24px;border-radius:12px 12px 0 0">
-    <div style="font-size:13px;letter-spacing:2px;opacity:.8">HYPER ESTRATÉGIA DIGITAL</div>
+    <div style="font-size:13px;letter-spacing:2px;opacity:.8">HYPER STUDIO</div>
     <div style="font-size:22px;font-weight:bold;font-style:italic">${esc(titulo)}</div>
   </div>
   <div style="border:1px solid ${MARCA.gelo};border-top:0;padding:24px;border-radius:0 0 12px 12px;line-height:1.5">
     ${paragrafos.map((p) => `<p>${p}</p>`).join("")}
     ${link ? `<p style="margin:28px 0 8px"><a href="${esc(link)}" style="background:${MARCA.amarelo};color:#000;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:bold">${esc(botao)}</a></p>` : ""}
     <p style="color:${MARCA.cinza};font-size:12px;margin-top:24px">Entre sempre com a sua conta Google (o mesmo e-mail que recebeu esta mensagem).</p>
-  </div></div>`;
+  </div>
+  <p style="color:${MARCA.cinza};font-size:11px;text-align:center;margin-top:14px"><b>Hyper Studio</b> · desenvolvido pela Hyper Estratégia Digital</p></div>`;
 }
 
 /** Envia um e-mail (só administradores). Sem e-mail configurado, não faz nada e devolve false. */
@@ -46,16 +47,18 @@ export async function enviarEmail({ para, assunto, html }) {
 }
 
 const rotulos = (areas = []) => areas.map((a) => ({ conteudo: "Conteúdo", trafego: "Tráfego pago", financeiro: "Financeiro" }[a] || a)).join(", ");
-const descreverAcesso = ({ papel, permissoes = [], acessoClientes, nomesClientes = [] }) => [
+const descreverAcesso = ({ papel, permissoes = [], acessoClientes, nomesClientes = [] }) => papel === "cliente"
+  ? `Acesso de cliente de <b>${esc(nomesClientes.join(", ") || "—")}</b>: aprovar posts, ver o calendário, a identidade da marca e os resultados.`
+  : [
   papel === "admin" ? "<b>Administrador</b> (tudo, inclusive usuários)" : permissoes.length ? `Áreas: <b>${esc(rotulos(permissoes))}</b>` : "Acesso básico (Hoje, Tarefas, compromissos e clientes)",
   papel !== "admin" && acessoClientes === "alguns" ? `Clientes: <b>${esc(nomesClientes.join(", ") || "nenhum ainda")}</b>` : null
 ].filter(Boolean).join("<br>");
 
 export const emailConvite = (c) => enviarEmail({
   para: c.email,
-  assunto: "Você foi adicionado ao app da Hyper",
+  assunto: "Você foi adicionado ao Hyper Studio",
   html: modelo(`Olá${c.nome ? `, ${c.nome}` : ""}!`, [
-    `${esc(eu.nome || "A Hyper")} adicionou você ao app de trabalho da Hyper.`,
+    `${esc(eu.nome || "A Hyper")} adicionou você ao Hyper Studio.`,
     descreverAcesso(c),
     `Para entrar, abra o app e clique em <b>Entrar com Google</b> usando <b>${esc(c.email)}</b>. Seu acesso já está liberado.`
   ], { botao: "Entrar no app" })
@@ -63,9 +66,9 @@ export const emailConvite = (c) => enviarEmail({
 
 export const emailLiberado = (m) => enviarEmail({
   para: m.email,
-  assunto: "Seu acesso ao app da Hyper foi liberado",
+  assunto: "Seu acesso ao Hyper Studio foi liberado",
   html: modelo(`Acesso liberado${m.nome ? `, ${m.nome.split(" ")[0]}` : ""}!`, [
-    "Seu pedido de acesso ao app da Hyper foi aprovado.", descreverAcesso(m)
+    "Seu pedido de acesso ao Hyper Studio foi aprovado.", descreverAcesso(m)
   ], { botao: "Entrar no app" })
 });
 
@@ -73,8 +76,8 @@ export const emailMaisAcesso = (m, aprovado) => enviarEmail({
   para: m.email,
   assunto: aprovado ? "Seu pedido de acesso foi aprovado" : "Sobre o seu pedido de acesso",
   html: modelo(aprovado ? "Pedido aprovado" : "Pedido não aprovado", aprovado
-    ? ["Seu pedido de mais acesso no app da Hyper foi aprovado. Seu acesso agora:", descreverAcesso(m)]
-    : ["Seu pedido de mais acesso no app da Hyper não foi aprovado desta vez. Se tiver dúvida, fale com o administrador."])
+    ? ["Seu pedido de mais acesso no Hyper Studio foi aprovado. Seu acesso agora:", descreverAcesso(m)]
+    : ["Seu pedido de mais acesso no Hyper Studio não foi aprovado desta vez. Se tiver dúvida, fale com o administrador."])
 });
 
 /** Avisa os administradores de um pedido (funciona até para quem ainda não foi liberado). */
@@ -117,7 +120,7 @@ export async function conectarEmail(url) {
 export async function testarEmail() {
   const { url, segredo } = configEmail();
   const r = await chamar(url, { tipo: "testar", segredo });
-  await enviarEmail({ para: eu.email, assunto: "Teste do app da Hyper", html: modelo("Tudo certo!", ["Os e-mails automáticos do app da Hyper estão funcionando."]) });
+  await enviarEmail({ para: eu.email, assunto: "Teste do Hyper Studio", html: modelo("Tudo certo!", ["Os e-mails automáticos do Hyper Studio estão funcionando."]) });
   return r;
 }
 

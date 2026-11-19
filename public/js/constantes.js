@@ -89,3 +89,21 @@ export const MODELOS_PADRAO = {
   "Planejamento": ["Planejar os posts no calendário", "Enviar link de aprovação ao cliente", "Ajustar com o retorno"],
   "Vídeo / Roteiro": ["Roteiro", "Gravação", "Edição", "Revisão"]
 };
+/**
+ * Redes sociais e canais de cada conta (cliente sem marcas ou cada marca de um grupo), na aba Contas.
+ * [campo, rótulo, dica, tipo]. tipo "perfil" = @usuário; "link" = endereço completo; "id" = número.
+ */
+export const CAMPOS_REDES = [
+  ["instagram", "Instagram", "@perfil", "perfil"],
+  ["facebook", "Facebook", "https://facebook.com/pagina", "link"],
+  ["facebookPageId", "ID da página do Facebook", "Para agendar e ver os resultados (dá para escolher na aba Resultados)", "id"],
+  ["tiktok", "TikTok", "@perfil", "perfil"],
+  ["youtube", "YouTube", "https://youtube.com/@canal", "link"],
+  ["linkedin", "LinkedIn", "https://linkedin.com/company/...", "link"],
+  ["googleMeuNegocio", "Google Meu Negócio", "Link do Perfil da Empresa no Google (Maps)", "link"],
+  ["whatsappNegocio", "WhatsApp Business", "(11) 99999-9999", "telefone"],
+  ["pinterest", "Pinterest", "@perfil", "perfil"],
+  ["threads", "Threads", "@perfil", "perfil"],
+  ["x", "X (Twitter)", "@perfil", "perfil"],
+  ["site", "Site", "https://...", "link"]
+];

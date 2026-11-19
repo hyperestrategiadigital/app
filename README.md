@@ -1,6 +1,6 @@
-# Hyper App
+# Hyper Studio
 
-Central de trabalho da Hyper Estratégia Digital: tarefas, clientes, calendário de conteúdo, tráfego pago e financeiro. Roda no Firebase (projeto `hyper-9e023`) e está publicado em https://hyper-9e023.web.app.
+O Hyper Studio é a central de trabalho da Hyper Estratégia Digital, e no futuro também dos clientes: tarefas, clientes, calendário de conteúdo, tráfego pago e financeiro. Roda no Firebase (projeto `hyper-9e023`) e está publicado em https://hyper-9e023.web.app.
 
 ## Telas
 
@@ -12,12 +12,14 @@ Menu: **Hoje, Tarefas, Calendário, Clientes, Tráfego pago, Financeiro** e o gr
 | Tarefas | Quadro A fazer / Em andamento / Concluído (arrastar e soltar) ou lista, com busca e filtros. Tipos: Conteúdo, Produção, Vídeo / Roteiro, Tráfego pago, Financeiro / Comercial, Planejamento, Organização e Outro ("Reunião" abre como compromisso). Concluir e excluir têm **Desfazer** |
 | Calendário | Camadas **Tudo / Conteúdo / Compromissos**, filtro por cliente e por marca. Com um cliente filtrado, a aba **Planejar mês** abre o planejamento (grade do mês ou tabela, "Formato \| Tema" no dia, arrastar entre dias). PDF por cliente (ou marca) e mês para aprovação. Compromissos podem ir para a Google Agenda pessoal (posts nunca vão) |
 | Post | Tarefa do tipo **Conteúdo** com marca, formato, rede, data/hora, **etapa** (ideia → publicado; o status de tarefa sai da etapa), copy e criativos. **Criar arte** abre dentro do post: gera a imagem com a OpenAI na identidade da marca e "Levar ao Canva" copia o pedido para o Claude montar o design |
-| Clientes | Editar = cadastro, contato e contrato. Abas: tarefas, conteúdo, **marca** (identidade do cliente e de cada **marca** dele, com "Sugerir melhoria" e "Juntar outros clientes como marcas"), **contas** (redes sociais e atalhos de agendamento), **tráfego pago** (contas de anúncio e manutenções) e financeiro |
+| Clientes | A ficha é a configuração do cliente (as tarefas dele ficam em Tarefas, pelo botão "Tarefas" da ficha). Editar = cadastro, contato e contrato. Abas: **marca** (identidade do cliente e de cada **marca** dele, com "Sugerir melhoria" e "Juntar outros clientes como marcas"), **contas** (redes sociais e atalhos de agendamento), **resultados**, **tráfego pago** (contas de anúncio e manutenções) e financeiro |
 | Tráfego pago | Contas de anúncio e verba por cliente, alerta de manutenção atrasada (mais de 7 dias) e diário de manutenções |
 | Financeiro | Receitas e despesas do mês, mensalidades a partir dos contratos e orçamentos. A rotina de cobrança cria a receita pendente e concluir a tarefa de cobrança marca como paga |
 | Rotinas | Tarefas automáticas: produzir a semana seguinte, planejar o mês seguinte, cobrar a mensalidade no vencimento e rotinas livres |
 | Relatórios | Por cliente ou geral, por mês ou período: posts publicados, outras entregas, manutenções, reuniões e financeiro. Exporta PDF. Meses antigos leem o arquivo de tarefas |
-| Usuários e equipe | **+ Adicionar usuário** por e-mail (convite: a pessoa entra já liberada), pedidos de acesso e de mais acesso para qualquer administrador aprovar, áreas e **clientes que cada um pode ver**, e pessoas da equipe sem conta |
+| Usuários e equipe | Três tipos: **Administrador** (tudo, inclusive Financeiro), **Equipe** (áreas Conteúdo e/ou Tráfego pago, todos ou alguns clientes) e **Cliente** (portal do cliente). **+ Adicionar usuário** por e-mail (convite: a pessoa entra já liberada), pedidos de acesso e de mais acesso para qualquer administrador aprovar, áreas e **clientes que cada um pode ver**, e pessoas da equipe sem conta |
+| Studio (beta) | Para a equipe e para o cliente: escolhe a marca e depois **Studio fotográfico** (direção de fotos da marca, dicas e roteiro da sessão), **Studio de conteúdo** (legenda com o Claude e pedido de arte para o Canva com o tom, as cores e as fontes da marca) ou **Ideias** (pauta na linha editorial da marca; cole as ideias do Claude e cada uma vira post). A equipe salva como post; o cliente envia como sugestão. Quem tem a chave da OpenAI também gera aqui dentro |
+| Portal do cliente | Quem tem acesso de **cliente** (de um cliente ou só de algumas marcas) vê um Hyper Studio simplificado: **Início** (posts para aprovar com imagem e legenda, "Aprovar" e "Pedir ajuste", próximas publicações), **Calendário**, **Marca** (identidade e redes, só leitura), **Resultados** e **Sugerir um post** (entra como ideia; "Legenda com o Claude" usa o tom de voz da marca). Não vê tarefas internas, outros clientes, valores nem a equipe |
 | Minha conta | Clique no seu nome no menu: foto, nome, seu acesso, pedir mais acesso (áreas ou clientes) e suas conexões (Google Agenda) |
 | Creators | Em breve: cadastro de influenciadoras (perfil, público, clientes atendidos) |
 | Lixeira | O que foi excluído nos últimos 30 dias, com restaurar (administrador) |
@@ -25,7 +27,7 @@ Menu: **Hoje, Tarefas, Calendário, Clientes, Tráfego pago, Financeiro** e o gr
 
 ### Marcas e grupos
 
-Clientes com várias marcas funcionam como grupo (ex.: um grupo de academias com uma marca para cada modalidade). Cada marca tem logo, cores, fontes, tom de voz, persona, público e estilo próprios; o grupo tem só a identidade institucional. Na aba Marca do cliente, "Juntar outros clientes como marcas" transforma clientes soltos em marcas do grupo, e "Separar em cliente próprio" faz o contrário.
+Clientes com várias marcas funcionam como grupo (ex.: um grupo de academias com uma marca para cada modalidade). Cada marca tem logo, cores, fontes, tom de voz, persona, público e estilo próprios; o grupo tem só a identidade institucional. As redes sociais (Instagram, Facebook, TikTok, YouTube, LinkedIn, Google Meu Negócio, WhatsApp Business, Pinterest, Threads, X, site; lista em `CAMPOS_REDES`) também são de cada marca e não passam do grupo para a marca. Ao abrir um grupo, primeiro se escolhe a marca (ou o "geral" do grupo); depois a ficha é igual à de um cliente comum (Marca, Contas, Resultados). Contrato, tráfego pago e financeiro ficam no geral do grupo. Na aba Marca do cliente, "Juntar outros clientes como marcas" transforma clientes soltos em marcas do grupo, e "Separar em cliente próprio" faz o contrário.
 
 Um cliente pode ter várias marcas com identidades diferentes (ex.: um grupo com várias empresas). A identidade do próprio cliente é a "marca principal"; cada marca extra fica em `marcas` com `clienteId`, nome e os mesmos campos de identidade (campo vazio = usa o do cliente). O post guarda `marcaId`; a copy, a imagem, o pedido do Canva e o PDF usam a identidade da marca (`identidade()` em `db.js`).
 

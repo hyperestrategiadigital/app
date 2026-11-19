@@ -9,8 +9,9 @@ import { sincronizar as sincronizarAgenda } from "./agenda.js";
 import { avisarAdmins, sincronizarAdmins } from "./emails.js";
 import { avatar, abrirTarefa } from "./views/componentes.js";
 import { el, avisar, hojeISO, quandoErro } from "./ui.js";
-import { eu, pode, ehAdmin, AREAS } from "./permissoes.js";
+import { eu, pode, ehAdmin, ehCliente, AREAS, AREAS_EQUIPE } from "./permissoes.js";
 import { gerarRecorrencias } from "./recorrencias.js";
+import { marcarArtesComMarca } from "./arquivos.js";
 import { abrirBusca, definirTelas, ativarAtalhoBusca } from "./busca.js";
 import { completarPostsSemFormato, migrarReunioes, migrarTipos, alinharStatusPosts, marcarCompromissosParaAgenda, reativarGruposSumidos } from "./migracoes.js";
 
@@ -29,6 +30,8 @@ import * as usuarios from "./views/usuarios.js";
 import * as conta from "./views/conta.js";
 import * as lixeira from "./views/lixeira.js";
 import * as creators from "./views/creators.js";
+import * as portal from "./views/portal.js";
+import * as studio from "./views/studio.js";
 
 // `area`: quem não tem essa área não vê a tela ("admin" = só administradores)
 // `grupo: "admin"`: fica dentro de "Administração" no menu. `menu: false`: tela sem item no menu.
@@ -38,6 +41,7 @@ const ROTAS = {
   tarefas: { titulo: "Tarefas", icone: "✓", view: tarefas, estado: "calendario", menu: false },
   calendario: { titulo: "Tarefas", icone: "✓", view: calendario, inclui: ["tarefas"] },
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
+  studio: { titulo: "Studio", icone: "✦", view: studio, selo: "beta" },
   creators: { titulo: "Creators", icone: "★", view: creators, area: "conteudo", selo: "em breve" },
   trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego, area: "trafego" },
   financeiro: { titulo: "Financeiro", icone: "$", view: financeiro, area: "financeiro" },
@@ -58,6 +62,17 @@ const ROTAS = {
   planejamento: { titulo: "Planejamento", icone: "☷", view: { render: planejamento.redirecionar }, area: "conteudo", menu: false },
   criar: { titulo: "Criar", icone: "✦", view: { render: criar.redirecionar }, area: "conteudo", menu: false }
 };
+// Pessoa do cliente: o portal do cliente, com as telas dela
+const ROTAS_CLIENTE = {
+  inicio: { titulo: "Início", icone: "☀", view: portal.inicio },
+  calendario: { titulo: "Calendário", icone: "▦", view: portal.calendario },
+  marca: { titulo: "Marca", icone: "◉", view: portal.marca },
+  resultados: { titulo: "Resultados", icone: "↗", view: portal.resultados },
+  studio: { titulo: "Studio", icone: "✦", view: studio },
+  conta: { titulo: "Minha conta", icone: "☺", view: conta, menu: false }
+};
+const rotas = () => (ehCliente() ? ROTAS_CLIENTE : ROTAS);
+const telaInicial = () => (ehCliente() ? "inicio" : "hoje");
 const liberada = (r) => !r.area || (r.area === "admin" ? ehAdmin() : pode(r.area));
 
 const $ = (id) => document.getElementById(id);
@@ -65,7 +80,8 @@ const estadoTela = {}; // filtros e mês selecionado de cada tela, preservados e
 
 function rotaAtual() {
   const [nome, ...resto] = location.hash.replace(/^#\/?/, "").split("/");
-  return { nome: ROTAS[nome] && liberada(ROTAS[nome]) ? nome : "hoje", params: resto.map(decodeURIComponent) };
+  const R = rotas();
+  return { nome: R[nome] && liberada(R[nome]) ? nome : telaInicial(), params: resto.map(decodeURIComponent) };
 }
 
 export function irPara(caminho) { location.hash = "#/" + caminho; }
@@ -75,7 +91,9 @@ function montarMenu() {
   const { nome } = rotaAtual();
   const item = ([chave, r]) => el("a", { href: `#/${chave === "calendario" ? ultimaVisao() : chave}`, class: chave === nome || r.inclui?.includes(nome) ? "ativo" : "" },
     el("span", { class: "menu-icone", "aria-hidden": "true" }, r.icone), r.titulo, r.selo ? el("small", { class: "menu-selo" }, r.selo) : null);
-  const visiveis = Object.entries(ROTAS).filter(([, r]) => liberada(r) && r.menu !== false);
+  const visiveis = Object.entries(rotas()).filter(([, r]) => liberada(r) && r.menu !== false);
+  if (ehCliente()) return $("menu").replaceChildren(...visiveis.map(([chave, r]) => el("a", { href: `#/${chave}`, class: chave === nome ? "ativo" : "" },
+    el("span", { class: "menu-icone", "aria-hidden": "true" }, r.icone), r.titulo)));
   const principais = visiveis.filter(([, r]) => r.grupo !== "admin" || !ehAdmin()).map(item);
   const busca = el("button", { class: "menu-busca", onClick: abrirBusca, title: "Ctrl+K" },
     el("span", { class: "menu-icone", "aria-hidden": "true" }, "⌕"), "Buscar", el("kbd", {}, "Ctrl K"));
@@ -95,6 +113,10 @@ const ultimaVisao = () => { const v = estadoTela.calendario?.visao; return v && 
 /** Celular: atalhos fixos embaixo (Hoje, Tarefas, + Nova, Clientes e Financeiro ou Minha conta), com o "+" no meio. */
 function montarNavMovel(nome) {
   const item = (rota, icone, titulo, ativo = rota === nome) => el("a", { href: `#/${rota}`, class: ativo ? "ativo" : "" }, el("span", { "aria-hidden": "true" }, icone), titulo);
+  if (ehCliente()) return $("nav-movel").replaceChildren(
+    item("inicio", "☀\uFE0E", "Início"), item("calendario", "▦\uFE0E", "Calendário"),
+    el("a", { class: `nav-novo ${nome === "studio" ? "ativo" : ""}`, href: "#/studio" }, el("span", { "aria-hidden": "true" }, "✦\uFE0E"), "Studio"),
+    item("marca", "◉\uFE0E", "Marca"), item("resultados", "↗\uFE0E", "Resultados"));
   $("nav-movel").replaceChildren(
     item("hoje", "☀\uFE0E", "Hoje"), item(ultimaVisao(), "✓\uFE0E", "Tarefas", ["tarefas", "calendario"].includes(nome)),
     el("button", { class: "nav-novo", onClick: () => abrirTarefa({ prazo: hojeISO() }) }, el("span", { "aria-hidden": "true" }, "+"), "Nova"),
@@ -104,10 +126,11 @@ function montarNavMovel(nome) {
 
 function renderizar() {
   const { nome, params } = rotaAtual();
-  const r = ROTAS[nome];
+  const r = rotas()[nome];
+  document.body.classList.toggle("modo-cliente", ehCliente());
   montarMenu();
   montarNavMovel(nome);
-  document.title = `${r.titulo} · Hyper`;
+  document.title = `${r.titulo} · Hyper Studio`;
   const area = $("conteudo");
   const rolagem = area.scrollTop;
   const foco = document.activeElement?.id && area.contains(document.activeElement) ? document.activeElement : null;
@@ -122,7 +145,7 @@ function renderizar() {
   }
 }
 
-definirTelas(() => Object.entries(ROTAS).filter(([, r]) => liberada(r) && r.menu !== false)
+definirTelas(() => Object.entries(rotas()).filter(([, r]) => liberada(r) && r.menu !== false)
   .map(([chave, r]) => ({ titulo: r.titulo, icone: r.icone, href: `#/${chave}` })));
 ativarAtalhoBusca();
 
@@ -157,7 +180,7 @@ $("btn-entrar").addEventListener("click", async () => {
 /* ---------------- Menu do usuário (clique no nome) ---------------- */
 function montarUsuario() {
   const meu = dados.membros.find((m) => m.id === eu.uid) || eu;
-  const papel = ehAdmin() ? "Administrador" : eu.permissoes?.length ? eu.permissoes.map((a) => AREAS.find(([v]) => v === a)?.[1]).join(", ") : "Acesso básico";
+  const papel = ehAdmin() ? "Administrador" : ehCliente() ? "Cliente" : eu.permissoes?.length ? eu.permissoes.map((a) => AREAS.find(([v]) => v === a)?.[1]).join(", ") : "Acesso básico";
   $("btn-usuario").replaceChildren(avatar(meu), el("span", { class: "usuario-textos" }, el("strong", {}, meu.nome || eu.email), el("small", {}, papel)), el("span", { "aria-hidden": "true" }, "▴"));
 }
 function fecharMenuUsuario() { $("menu-usuario").hidden = true; $("btn-usuario").setAttribute("aria-expanded", "false"); }
@@ -176,7 +199,7 @@ let usuarioAtual = null;
 
 /** Aviso para quem entrou e ainda está só com o acesso básico. */
 function faixaPendente() {
-  if (ehAdmin() || eu.permissoes?.length) return "";
+  if (ehAdmin() || ehCliente() || eu.permissoes?.length) return "";
   return el("p", { class: "faixa-aviso faixa-topo" }, "Você está com o acesso básico (Hoje, Tarefas, compromissos e lista de clientes). Para mais áreas, fale com o administrador.");
 }
 
@@ -220,12 +243,12 @@ async function entrar(usuario) {
 
   if (estado === "novo") {
     const nome = el("input", { id: "acesso-nome", type: "text", value: usuario.displayName || "", placeholder: "Seu nome" });
-    const funcoes = el("div", { class: "multi" }, [...AREAS.map(([v, r]) => [v, r]), ["admin", "Administração (tudo)"]].map(([v, r]) =>
+    const funcoes = el("div", { class: "multi" }, [...AREAS_EQUIPE.map(([v, r]) => [v, r]), ["admin", "Administração (tudo)"]].map(([v, r]) =>
       el("label", { class: "chip-check" }, el("input", { type: "checkbox", value: v }), r)));
     const clientes = el("textarea", { id: "acesso-clientes", rows: 2, placeholder: "Ex.: os nomes dos clientes com quem vai trabalhar. Deixe em branco se for trabalhar com todos." });
     const mensagem = el("textarea", { id: "acesso-mensagem", rows: 2, placeholder: "Ex.: sou a nova social media, começo segunda" });
     return telaCheia(
-      el("h1", {}, "Bem-vindo à Hyper"),
+      el("h1", {}, "Bem-vindo ao Hyper Studio"),
       el("p", {}, `Você entrou como ${usuario.email}. Para usar o app, peça acesso: um administrador da Hyper aprova e você recebe um e-mail.`),
       el("label", { class: "campo", for: "acesso-nome" }, el("span", {}, "Seu nome"), nome),
       el("div", { class: "campo" }, el("span", {}, "O que você precisa acessar?"), funcoes),
@@ -247,8 +270,8 @@ async function entrar(usuario) {
   }
 
   document.body.classList.remove("carregando");
-  pararDeOuvir = aoMudar(() => { montarUsuario(); renderizar(); if (ehAdmin()) tarefasDeAdmin(); acompanharRespostas(notificar); });
-  acompanharRespostas(notificar);
+  pararDeOuvir = aoMudar(() => { montarUsuario(); renderizar(); if (ehAdmin()) tarefasDeAdmin(); if (!ehCliente()) acompanharRespostas(notificar); });
+  if (!ehCliente()) acompanharRespostas(notificar);
   renderizar();
   if (espacoInfo.boasVindas) avisar("Bem-vindo! Seu acesso já estava liberado pelo convite.");
   // Foto do Google como foto inicial (dá para trocar em Minha conta)
@@ -257,6 +280,7 @@ async function entrar(usuario) {
   // Rotinas automáticas e ajustes de dados antigos: só o administrador roda
   if (ehAdmin()) {
     gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
+    marcarArtesComMarca().catch((e) => console.warn("Criativos:", e.message));
     reativarGruposSumidos().then(completarPostsSemFormato).then(migrarReunioes).then(migrarTipos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).then(marcarCompromissosParaAgenda).then((n) => { if (n) sincronizarAgenda(); }).catch((e) => console.error("Migração:", e));
   }
 }

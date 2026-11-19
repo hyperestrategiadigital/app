@@ -88,7 +88,7 @@ export async function exportarPDF(clienteId, mes, marcaId) {
 <section class="calendario">${calendarioMes(posts, mes, artePorTarefa)}</section>
 <h2 class="titulo-detalhes">Detalhes dos posts</h2>
 <main>${cards}</main>
-<footer>Hyper Estratégia Digital — para aprovar, marque cada post e devolva este arquivo ou responda com os ajustes.</footer>
+<footer><strong>Hyper Studio</strong> · Hyper Estratégia Digital — para aprovar, marque cada post e devolva este arquivo ou responda com os ajustes.</footer>
 <script>window.onload=()=>setTimeout(()=>window.print(),800)<\/script>
 </body></html>`;
   // Página própria (blob) para o navegador carregar imagens e fontes normalmente

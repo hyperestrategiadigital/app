@@ -28,12 +28,12 @@ const BANCO = {
   }
 };
 
-async function abrir(page, { usuario, membros, semMenu = false } = {}) {
+async function abrir(page, { usuario, membros, semMenu = false, extra = null } = {}) {
   const erros = [];
   if (usuario) await page.addInitScript((u) => { window.__usuario = u; }, usuario);
   page.on("pageerror", (e) => erros.push(String(e)));
   await rotearMocks(page);
-  return abrirDepois(page, { membros, semMenu, erros });
+  return abrirDepois(page, { membros, semMenu, erros, extra });
 }
 
 async function rotearMocks(page) {
@@ -45,8 +45,10 @@ async function rotearMocks(page) {
   });
 }
 
-async function abrirDepois(page, { membros, semMenu, erros }) {
-  const banco = membros ? { ...BANCO, [`${E}/membros`]: membros } : BANCO;
+async function abrirDepois(page, { membros, semMenu, erros, extra = null }) {
+  const banco = { ...BANCO, ...(membros ? { [`${E}/membros`]: membros } : {}) };
+  // extra: coleções a mais ou a juntar (ex.: { tarefas: {...} })
+  for (const [col, docs] of Object.entries(extra || {})) banco[`${E}/${col}`] = { ...(banco[`${E}/${col}`] || {}), ...docs };
   await page.addInitScript((b) => { if (!localStorage.getItem("fake-fs-store")) localStorage.setItem("fake-fs-store", JSON.stringify(b)); }, banco);
   await page.goto("/");
   if (semMenu) await page.waitForTimeout(500);
@@ -56,12 +58,12 @@ async function abrirDepois(page, { membros, semMenu, erros }) {
 
 test("todas as telas abrem sem erro e o menu agrupa a administração", async ({ page }) => {
   const erros = await abrir(page);
-  for (const rota of ["hoje", "tarefas", "calendario", "clientes", "trafego", "financeiro", "rotinas", "relatorios", "usuarios", "config"]) {
+  for (const rota of ["hoje", "tarefas", "calendario", "clientes", "studio", "trafego", "financeiro", "rotinas", "relatorios", "usuarios", "config"]) {
     await page.goto(`/#/${rota}`);
     await expect(page.locator("#conteudo h1").first()).toBeVisible();
   }
   await expect(page.locator(".menu-grupo summary")).toHaveText(/Administração/);
-  await expect(page.locator("#menu > a")).toHaveCount(6); // Tarefas e Calendário são um item só
+  await expect(page.locator("#menu > a")).toHaveCount(7); // Tarefas e Calendário são um item só; + Studio
   await expect(page.locator("#menu")).toContainText("Creators");
   for (const rota of ["lixeira", "creators"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
   expect(erros).toEqual([]);
@@ -98,7 +100,10 @@ test("ficha do cliente: editar só cadastro e contrato; marcas com identidade pr
   await page.getByRole("button", { name: "+ Marca" }).click();
   await page.fill("#f-nome", "Marca Um");
   await page.click(".modal button[type=submit]");
-  await page.locator(".marcas-seletor button", { hasText: "Marca Um" }).click();
+  // virou grupo: a ficha abre direto na marca nova
+  await expect(page).toHaveURL(/#\/clientes\/grupo\/marca\//);
+  await expect(page.locator("#conteudo h1")).toHaveText("Marca Um");
+  await page.getByRole("tab", { name: "Marca" }).click();
   await page.fill("#marca-tomDeVoz", "Técnico e acolhedor");
   await page.locator(".campo-marca", { has: page.locator("#marca-tomDeVoz") }).getByRole("button", { name: "Salvar" }).click();
   await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/marcas"] || {}).find((m) => m.nome === "Marca Um")?.tomDeVoz)).toBe("Técnico e acolhedor");
@@ -199,7 +204,7 @@ test("administrador adiciona usuário por e-mail e ele entra já liberado, só c
   await admin.fill("#f-email", "Luisa@Exemplo.com");
   await admin.locator(".modal .chip-check", { hasText: "Conteúdo" }).locator("input").check();
   await admin.locator(".modal select[aria-label=Clientes]").selectOption("alguns");
-  await admin.locator(".modal .lista-clientes-acesso .chip-check", { hasText: "Loja Exemplo" }).locator("input").check();
+  await admin.locator(".modal .lista-clientes-acesso:visible .chip-check", { hasText: "Loja Exemplo" }).locator("input").check();
   await admin.click(".modal button[type=submit]");
   await expect(admin.locator("#conteudo")).toContainText("Convites aguardando");
   const banco = await admin.evaluate(() => localStorage.getItem("fake-fs-store"));
@@ -226,7 +231,7 @@ test("primeiro acesso sem convite: pede acesso e o administrador libera", async 
   const ctx = await browser.newContext();
   const novo = await ctx.newPage();
   await abrir(novo, { usuario: { uid: "matheus", displayName: "Matheus", email: "matheus@exemplo.com" }, semMenu: true });
-  await expect(novo.locator("#conteudo h1")).toContainText("Bem-vindo à Hyper");
+  await expect(novo.locator("#conteudo h1")).toContainText("Bem-vindo ao Hyper Studio");
   await novo.locator(".chip-check", { hasText: "Administração" }).locator("input").check();
   await novo.fill("#acesso-clientes", "todos");
   await novo.getByRole("button", { name: "Pedir acesso" }).click();
@@ -242,7 +247,7 @@ test("primeiro acesso sem convite: pede acesso e o administrador libera", async 
   await admin.goto("/#/usuarios");
   const cartao = admin.locator(".cartao-membro", { hasText: "Matheus" });
   await expect(cartao).toContainText("Aguardando liberação");
-  await cartao.locator(".destaque-admin input").check();
+  await cartao.locator(".tipo-acesso label", { hasText: "Administrador" }).locator("input").check();
   await cartao.getByRole("button", { name: "Liberar acesso" }).click();
   await expect.poll(() => admin.evaluate(() => window.__store["espacos/hyper/membros"].matheus)).toMatchObject({ status: "ativo", papel: "admin", pedido: null });
   await ctx2.close();
@@ -335,7 +340,6 @@ test("juntar cliente solto numa marca de mesmo nome não duplica a marca", async
   await abrir(page);
   await page.evaluate(async () => { const db = await import("/js/db.js"); await db.salvarComId("marcas", "m-loja-ja", { clienteId: "grupo", nome: "Loja Exemplo", ativo: true, paleta: [] }); });
   await page.goto("/#/clientes/grupo");
-  await page.getByRole("tab", { name: "Marca" }).click();
   await page.getByRole("button", { name: /Juntar outros clientes/ }).click();
   await page.check(".modal input[value=loja]");
   await page.locator(".modal").getByRole("button", { name: "Juntar" }).click();
@@ -370,7 +374,8 @@ test("separar uma marca do grupo devolve o cliente com os posts dele", async ({ 
   await page.check(".modal input[value=loja]");
   await page.locator(".modal").getByRole("button", { name: "Juntar" }).click();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].p1.marcaId)).toBe("m-loja");
-  await page.locator(".marcas-seletor").getByRole("button", { name: /Loja Exemplo/ }).click();
+  await page.locator(".cartao-marca", { hasText: "Loja Exemplo" }).click();
+  await page.getByRole("tab", { name: "Marca" }).click();
   await page.getByRole("button", { name: "Separar em cliente próprio…" }).click();
   await page.locator(".modal").getByRole("button", { name: "Confirmar" }).click();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.ativo)).toBe(true);
@@ -606,18 +611,162 @@ test("topo de Tarefas igual nas quatro visões e logo leva para o Hoje", async (
   const medidas = [];
   for (const visao of ["Calendário", "Quadro", "Lista", "Equipe"]) {
     await page.locator(".visoes-tarefas").getByRole("tab", { name: new RegExp(visao) }).click();
+    await expect(page.locator(".visoes-tarefas [aria-selected=true]")).toContainText(visao);
     await expect(page.locator("#conteudo h1")).toHaveText("Tarefas");
     await expect(page.getByRole("button", { name: /\+ Novo/ })).toBeVisible();
     await expect(page.locator("#busca-tarefas")).toBeVisible();
-    const caixa = await page.locator(".filtros-tarefas").boundingBox();
-    medidas.push(Math.round(caixa.y));
+    medidas.push(await page.locator(".filtros-tarefas").evaluate((e) => Math.round(e.getBoundingClientRect().top)));
     await expect(page.locator(".navegador-mes")).toBeVisible({ visible: visao === "Calendário" });
   }
-  expect(new Set(medidas).size).toBe(1); // os filtros não mudam de lugar
+  expect(new Set(medidas).size, JSON.stringify(medidas)).toBe(1); // os filtros não mudam de lugar
   await page.getByRole("button", { name: /\+ Novo/ }).click();
   await expect(page.getByRole("menuitem")).toHaveCount(3);
   await page.locator("#conteudo h1").click();
   await expect(page.getByRole("menuitem")).toHaveCount(0);
   await page.locator(".lateral-menu a.marca").click();
   await expect(page).toHaveURL(/#\/hoje/);
+});
+
+test("grupo: escolhe a marca antes e a ficha fica igual à de um cliente comum", async ({ page }) => {
+  await abrir(page);
+  await page.evaluate(async () => {
+    const db = await import("/js/db.js");
+    await db.salvarComId("marcas", "ma", { nome: "Marca A", clienteId: "grupo", ativo: true, paleta: ["#2D6CDF"] });
+    await db.salvarComId("marcas", "mb", { nome: "Marca B", clienteId: "grupo", ativo: true, paleta: ["#B4415A"], instagram: "@marcab" });
+  });
+  await page.goto("/#/clientes/grupo");
+  await expect(page.locator("#conteudo")).toContainText("Qual marca você quer abrir?");
+  await expect(page.locator(".cartao-marca")).toHaveCount(3); // Marca A, Marca B e o geral do grupo
+  await page.locator(".cartao-marca", { hasText: "Marca A" }).click();
+  await expect(page).toHaveURL(/#\/clientes\/grupo\/marca\/ma/);
+  await expect(page.locator("#conteudo h1")).toHaveText("Marca A");
+  const abas = await page.locator(".ficha .abas [role=tab]").allTextContents();
+  expect(abas).toEqual(["Marca", "Contas", "Resultados", "Tráfego pago"]); // contrato e financeiro ficam no geral do grupo
+  await page.getByRole("tab", { name: "Contas" }).click();
+  await expect(page.locator(".cartao-conta")).toHaveCount(1);
+  await page.getByRole("button", { name: "Editar redes" }).click();
+  await page.fill("#f-googleMeuNegocio", "https://g.page/marca-a");
+  await page.fill("#f-linkedin", "linkedin.com/company/marca-a");
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/marcas"].ma.googleMeuNegocio)).toBe("https://g.page/marca-a");
+  expect(await page.evaluate(() => window.__store["espacos/hyper/clientes"].grupo.linkedin || "")).toBe("");
+  await expect(page.locator(".cartao-conta")).toContainText("Google Meu Negócio");
+
+  // Tarefas da marca: abre Tarefas filtrado pelo cliente e pela marca
+  await page.getByRole("link", { name: /Tarefas \(/ }).click();
+  await expect(page).toHaveURL(/#\/tarefas\/grupo\/ma/);
+  await expect(page.locator(".filtros-tarefas select[aria-label=Marca]")).toHaveValue("ma");
+
+  // Geral do grupo: tem tráfego e financeiro
+  await page.goto("/#/clientes/grupo/marca/grupo");
+  await expect(page.locator(".ficha .abas").getByRole("tab", { name: "Financeiro" })).toHaveCount(1);
+
+  // Cliente comum: abre direto, mesmas abas de redes, sem Tarefas/Conteúdo
+  await page.goto("/#/clientes/loja");
+  await expect(page.locator(".ficha .abas").getByRole("tab", { name: "Tarefas" })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Contas" }).click();
+  await page.getByRole("button", { name: "Editar redes" }).click();
+  await expect(page.locator("#f-googleMeuNegocio")).toBeVisible();
+});
+
+test("portal do cliente: só as marcas dele, aprova, pede ajuste e sugere post", async ({ page }) => {
+  const erros = await abrir(page, {
+    usuario: { uid: "cli", displayName: "Carla Cliente", email: "carla@exemplo.com" }, semMenu: true,
+    membros: {
+      hyper: { nome: "Hyper", email: "hyper@exemplo.com", papel: "admin", status: "ativo" },
+      cli: { nome: "Carla Cliente", email: "carla@exemplo.com", papel: "cliente", status: "ativo", permissoes: [], acessoClientes: "alguns", clientes: ["grupo"], marcas: ["ma"] }
+    },
+    extra: {
+      marcas: { ma: { nome: "Marca A", clienteId: "grupo", ativo: true, paleta: ["#2D6CDF"], tomDeVoz: "Animado e próximo", instagram: "@marcaa" },
+        mb: { nome: "Marca B", clienteId: "grupo", ativo: true, paleta: ["#B4415A"] } },
+      tarefas: {
+        pa: { titulo: "Post para aprovar", tipo: "Conteúdo", clienteId: "grupo", marcaId: "ma", status: "andamento", statusConteudo: "aprovacao", dataPublicacao: dia(3), prazo: dia(3), copy: "Legenda do post A", checklist: [] },
+        pc: { titulo: "Post com ajuste", tipo: "Conteúdo", clienteId: "grupo", marcaId: "ma", status: "andamento", statusConteudo: "aprovacao", dataPublicacao: dia(4), prazo: dia(4), checklist: [] },
+        pb: { titulo: "Post da outra marca", tipo: "Conteúdo", clienteId: "grupo", marcaId: "mb", status: "andamento", statusConteudo: "aprovacao", dataPublicacao: dia(3), prazo: dia(3), checklist: [] }
+      }
+    }
+  });
+  await expect(page.locator("#menu")).toContainText("Início");
+  const menu = await page.locator("#menu a").allTextContents();
+  expect(menu.join(" ")).not.toMatch(/Tarefas|Financeiro|Clientes|Ajustes/);
+  await expect(page.locator("#conteudo")).toContainText("Para aprovar (2)");
+  await expect(page.locator("#conteudo")).not.toContainText("Post da outra marca");
+  await expect(page.locator("#conteudo")).not.toContainText("Revisar campanhas");
+
+  await page.locator(".portal-post", { hasText: "Post para aprovar" }).getByRole("button", { name: /Aprovar/ }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pa.statusConteudo)).toBe("aprovado");
+
+  await page.locator(".portal-post", { hasText: "Post com ajuste" }).getByRole("button", { name: "Pedir ajuste" }).click();
+  await page.fill("#f-comentario", "Trocar a foto");
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pc.aprovacaoCliente?.comentario)).toBe("Trocar a foto");
+  expect(await page.evaluate(() => window.__store["espacos/hyper/tarefas"].pc.statusConteudo)).toBe("producao");
+
+  await page.getByRole("button", { name: "+ Sugerir um post" }).click();
+  await page.fill("#f-titulo", "Ideia da Carla");
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Ideia da Carla")))
+    .toMatchObject({ tipo: "Conteúdo", clienteId: "grupo", marcaId: "ma", statusConteudo: "ideia", sugeridoPeloCliente: "Carla Cliente" });
+
+  await page.goto("/#/marca");
+  await expect(page.locator("#conteudo")).toContainText("Animado e próximo");
+  await page.goto("/#/financeiro"); // tela da equipe: volta para o Início
+  await expect(page.locator("#conteudo h1")).toContainText("Olá, Carla");
+  expect(erros).toEqual([]);
+});
+
+test("administrador adiciona uma pessoa do cliente com uma marca só; financeiro não é área da equipe", async ({ page }) => {
+  await abrir(page, { extra: { marcas: { ma: { nome: "Marca A", clienteId: "grupo", ativo: true, paleta: [] } } } });
+  await page.goto("/#/usuarios");
+  await page.getByRole("button", { name: /Adicionar usuário/ }).click();
+  await expect(page.locator(".modal .chip-check", { hasText: "Financeiro" })).toHaveCount(0);
+  await page.fill("#f-nome", "Carla");
+  await page.fill("#f-email", "Carla@Exemplo.com");
+  await page.locator(".modal .tipo-acesso label", { hasText: "Cliente" }).click();
+  await page.locator(".modal .lista-clientes-acesso:visible .chip-check", { hasText: "Grupo Exemplo" }).locator("input").check();
+  await page.locator(".modal .lista-marcas-acesso .chip-check", { hasText: "Marca A" }).locator("input").check();
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/convites"]?.["carla@exemplo.com"]))
+    .toMatchObject({ papel: "cliente", acessoClientes: "alguns", clientes: ["grupo"], marcas: ["ma"], permissoes: [] });
+});
+
+test("Studio da equipe: escolhe a marca, vê o kit e transforma ideias em post", async ({ page }) => {
+  const erros = await abrir(page);
+  await page.goto("/#/studio");
+  await expect(page.locator("#menu")).toContainText("Studio");
+  await page.locator(".cartao-marca", { hasText: "Loja Exemplo" }).click();
+  await expect(page.locator(".studio-modo")).toHaveCount(3);
+  await expect(page.locator(".studio-kit")).toContainText("Leve e direto"); // tom de voz da marca
+  await page.locator(".studio-modo", { hasText: "Studio fotográfico" }).click();
+  await expect(page.locator("#conteudo")).toContainText("Na hora de fotografar");
+  await page.goto("/#/studio/loja/ideias");
+  await page.fill("#studio-texto", "Formato | Tema | Gancho | Por quê\n1. Reels | Bastidores da loja | Você nunca viu isso | Aproxima\n- Carrossel | 5 looks de verão | Qual é o seu? | Salvamentos");
+  await page.getByRole("button", { name: "Organizar ideias" }).click();
+  await expect(page.locator(".portal-post")).toHaveCount(2);
+  await page.locator(".portal-post", { hasText: "Bastidores da loja" }).getByRole("button", { name: "+ Virar post" }).click();
+  await expect(page.locator("#f-titulo")).toHaveValue("Bastidores da loja");
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Bastidores da loja")))
+    .toMatchObject({ tipo: "Conteúdo", clienteId: "loja", formato: "Reels" });
+  expect(erros).toEqual([]);
+});
+
+test("Studio do cliente: cria a legenda e envia para a Hyper como sugestão", async ({ page }) => {
+  await abrir(page, {
+    usuario: { uid: "cli", displayName: "Carla Cliente", email: "carla@exemplo.com" }, semMenu: true,
+    membros: {
+      hyper: { nome: "Hyper", email: "hyper@exemplo.com", papel: "admin", status: "ativo" },
+      cli: { nome: "Carla Cliente", email: "carla@exemplo.com", papel: "cliente", status: "ativo", permissoes: [], acessoClientes: "alguns", clientes: ["loja"], marcas: [] }
+    }
+  });
+  await expect(page.locator("#menu")).toContainText("Studio");
+  await page.goto("/#/studio");
+  await expect(page).toHaveURL(/#\/studio\/loja/); // uma marca só: entra direto
+  await page.locator(".studio-modo", { hasText: "Studio de conteúdo" }).click();
+  await page.fill("#studio-titulo", "Promoção de inverno");
+  await page.fill("#studio-copy", "Chegou o inverno na Loja!");
+  await page.getByRole("button", { name: "Enviar para a Hyper" }).click();
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Promoção de inverno")))
+    .toMatchObject({ clienteId: "loja", statusConteudo: "ideia", copy: "Chegou o inverno na Loja!", sugeridoPeloCliente: "Carla Cliente" });
+  await expect(page.locator(".modal")).toHaveCount(0);
 });

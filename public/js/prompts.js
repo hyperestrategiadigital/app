@@ -89,3 +89,61 @@ export function promptCanva({ post = {}, cliente = {}, formato, tamanho, texto =
   ];
   return linhas.filter((l) => l !== null).join("\n");
 }
+
+/** Contexto da marca para os pedidos do Studio (identidade completa, sem dados internos). */
+function contextoMarca(c) {
+  const paleta = (c.paleta || []).filter(Boolean);
+  return [
+    c.marcaId && c.clienteNome ? `Marca: ${c.nome} (do grupo ${c.clienteNome})` : `Marca: ${c.nome || "(sem nome)"}`,
+    c.descricao ? `- O que é: ${c.descricao}` : null,
+    c.tomDeVoz ? `- Tom de voz: ${c.tomDeVoz}` : null,
+    c.publico ? `- Público-alvo: ${c.publico}` : null,
+    c.persona ? `- Persona: ${c.persona}` : null,
+    c.estiloVisual ? `- Estilo de imagem: ${c.estiloVisual}` : null,
+    c.identidadeVisual ? `- Diagramação: ${c.identidadeVisual}` : null,
+    paleta.length ? `- Cores: ${paleta.join(", ")}` : null,
+    c.fontes ? `- Fontes: ${c.fontes}` : null,
+    c.instagram ? `- Instagram: ${c.instagram}` : null,
+    c.diretrizes ? `\n## Diretrizes de conteúdo (siga à risca)\n${c.diretrizes}` : null
+  ].filter(Boolean).join("\n");
+}
+
+/** Studio fotográfico: roteiro de fotos na direção da marca. */
+export function promptFotos(c, { assunto = "", formato = "", local = "", quantidade = 8 } = {}) {
+  return [
+    `Você é diretor de fotografia da Hyper Estratégia Digital. Monte um roteiro de fotos para a marca abaixo, que a própria equipe da marca vai fotografar com o celular.`,
+    "",
+    "## Sobre a marca",
+    contextoMarca(c),
+    "",
+    "## Sessão",
+    `- O que fotografar: ${assunto || "fotos do dia a dia da marca para as redes sociais"}`,
+    formato ? `- Onde vai usar: ${formato} (${ehVertical(formato) ? "vertical 9:16" : "feed 4:5"})` : null,
+    local ? `- Local / ambiente: ${local}` : null,
+    "",
+    "## O que eu quero",
+    `1. Uma lista de ${quantidade} fotos (plano, enquadramento, o que aparece, pose/ação, luz), numeradas, cada uma em uma ou duas linhas.`,
+    "2. Como deixar as fotos com a cara da marca (cores no cenário e na roupa, objetos, clima).",
+    "3. O que evitar.",
+    "4. Dicas rápidas de celular (luz, limpeza da lente, modo retrato, espaço livre para texto).",
+    "Escreva em português do Brasil, simples e direto, para alguém que não é fotógrafo."
+  ].filter((l) => l !== null).join("\n");
+}
+
+/** Studio: ideias de conteúdo na linha editorial da marca. */
+export function promptIdeias(c, { quantidade = 10, foco = "", mes = "", jaPlanejados = [] } = {}) {
+  return [
+    `Você é estrategista de conteúdo da Hyper Estratégia Digital. Sugira ${quantidade} ideias de posts para a marca abaixo.`,
+    "",
+    "## Sobre a marca",
+    contextoMarca(c),
+    "",
+    "## Pedido",
+    foco ? `- Foco / objetivo: ${foco}` : null,
+    mes ? `- Mês: ${mes} (considere datas comemorativas relevantes para este público)` : null,
+    jaPlanejados.length ? `- Já planejados (não repita): ${jaPlanejados.slice(0, 30).join("; ")}` : null,
+    "",
+    "Para cada ideia, uma linha no formato: Formato | Tema | Gancho (primeira frase) | Por que funciona.",
+    "Varie os formatos (Reels, Carrossel, Story, Feed estático) e siga as diretrizes da marca."
+  ].filter((l) => l !== null).join("\n");
+}

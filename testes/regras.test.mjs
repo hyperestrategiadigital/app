@@ -31,6 +31,9 @@ beforeEach(async () => {
     await membro("financeiro", { permissoes: ["financeiro"] });
     await membro("trafego", { permissoes: ["trafego"] });
     await membro("pendente", { status: "pendente" });
+    // Pessoas do cliente c1: uma vê o cliente todo, a outra só a marca m1
+    await membro("cli", { papel: "cliente", acessoClientes: "alguns", clientes: ["c1"] });
+    await membro("clim", { papel: "cliente", acessoClientes: "alguns", clientes: ["c1"], marcas: ["m1"] });
     await membro("luisa", { permissoes: ["conteudo", "financeiro"], acessoClientes: "alguns", clientes: ["c1"] });
     await setDoc(doc(db, `${E}/clientes/c2`), { nome: "Outro cliente" });
     await setDoc(doc(db, `${E}/tarefas/t2`), { titulo: "Do outro", clienteId: "c2" });
@@ -54,6 +57,12 @@ beforeEach(async () => {
     await setDoc(doc(db, `${E}/config/comercial`), { reserva: 30, despesasFixas: [{ descricao: "Canva", valor: 35 }] });
     await setDoc(doc(db, `${E}/recorrencias/r1`), { modelo: "livre" });
     await setDoc(doc(db, `${E}/clientes/c1/artes/a1`), { dados: "data:" });
+    await setDoc(doc(db, `${E}/clientes/c1/artes/a2`), { dados: "data:", marcaId: "m1", tarefaId: "pc1" });
+    await setDoc(doc(db, `${E}/marcas/m2`), { nome: "Outra marca", clienteId: "c1" });
+    await setDoc(doc(db, `${E}/tarefas/pc1`), { titulo: "Post m1", tipo: "Conteúdo", clienteId: "c1", marcaId: "m1", status: "andamento", statusConteudo: "aprovacao" });
+    await setDoc(doc(db, `${E}/tarefas/pc2`), { titulo: "Post m2", tipo: "Conteúdo", clienteId: "c1", marcaId: "m2", status: "andamento", statusConteudo: "aprovacao" });
+    await setDoc(doc(db, `${E}/tarefas/pc3`), { titulo: "Post pronto", tipo: "Conteúdo", clienteId: "c1", marcaId: "m1", status: "andamento", statusConteudo: "agendado" });
+    await setDoc(doc(db, `${E}/compromissos/k1`), { titulo: "Reunião", clienteId: "c1" });
     await setDoc(doc(db, `${E}/pessoal/basico/config/agenda`), { email: "b@x.com" });
   });
 });
@@ -115,9 +124,11 @@ test("conteúdo: edita clientes e marcas, lê a chave da OpenAI e os criativos; 
   for (const c of ["contratos/c1", "financeiro/f1", "contasAds/a1"]) await assertFails(ler("conteudo", `${E}/${c}`));
 });
 
-test("financeiro: vê contratos, lançamentos e orçamentos; não vê a chave da OpenAI", async () => {
-  for (const c of ["contratos/c1", "financeiro/f1", "orcamentos/o1"]) await assertSucceeds(ler("financeiro", `${E}/${c}`));
-  await assertSucceeds(gravar("financeiro", `${E}/financeiro/f2`, { valor: 10 }));
+test("financeiro é só de administrador: quem tem a área marcada não vê valores", async () => {
+  for (const c of ["contratos/c1", "financeiro/f1", "orcamentos/o1"]) await assertFails(ler("financeiro", `${E}/${c}`));
+  for (const c of ["contratos/c1", "financeiro/f1", "orcamentos/o1"]) await assertSucceeds(ler("admin", `${E}/${c}`));
+  await assertFails(gravar("financeiro", `${E}/financeiro/f2`, { valor: 10 }));
+  await assertSucceeds(gravar("admin", `${E}/financeiro/f2`, { valor: 10 }));
   await assertFails(ler("financeiro", `${E}/config/openai`));
   await assertFails(ler("financeiro", `${E}/contasAds/a1`));
 });
@@ -183,24 +194,22 @@ test("acesso só a alguns clientes", async () => {
   await assertFails(gravar("luisa", `${E}/tarefas/t9`, { titulo: "x", clienteId: "c2" }));
   await assertSucceeds(gravar("luisa", `${E}/tarefas/t9`, { titulo: "x", clienteId: "c1" }));
   await assertFails(updateDoc(doc(db, `${E}/tarefas/t1`), { clienteId: "c2" }));
-  // Financeiro só dos clientes dela, sem as despesas da agência
-  await assertSucceeds(ler("luisa", `${E}/contratos/c1`));
+  // Financeiro é só de administrador, mesmo com a área marcada
+  await assertFails(ler("luisa", `${E}/contratos/c1`));
   await assertFails(ler("luisa", `${E}/contratos/c2`));
-  await assertSucceeds(ler("luisa", `${E}/financeiro/f1`));
-  await assertFails(ler("luisa", `${E}/financeiro/f2`));
+  await assertFails(ler("luisa", `${E}/financeiro/f1`));
   await assertFails(ler("luisa", `${E}/financeiro/d1`));
-  await assertSucceeds(getDocs(query(collection(db, `${E}/financeiro`), where("clienteId", "in", ["c1"]))));
+  await assertFails(getDocs(query(collection(db, `${E}/financeiro`), where("clienteId", "in", ["c1"]))));
   await assertSucceeds(ler("luisa", `${E}/clientes/c1/artes/a1`));
   await assertFails(gravar("luisa", `${E}/clientes/c2`));
   // Quem vê todos continua lendo a coleção inteira
   await assertSucceeds(getDocs(collection(como("basico"), `${E}/tarefas`)));
-  await assertSucceeds(getDocs(collection(como("financeiro"), `${E}/financeiro`)));
+  await assertSucceeds(getDocs(collection(como("admin"), `${E}/financeiro`)));
 });
 
-test("comercial (preços, despesas fixas, modelo de contrato): Financeiro que vê todos lê; só administrador grava", async () => {
-  await assertSucceeds(ler("financeiro", `${E}/config/comercial`));
+test("comercial (preços, despesas fixas, modelo de contrato): só administrador", async () => {
   await assertSucceeds(ler("admin", `${E}/config/comercial`));
-  for (const quem of ["basico", "conteudo", "trafego", "luisa"]) await assertFails(ler(quem, `${E}/config/comercial`));
+  for (const quem of ["basico", "conteudo", "trafego", "financeiro", "luisa"]) await assertFails(ler(quem, `${E}/config/comercial`));
   await assertFails(gravar("financeiro", `${E}/config/comercial`, { reserva: 0 }));
   await assertSucceeds(gravar("admin", `${E}/config/comercial`, { reserva: 25 }));
 });
@@ -264,4 +273,55 @@ test("aprovação por link: cliente sem login vê e responde só os posts do lin
 test("resumo diário: a própria pessoa liga e desliga", async () => {
   await assertSucceeds(updateDoc(doc(como("basico"), `${E}/membros/basico`), { resumoDiario: false }));
   await assertSucceeds(updateDoc(doc(como("basico"), `${E}/membros/basico`), { emailAgenda: "pessoal@icloud.com" }));
+});
+
+test("cliente: vê só os posts, a marca e o cadastro dele; nada da equipe", async () => {
+  const db = como("cli");
+  await assertSucceeds(ler("cli", `${E}/clientes/c1`));
+  await assertFails(ler("cli", `${E}/clientes/c2`));
+  await assertSucceeds(ler("cli", `${E}/membros/cli`));
+  await assertFails(ler("cli", `${E}/membros/admin`));
+  await assertFails(getDocs(collection(db, `${E}/membros`)));
+  await assertSucceeds(ler("cli", `${E}/tarefas/pc1`));
+  await assertFails(ler("cli", `${E}/tarefas/t1`)); // tarefa interna do cliente
+  await assertFails(ler("cli", `${E}/tarefas/t3`)); // tarefa sem cliente
+  await assertSucceeds(getDocs(query(collection(db, `${E}/tarefas`), where("clienteId", "in", ["c1"]), where("tipo", "==", "Conteúdo"))));
+  await assertFails(getDocs(query(collection(db, `${E}/tarefas`), where("clienteId", "in", ["c1"]))));
+  await assertSucceeds(getDocs(query(collection(db, `${E}/marcas`), where("clienteId", "in", ["c1"]))));
+  await assertSucceeds(ler("cli", `${E}/clientes/c1/artes/a1`));
+  for (const c of ["contratos/c1", "financeiro/f1", "orcamentos/o1", "contasAds/a1", "manutencoes/x1", "recorrencias/r1", "compromissos/k1", "tarefasArquivo/t0", "config/equipe", "config/openai", "config/clientes", "lixeira/l1"])
+    await assertFails(ler("cli", `${E}/${c}`));
+  await assertSucceeds(ler("cli", `${E}/config/meta`));
+  await assertFails(gravar("cli", `${E}/clientes/c1`, { nome: "Mudei" }));
+  await assertFails(gravar("cli", `${E}/marcas/m1`, { tomDeVoz: "Mudei" }));
+});
+
+test("cliente: aprova ou pede ajuste só em post em aprovação e sugere posts como ideia", async () => {
+  const db = como("cli");
+  const aprovar = { statusConteudo: "aprovado", status: "andamento", aprovacaoCliente: { decisao: "aprovado", nome: "cli", em: 1 }, atualizadoEm: 1 };
+  await assertFails(updateDoc(doc(db, `${E}/tarefas/pc1`), { ...aprovar, titulo: "Mudei o tema" }));
+  await assertFails(updateDoc(doc(db, `${E}/tarefas/pc1`), { statusConteudo: "publicado", status: "concluido" }));
+  await assertSucceeds(updateDoc(doc(db, `${E}/tarefas/pc1`), aprovar));
+  await assertFails(updateDoc(doc(db, `${E}/tarefas/pc3`), aprovar)); // não estava em aprovação
+  await assertSucceeds(updateDoc(doc(db, `${E}/tarefas/pc2`), { statusConteudo: "producao", status: "andamento", aprovacaoCliente: { decisao: "ajuste", comentario: "Trocar a foto" }, atualizadoEm: 1 }));
+  await assertSucceeds(setDoc(doc(db, `${E}/tarefas/pc1/atividade/x1`), { tipo: "comentario", texto: "Ajuste", uid: "cli", nome: "cli", em: 1, mencoes: [] }));
+  const ideia = { tipo: "Conteúdo", clienteId: "c1", marcaId: "m1", titulo: "Ideia", dataPublicacao: "", prazo: "", formato: "Reels", rede: "Instagram", copy: "", notas: "", statusConteudo: "ideia", status: "a_fazer", responsavel: "", sugeridoPeloCliente: "cli", criadoEm: 1 };
+  await assertSucceeds(setDoc(doc(db, `${E}/tarefas/novo1`), ideia));
+  await assertFails(setDoc(doc(db, `${E}/tarefas/novo2`), { ...ideia, statusConteudo: "aprovado", status: "andamento" }));
+  await assertFails(setDoc(doc(db, `${E}/tarefas/novo3`), { ...ideia, tipo: "Tráfego pago" }));
+  await assertFails(setDoc(doc(db, `${E}/tarefas/novo4`), { ...ideia, clienteId: "c2", marcaId: "" }));
+  await assertFails(deleteDoc(doc(db, `${E}/tarefas/pc1`)));
+});
+
+test("cliente com uma marca só: não vê as outras marcas do grupo", async () => {
+  const db = como("clim");
+  await assertSucceeds(ler("clim", `${E}/tarefas/pc1`));
+  await assertFails(ler("clim", `${E}/tarefas/pc2`));
+  await assertSucceeds(getDocs(query(collection(db, `${E}/tarefas`), where("marcaId", "in", ["m1"]), where("tipo", "==", "Conteúdo"))));
+  await assertFails(getDocs(query(collection(db, `${E}/tarefas`), where("clienteId", "in", ["c1"]), where("tipo", "==", "Conteúdo"))));
+  await assertSucceeds(ler("clim", `${E}/marcas/m1`));
+  await assertFails(ler("clim", `${E}/marcas/m2`));
+  await assertSucceeds(getDocs(query(collection(db, `${E}/clientes/c1/artes`), where("marcaId", "in", ["m1"]))));
+  await assertFails(ler("clim", `${E}/clientes/c1/artes/a1`)); // criativo sem marca
+  await assertFails(updateDoc(doc(db, `${E}/tarefas/pc2`), { statusConteudo: "aprovado", status: "andamento", atualizadoEm: 1 }));
 });

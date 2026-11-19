@@ -3,7 +3,7 @@
 import { el, avisar, confirmar, hojeISO } from "../ui.js";
 import { dados, porId, atualizarMeuCadastro } from "../db.js";
 import { cabecalho, avatar } from "./componentes.js";
-import { eu, ehAdmin, AREAS, rotuloArea, clientesRestritos } from "../permissoes.js";
+import { eu, ehAdmin, ehCliente, AREAS, AREAS_EQUIPE, rotuloArea, clientesRestritos } from "../permissoes.js";
 import { configAgenda, agendaConectada } from "../agenda.js";
 import { comprimirImagem } from "../arquivos.js";
 import { avisarAdmins } from "../emails.js";
@@ -78,7 +78,7 @@ function blocoPedido(m, restrito) {
     } }, "Cancelar pedido"));
   const temArea = new Set(m.permissoes || []);
   const areas = el("div", { class: "multi" },
-    [...AREAS.filter(([v]) => !temArea.has(v)).map(([v, r]) => [v, r]), ["admin", "Administração (tudo)"]].map(([v, r]) =>
+    [...AREAS_EQUIPE.filter(([v]) => !temArea.has(v)).map(([v, r]) => [v, r]), ["admin", "Administração (tudo)"]].map(([v, r]) =>
       el("label", { class: "chip-check" }, el("input", { type: "checkbox", value: v }), r)));
   const meus = new Set(m.clientes || []);
   const outros = restrito ? nomesClientes().filter((c) => !meus.has(c.id)) : [];
@@ -142,6 +142,11 @@ function blocoMeta() {
 
 export function render() {
   const m = meuCadastro();
+  // Pessoa do cliente: só o perfil e a conexão com o Facebook (para ver os resultados)
+  if (ehCliente()) return el("div", { class: "tela tela-estreita" },
+    cabecalho("Minha conta", "Seu perfil e suas conexões"),
+    blocoPerfil(m),
+    el("section", { class: "bloco" }, el("h2", {}, "Suas conexões"), blocoMeta()));
   return el("div", { class: "tela tela-estreita" },
     cabecalho("Minha conta", "Seu perfil, seu acesso e suas conexões"),
     blocoPerfil(m),

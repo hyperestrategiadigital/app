@@ -11,7 +11,7 @@ import { promptCopy } from "../prompts.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
 import { abrirCompromisso } from "../compromissos.js";
 import { configEquipe, responsaveis, responsavelPadrao } from "../agenda.js";
-import { linkAgendadorMeta, linkLinkedinAdmin } from "./contas.js";
+import { linkAgendadorMeta, linkLinkedinAdmin, redesDe } from "./contas.js";
 
 /** Nomes da equipe (Ajustes → Equipe) + quem já aparece nas tarefas. */
 export function opcoesResponsaveis(atual = "") {
@@ -114,7 +114,7 @@ export function abrirTarefa(tarefa = {}) {
     }, "✨ Copy com o Claude"),
     editando && ehConteudo(tarefa) ? el("a", {
       class: "botao-link secundario mini so-conteudo", target: "_blank", rel: "noopener",
-      href: tarefa.rede === "LinkedIn" && porId("clientes", tarefa.clienteId)?.linkedin ? linkLinkedinAdmin(porId("clientes", tarefa.clienteId)) : linkAgendadorMeta(porId("clientes", tarefa.clienteId) || {}),
+      href: tarefa.rede === "LinkedIn" && redesDe(tarefa.clienteId, tarefa.marcaId).linkedin ? linkLinkedinAdmin(redesDe(tarefa.clienteId, tarefa.marcaId)) : linkAgendadorMeta(redesDe(tarefa.clienteId, tarefa.marcaId)),
       onClick: async () => { if (tarefa.copy) { try { await navigator.clipboard.writeText(tarefa.copy); avisar("Legenda copiada. Cole no agendador."); } catch {} } }
     }, "📅 Agendar") : null,
     editando ? el("button", {
@@ -166,7 +166,7 @@ export function abrirTarefa(tarefa = {}) {
 /** Pessoas mencionadas com @PrimeiroNome (ou @Nome Completo) no texto. */
 function mencionados(texto) {
   const t = normalizar(texto);
-  return dados.membros.filter((m) => m.status === "ativo" && m.id !== eu.uid && m.nome && m.email &&
+  return dados.membros.filter((m) => m.status === "ativo" && m.papel !== "cliente" && m.id !== eu.uid && m.nome && m.email &&
     (t.includes("@" + normalizar(m.nome)) || t.includes("@" + normalizar(m.nome.split(" ")[0]))));
 }
 

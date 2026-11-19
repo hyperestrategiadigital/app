@@ -1,7 +1,7 @@
 // Busca rápida (Ctrl+K ou ⌘K): encontra telas, clientes, marcas, tarefas, posts e compromissos.
 import { el, abrirModal, normalizar, fmtData } from "./ui.js";
 import { dados, nomeCliente, porId } from "./db.js";
-import { tarefaVisivel } from "./permissoes.js";
+import { tarefaVisivel, ehCliente } from "./permissoes.js";
 import { TIPO_CONTEUDO } from "./constantes.js";
 import { abrirTarefa } from "./views/componentes.js";
 import { abrirCompromisso } from "./compromissos.js";
@@ -63,7 +63,7 @@ function procurar(termo) {
 }
 
 export function abrirBusca() {
-  if (document.querySelector(".busca-rapida")) return;
+  if (document.querySelector(".busca-rapida") || ehCliente()) return; // o portal do cliente não tem a busca da equipe
   let resultados = [];
   let ativo = 0;
   const lista = el("ul", { class: "busca-lista", role: "listbox" });

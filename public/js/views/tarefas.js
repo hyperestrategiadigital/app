@@ -9,9 +9,13 @@ import { STATUS_TAREFA, TIPO_CONTEUDO, etapaDoStatus } from "../constantes.js";
 import { compromissosEntre } from "../agenda.js";
 import { abrirCompromisso } from "../compromissos.js";
 
-export function render({ estado, renderizar }) {
+export function render({ params = [], estado, renderizar }) {
   // Tarefas e Calendário compartilham o estado (filtros); aqui ficam as visões Quadro, Lista e Carga da equipe
   if (!estado.visao || estado.visao === "calendario") estado.visao = "quadro";
+  // #/tarefas/<cliente> (vem da ficha do cliente): já abre filtrado por ele
+  // #/tarefas/<cliente>/<marca> já abre filtrado pela marca
+  const chave = params.join("/");
+  if (params[0] && estado.paramsTarefas !== chave) { estado.paramsTarefas = chave; estado.cliente = params[0]; estado.marca = params[1] || null; }
   estado.periodoConcluidas ??= "30";
   const f = estado;
   const topo = topoTarefas(f, renderizar);

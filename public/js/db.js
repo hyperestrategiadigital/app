@@ -6,7 +6,8 @@ import {
   getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch, getDocs, getDoc, query, where
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
-import { eu, definirEu, colecoesPermitidas, pode, ehAdmin, clientesRestritos } from "./permissoes.js";
+import { eu, definirEu, colecoesPermitidas, pode, ehAdmin, clientesRestritos, ehCliente, marcasRestritas } from "./permissoes.js";
+import { TIPO_CONTEUDO } from "./constantes.js";
 
 export const ESPACO = "hyper";
 /** Dados do documento do espaço (ex.: uid do dono). */
@@ -152,7 +153,7 @@ async function aceitarConvite(usuario) {
   const c = convite.data();
   await comPrazo(setDoc(doc(ref("membros"), usuario.uid), {
     nome: usuario.displayName || c.nome || usuario.email, email: usuario.email,
-    papel: c.papel, permissoes: c.permissoes, acessoClientes: c.acessoClientes || "todos", clientes: c.clientes || [],
+    papel: c.papel, permissoes: c.permissoes, acessoClientes: c.acessoClientes || "todos", clientes: c.clientes || [], marcas: c.marcas || [],
     status: "ativo", criadoEm: Date.now(), convidadoPor: c.criadoPor || ""
   }));
   await comPrazo(deleteDoc(refConvite)).catch(() => {});
@@ -169,6 +170,7 @@ const POR_ID = new Set(["clientes", "contratos"]);
  * documentos um a um (clientes, contratos) ou consultas por clienteId (em lotes de 30, limite do Firestore).
  */
 function ouvirColecao(col, aoMudar, aoErro) {
+  if (ehCliente()) return ouvirComoCliente(col, aoMudar, aoErro);
   if (col === "membros" || !clientesRestritos()) return [onSnapshot(ref(col), (s) => aoMudar(s.docs.map((d) => ({ id: d.id, ...d.data() }))), aoErro)];
   const ids = [...new Set(eu.clientes || [])];
   const partes = new Map();
@@ -188,7 +190,40 @@ function ouvirColecao(col, aoMudar, aoErro) {
   }, aoErro));
 }
 
+/**
+ * Pessoa do cliente: só o próprio cadastro, os clientes e marcas dela e os posts (tarefas do tipo Conteúdo)
+ * desses clientes, ou só das marcas liberadas. As regras exigem exatamente esses filtros.
+ */
+function ouvirComoCliente(col, aoMudar, aoErro) {
+  const lista = (s) => s.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const porDocumento = (colecao, ids) => {
+    if (!ids.length) { aoMudar([]); return []; }
+    const partes = new Map();
+    return ids.map((id) => onSnapshot(doc(ref(colecao), id), (s) => {
+      partes.set(id, s.exists() ? [{ id: s.id, ...s.data() }] : []);
+      if (partes.size === ids.length) aoMudar([...partes.values()].flat());
+    }, (e) => { partes.set(id, []); if (partes.size === ids.length) aoMudar([...partes.values()].flat()); console.warn(colecao, id, e.code); }));
+  };
+  const clientes = [...new Set(eu.clientes || [])].slice(0, 30);
+  const marcas = [...new Set(eu.marcas || [])].slice(0, 30);
+  if (col === "membros") return porDocumento("membros", [eu.uid]);
+  if (col === "clientes") return porDocumento("clientes", clientes);
+  if (col === "marcas") {
+    if (marcasRestritas()) return porDocumento("marcas", marcas);
+    if (!clientes.length) { aoMudar([]); return []; }
+    return [onSnapshot(query(ref("marcas"), where("clienteId", "in", clientes)), (s) => aoMudar(lista(s)), aoErro)];
+  }
+  if (col === "tarefas") {
+    const filtro = marcasRestritas() ? where("marcaId", "in", marcas) : where("clienteId", "in", clientes);
+    if (!(marcasRestritas() ? marcas : clientes).length) { aoMudar([]); return []; }
+    return [onSnapshot(query(ref("tarefas"), filtro, where("tipo", "==", TIPO_CONTEUDO)), (s) => aoMudar(lista(s)), aoErro)];
+  }
+  aoMudar([]);
+  return [];
+}
+
 async function lerColecao(col) {
+  if (ehCliente()) return [];
   if (!clientesRestritos()) return (await comPrazo(getDocs(ref(col)), 60)).docs.map((d) => ({ id: d.id, ...d.data() }));
   const valores = COM_SEM_CLIENTE.has(col) ? [...(eu.clientes || []), ""] : [...(eu.clientes || [])];
   const lista = [];
@@ -199,7 +234,7 @@ async function lerColecao(col) {
   return lista;
 }
 
-const assinaturaAcesso = (m) => JSON.stringify([m.papel, m.permissoes, m.acessoClientes || "todos", m.clientes || []]);
+const assinaturaAcesso = (m) => JSON.stringify([m.papel, m.permissoes, m.acessoClientes || "todos", m.clientes || [], m.marcas || []]);
 
 function ouvirTudo(aoErro) {
   const permitidas = colecoesPermitidas();
@@ -220,7 +255,7 @@ function ouvirTudo(aoErro) {
     }, (erro) => { aoErro?.(traduzirErro(erro)); if (primeira) { primeira = false; pronto(); } }));
   }));
   // Documentos de configuração (lidos um a um, porque cada um tem uma regra)
-  const docs = ["equipe", "agendaHyper", "clientes", "meta", "modelos", ...(pode("conteudo") ? ["openai"] : []), ...(pode("financeiro") && !clientesRestritos() ? ["comercial"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
+  const docs = ehCliente() ? ["meta"] : ["equipe", "agendaHyper", "clientes", "meta", "modelos", ...(pode("conteudo") ? ["openai"] : []), ...(pode("financeiro") && !clientesRestritos() ? ["comercial"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
     let primeira = true;
     cancelamentos.push(onSnapshot(docConfig(id), (snap) => {
       dados.config = [...dados.config.filter((c) => c.id !== id), ...(snap.exists() ? [{ id, ...snap.data() }] : [])];
@@ -420,8 +455,10 @@ export async function arquivarAntigas() {
 
 /* ---------------- Subcoleções sob demanda (arquivos pesados, não ficam em memória) ---------------- */
 const refSub = (caminho) => collection(db, "espacos", ESPACO, ...caminho);
-export async function listarSub(caminho) {
-  const snap = await comPrazo(getDocs(refSub(caminho)), 60);
+export async function listarSub(caminho, { marcas = null } = {}) {
+  // Cliente com marcas limitadas: as regras exigem a consulta filtrada pelas marcas dele
+  const alvo = marcas ? query(refSub(caminho), where("marcaId", "in", marcas.slice(0, 30))) : refSub(caminho);
+  const snap = await comPrazo(getDocs(alvo), 60);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 export async function salvarSub(caminho, valores, id) {

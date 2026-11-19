@@ -1,11 +1,12 @@
 // Aba "Resultados" da ficha do cliente: números do Instagram e do Facebook (Meta) da marca escolhida,
 // no período, e de cada post — ligando cada post do Instagram ao post do calendário do app.
 import { el, avisar, hojeISO, addDias, fmtData, vazio } from "../ui.js";
-import { dados, porId, atualizar, marcasDo } from "../db.js";
+import { dados, porId, atualizar } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
 import { TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
 import { abrirTarefa, corCliente } from "./componentes.js";
+import { marcaEscolhida } from "./marca.js";
 import { metaDisponivel, metaConectada, conectarMeta, contaMeta, paginas, resultados } from "../meta.js";
 
 const fmtNum = (n) => (typeof n === "number" ? n.toLocaleString("pt-BR") : "—");
@@ -24,17 +25,14 @@ function periodo(chave) {
 
 const cache = new Map(); // chave → { carregando, dados, erro }
 
-export function abaResultados(c, estado, renderizar) {
-  const marcas = marcasDo(c.id);
-  estado.resMarca ??= marcas[0]?.id || "";
+/** `leitura`: portal do cliente (sem trocar a página nem abrir o post da equipe). */
+export function abaResultados(c, estado, renderizar, { leitura = false } = {}) {
   estado.resPeriodo ??= "30";
-  const marca = estado.resMarca ? porId("marcas", estado.resMarca) : null;
+  // A marca é a escolhida ao abrir a ficha (num grupo); vale para as abas Marca, Contas e Resultados
+  const { marca } = marcaEscolhida(c, estado);
+  const seletorMarca = null;
   const alvo = marca || c;
   const pageId = alvo.facebookPageId || "";
-  const seletorMarca = marcas.length ? el("div", { class: "marcas-seletor" },
-    [...marcas.map((m) => [m.id, m.nome, m]), ["", `${c.nome} (institucional)`, c]].map(([id, nome, obj]) =>
-      el("button", { class: `legenda-item ${estado.resMarca === id ? "ativo" : ""}`, style: { "--selo": corCliente(obj) }, onClick: () => { estado.resMarca = id; renderizar(); } },
-        el("span", { class: "bolinha" }), nome))) : null;
 
   if (!metaDisponivel()) return el("div", {}, seletorMarca,
     vazio("Os relatórios do Instagram e do Facebook ainda não foram ligados.",
@@ -49,7 +47,7 @@ export function abaResultados(c, estado, renderizar) {
         catch (erro) { avisar(erro.message, "erro"); e.currentTarget.disabled = false; }
       } }, "Conectar Facebook / Instagram")));
 
-  if (!pageId) return el("div", {}, seletorMarca, ligarPagina(c, marca, renderizar));
+  if (!pageId) return el("div", {}, seletorMarca, leitura ? vazio("A página desta marca ainda não foi ligada aos relatórios. A Hyper liga para você.") : ligarPagina(c, marca, renderizar));
 
   const [de, ate] = periodo(estado.resPeriodo);
   const chave = `${pageId}|${de}|${ate}`;
@@ -67,12 +65,12 @@ export function abaResultados(c, estado, renderizar) {
     el("span", { class: "subtitulo" }, `${fmtData(de, true)} a ${fmtData(ate, true)} · conectado como ${contaMeta()}`),
     el("span", { class: "espaco" }),
     el("button", { class: "link", onClick: () => { cache.delete(chave); renderizar(); } }, "Atualizar"),
-    el("button", { class: "link", onClick: async () => { await atualizar(marca ? "marcas" : "clientes", alvo.id, { facebookPageId: "" }); renderizar(); } }, "Trocar página"));
+    leitura ? null : el("button", { class: "link", onClick: async () => { await atualizar(marca ? "marcas" : "clientes", alvo.id, { facebookPageId: "" }); renderizar(); } }, "Trocar página"));
 
   if (item.carregando) return el("div", {}, seletorMarca, topo, el("p", { class: "subtitulo" }, "Buscando os números na Meta…"));
   if (item.erro) return el("div", {}, seletorMarca, topo, el("p", { class: "faixa-alerta" }, "Não consegui ler os resultados: ", item.erro));
   const r = item.dados;
-  return el("div", { class: "aba-resultados" }, seletorMarca, topo, painel(r, c, marca));
+  return el("div", { class: "aba-resultados" }, seletorMarca, topo, painel(r, c, marca, leitura));
 }
 
 /** Escolher qual página do Facebook (e o Instagram ligado a ela) é deste cliente ou marca. */
@@ -93,7 +91,7 @@ function ligarPagina(c, marca, renderizar) {
   return caixa;
 }
 
-function painel(r, c, marca) {
+function painel(r, c, marca, leitura = false) {
   const blocoMetricas = (titulo, lista) => el("div", {},
     el("h3", {}, titulo),
     el("div", { class: "resumo resumo-metricas" }, lista.map((m) => el("div", { class: "numero", title: m.erro || "" },
@@ -129,7 +127,7 @@ function painel(r, c, marca) {
             el("div", { class: "cartao-meta" },
               [["views", "👁"], ["reach", "alcance"], ["likes", "❤"], ["comments", "💬"], ["shares", "↗"], ["saved", "🔖"]]
                 .filter(([k]) => p.numeros[k] != null).map(([k, r]) => el("span", { class: "etiqueta", title: k }, `${r} ${fmtNum(p.numeros[k])}`))),
-            doApp ? el("button", { class: "link", onClick: () => abrirTarefa(doApp) }, `Post do app: ${doApp.titulo}`) : null));
+            doApp ? (leitura ? el("span", { class: "subtitulo" }, `Post: ${doApp.titulo}`) : el("button", { class: "link", onClick: () => abrirTarefa(doApp) }, `Post do app: ${doApp.titulo}`)) : null));
       })) : vazio("Nenhum post no Instagram neste período.")
     ] : null);
 }
