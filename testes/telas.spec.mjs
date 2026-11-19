@@ -545,3 +545,28 @@ test("celular: barra de baixo com 5 atalhos e o + no meio", async ({ page }) => 
   await page.goto("/#/financeiro");
   for (const n of await page.locator(".numero strong").all()) expect(await n.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
 });
+
+test("importar marcas: acha o cliente por nome parecido e manda para a marca com o nome do grupo", async ({ page }) => {
+  await abrir(page);
+  await page.evaluate(async () => {
+    const db = await import("/js/db.js");
+    await db.salvarComId("marcas", "m-grupo", { nome: "Grupo Exemplo", clienteId: "grupo", ativo: true, paleta: [], principal: true });
+    await db.salvarComId("marcas", "m-ride", { nome: "Ride Exemplo", clienteId: "grupo", ativo: true, paleta: [] });
+  });
+  await page.goto("/#/config");
+  const lista = [
+    { cliente: "Grupo", marca: "Grupo Exemplo", tomDeVoz: "Próximo", diretrizes: "Pilares: A, B" },
+    { cliente: "Grupo", marca: "Ride", persona: "Mariana, 33" },
+    { cliente: "Grupo", descricao: "O grupo em si" }
+  ];
+  await page.setInputFiles("#importar-arquivo", { name: "m.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(lista)) });
+  await expect(page.locator(".modal select[aria-label='Cliente para Grupo']")).toHaveValue("grupo");
+  await expect(page.locator(".modal .lista-importar-marcas")).toContainText("Grupo Exemplo › Grupo Exemplo");
+  await page.locator(".modal").getByRole("button", { name: "Importar definições" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/marcas"]["m-grupo"].diretrizes)).toBe("Pilares: A, B");
+  const s = await page.evaluate(() => window.__store);
+  expect(s["espacos/hyper/marcas"]["m-ride"].persona).toBe("Mariana, 33");
+  expect(s["espacos/hyper/clientes"].grupo.descricao).toBe("O grupo em si");
+  expect(s["espacos/hyper/clientes"].grupo.tomDeVoz).not.toBe("Próximo");
+  expect(Object.keys(s["espacos/hyper/clientes"])).toHaveLength(2);
+});

@@ -143,7 +143,6 @@ export function abrirMarca(clienteId, marca = {}) {
     { nome: "nome", rotulo: "Nome da marca", obrigatorio: true, largura: "metade" },
     { nome: "instagram", rotulo: "Instagram", dica: "@perfil", largura: "metade" },
     { nome: "facebookPageId", rotulo: "ID da página do Facebook", dica: "Para agendar e ver os resultados (dá para escolher na aba Resultados)", largura: "metade" },
-    { nome: "descricao", rotulo: "Sobre a marca", tipo: "textarea", linhas: 3, dica: "O que é, para quem é e como se diferencia das outras marcas do grupo" },
     { nome: "ativo", rotulo: "Marca ativa", tipo: "checkbox", padrao: true }
   ], marca, {
     extras: editando ? [el("button", { type: "button", class: "perigo-texto", onClick: async () => {
@@ -164,7 +163,7 @@ export function abrirMarca(clienteId, marca = {}) {
   });
 }
 
-const CAMPOS_COPIADOS = ["paleta", "cor", "fontes", "tomDeVoz", "persona", "publico", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva", "instagram", "facebook", "facebookPageId", "linkedin", "tiktok", "youtube", "site"];
+const CAMPOS_COPIADOS = ["paleta", "cor", "fontes", "tomDeVoz", "persona", "publico", "diretrizes", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva", "instagram", "facebook", "facebookPageId", "linkedin", "tiktok", "youtube", "site"];
 
 /**
  * Transforma outros clientes em marcas deste (ex.: duas empresas soltas viram marcas de um grupo).
@@ -217,7 +216,7 @@ export async function juntarUm(destino, origem, progresso, marcaExistente) {
     }
     await atualizar("marcas", marcaId, completar);
   } else {
-    const marca = { clienteId: destino.id, nome: origem.nome, origemClienteId: origem.id, ativo: true, criadoEm: Date.now(), descricao: origem.observacoes || "" };
+    const marca = { clienteId: destino.id, nome: origem.nome, origemClienteId: origem.id, ativo: true, criadoEm: Date.now(), descricao: origem.descricao || origem.observacoes || "" };
     for (const k of CAMPOS_COPIADOS) if (origem[k] != null && origem[k] !== "") marca[k] = origem[k];
     marca.paleta ||= origem.cor ? [origem.cor] : [];
     await salvarComId("marcas", marcaId, marca);
@@ -262,7 +261,7 @@ export async function separarMarca(grupo, marca, progresso = () => {}) {
   const antigo = marca.origemClienteId ? porId("clientes", marca.origemClienteId) : null;
   const id = antigo?.id || `cli-${marca.id}`;
   const identidadeMarca = {};
-  for (const k of [...CAMPOS_COPIADOS, "logo"]) if (marca[k] != null && marca[k] !== "") identidadeMarca[k] = marca[k];
+  for (const k of [...CAMPOS_COPIADOS, "logo", "descricao"]) if (marca[k] != null && marca[k] !== "") identidadeMarca[k] = marca[k];
   progresso(`${marca.nome}: ${antigo ? "reativando o cliente" : "criando o cliente"}…`);
   if (antigo) await atualizar("clientes", id, { ...identidadeMarca, nome: marca.nome, ativo: true, viraMarcaDe: "", marcaId: "" });
   else await salvarComId("clientes", id, {
@@ -328,7 +327,7 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
     marca ? el("div", { class: "marca-cabeca" },
       el("div", {},
         el("h3", {}, `${c.nome} · ${marca.nome}`),
-        el("p", { class: "subtitulo" }, [marca.instagram, marca.descricao].filter(Boolean).join(" · ") || "Campos vazios usam o que estiver no grupo (institucional).")),
+        el("p", { class: "subtitulo" }, marca.instagram || "Campos vazios usam o que estiver no grupo (institucional).")),
       el("div", { class: "acoes" },
         podeGerir ? el("button", { class: "secundario mini", onClick: () => abrirMarca(c.id, marca) }, "Editar nome, Instagram e status") : null,
         ehAdmin() ? el("button", { class: "link", onClick: async (e) => {
@@ -348,9 +347,12 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
     campoLink(alvo, "linkCanva", "Brand kit / pasta no Canva", null, "https://www.canva.com/...", "Abrir no Canva ↗"),
     editorCores(alvo),
     campoTexto(alvo, "fontes", "Fontes", "Ex.: Títulos em Playfair Display Bold; textos em Montserrat. (Os arquivos ficam na pasta do Drive.)", 2),
+    campoTexto(alvo, "descricao", "Sobre a marca", "O que é, o que vende, para quem, diferenciais e posicionamento. Se for de um grupo, como se diferencia das outras marcas.", 5, { sugestao: true }),
     campoTexto(alvo, "tomDeVoz", "Tom de voz", "Como a marca fala: próxima, técnica, bem-humorada... palavras que usa e que evita.", 4, { sugestao: true }),
     campoTexto(alvo, "persona", "Persona", "Quem é o cliente ideal: nome fictício, idade, rotina, dores, desejos, objeções.", 5, { sugestao: true }),
     campoTexto(alvo, "publico", "Público-alvo", "Ex.: mulheres 25-45, região de Sorocaba, classe B.", 3, { sugestao: true }),
+    campoTexto(alvo, "diretrizes", "Diretrizes de conteúdo",
+      "Pilares e linha editorial, estrutura das legendas, CTAs, rodapé padrão, hashtags, emojis, séries fixas e o que nunca fazer. É o que a IA segue em cada post.", 8, { sugestao: true }),
     campoTexto(alvo, "estiloVisual", "Estilo de imagem",
       "Que tipo de imagem a marca usa? Ex.: fotos reais de pessoas treinando, luz natural, cores vibrantes. Evitar: banco de imagem genérico.", 4, { sugestao: true }),
     campoTexto(alvo, "identidadeVisual", "Identidade visual (diagramação)",
