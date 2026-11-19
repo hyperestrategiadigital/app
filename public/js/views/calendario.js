@@ -2,7 +2,7 @@
 // do cliente em cada post, filtros, planejamento e exportação para aprovação do cliente.
 import * as planejamento from "./planejamento.js";
 import { gerarLinkAprovacao, seloResposta } from "../aprovacoes.js";
-import { el, hojeISO, addDias, fmtData, vazio, formulario, dataDe, avisar } from "../ui.js";
+import { el, hojeISO, addDias, fmtData, vazio, formulario, dataDe, avisar, normalizar } from "../ui.js";
 import { dados, marcasDo, porId, opcoesClientes, nomeCliente, atualizar, registrarAtividade } from "../db.js";
 import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca, mudarEtapa, proximaEtapa, visoesTarefas, seletorResponsavel, atrasada } from "./componentes.js";
 import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
@@ -92,6 +92,86 @@ function chip(t) {
   return botao;
 }
 
+/** Menu suspenso simples: um botão que abre uma lista de ações. */
+function menuSuspenso(rotulo, itens, classe = "secundario") {
+  const lista = el("div", { class: "menu-suspenso-lista", role: "menu", hidden: true });
+  const fechar = () => { lista.hidden = true; document.removeEventListener("click", foraClique, true); };
+  const foraClique = (e) => { if (!caixa.contains(e.target)) fechar(); };
+  for (const [texto, acao] of itens.filter(Boolean)) {
+    lista.append(el("button", { type: "button", role: "menuitem", onClick: () => { fechar(); acao(); } }, texto));
+  }
+  const caixa = el("div", { class: "menu-suspenso" },
+    el("button", { type: "button", class: classe, "aria-haspopup": "menu", onClick: () => {
+      if (lista.hidden) { lista.hidden = false; document.addEventListener("click", foraClique, true); } else fechar();
+    } }, rotulo, el("span", { class: "seta", "aria-hidden": "true" }, " ▾")), lista);
+  return caixa;
+}
+
+/** Busca por texto nas tarefas/posts (título, checklist, observações). */
+export const bateBusca = (t, busca) => !busca || normalizar(`${t.titulo || ""} ${(t.checklist || []).map((i) => i.texto).join(" ")} ${t.notas || ""}`).includes(busca);
+
+/**
+ * Topo único de Tarefas (as quatro visões): título, "Ações do mês" e "+ Novo"; visões + mês; filtros iguais em todas.
+ * Nada muda de lugar ao trocar de visão. `navegador` aparece só no calendário.
+ */
+export function topoTarefas(estado, renderizar, { calendario = false } = {}) {
+  estado.mes ??= hojeISO().slice(0, 7);
+  estado.camada ??= "tudo";
+  if (!pode("conteudo") && estado.camada === "conteudo") estado.camada = "tudo";
+  if (estado.responsavel === undefined) estado.responsavel = ehAdmin() ? "" : eu.nome; // quem não é admin começa vendo as próprias
+  const marcas = estado.cliente ? marcasDo(estado.cliente) : [];
+  if (!marcas.length) estado.marca = null;
+  const [ano, mes] = estado.mes.split("-").map(Number);
+  const mudarMes = (n) => { const d = new Date(ano, mes - 1 + n, 1); estado.mes = hojeISO(d).slice(0, 7); renderizar(); };
+  const acaoCliente = async (fn, titulo) => {
+    const r = estado.cliente ? { clienteId: estado.cliente, mes: estado.mes } : await escolherClienteEMes(titulo, { mes: estado.mes });
+    if (r) fn(r.clienteId, r.mes);
+  };
+  const marcaDe = (c) => (estado.cliente === c ? estado.marca ?? undefined : undefined);
+
+  // Subtítulo estável: atrasadas com os filtros de cliente e responsável
+  const atrasadas = dados.tarefas.filter((t) => tarefaVisivel(t) && atrasada(t) &&
+    (!estado.cliente || t.clienteId === estado.cliente) && (!estado.responsavel || (t.responsavel || "") === estado.responsavel)).length;
+
+  const novo = menuSuspenso("+ Novo", [
+    pode("conteudo") ? ["▣ Post", () => novoPost({ clienteId: estado.cliente || "", marcaId: estado.marca || "" })] : null,
+    ["✓ Tarefa", () => abrirTarefa({ clienteId: estado.cliente || "", prazo: hojeISO() })],
+    ["◷ Compromisso", () => abrirCompromisso({ clienteId: estado.cliente || "" })]
+  ], "destaque");
+  const acoesMes = pode("conteudo") ? menuSuspenso("Ações do mês", [
+    ["☷ Planejar mês", () => acaoCliente((c, m) => (location.hash = planejamento.linkPlano(c, m)), "Planejar mês")],
+    ["🔗 Link de aprovação", () => acaoCliente((c, m) => gerarLinkAprovacao(c, m, marcaDe(c)), "Link de aprovação")],
+    ["⬇ PDF do mês", () => acaoCliente((c, m) => exportarPDF(c, m, marcaDe(c)), "Exportar PDF")]
+  ]) : null;
+
+  const navegador = el("div", { class: "navegador-mes", hidden: !calendario },
+    el("button", { class: "icone", "aria-label": "Mês anterior", onClick: () => mudarMes(-1) }, "‹"),
+    el("strong", {}, nomeMes(estado.mes)),
+    el("button", { class: "icone", "aria-label": "Próximo mês", onClick: () => mudarMes(1) }, "›"),
+    el("button", { class: "secundario mini", onClick: () => { estado.mes = hojeISO().slice(0, 7); renderizar(); } }, "Hoje"));
+
+  const nFiltros = [estado.busca, estado.cliente, estado.responsavel, estado.camada !== "tudo" ? 1 : ""].filter(Boolean).length;
+  const filtros = el("div", { class: `filtros filtros-tarefas ${estado.filtrosAbertos ? "aberto" : ""}` },
+    el("input", { id: "busca-tarefas", type: "search", placeholder: "Buscar…", value: estado.busca || "",
+      onInput: (e) => { estado.busca = e.target.value; clearTimeout(estado.tBusca); estado.tBusca = setTimeout(() => { renderizar(); document.getElementById("busca-tarefas")?.focus(); }, 300); } }),
+    el("select", { "aria-label": "Cliente", onChange: (e) => { estado.cliente = e.target.value; estado.marca = null; renderizar(); } },
+      opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (estado.cliente || "") }, v ? r : "Todos os clientes"))),
+    marcas.length ? el("select", { "aria-label": "Marca", onChange: (e) => { estado.marca = e.target.value === "*" ? null : e.target.value; renderizar(); } },
+      [["*", "Todas as marcas"], ...marcas.map((m) => [m.id, m.nome]), ["", "Institucional do grupo"]]
+        .map(([v, r]) => el("option", { value: v, selected: v === (estado.marca ?? "*") }, r))) : null,
+    seletorResponsavel(estado, renderizar),
+    abas([["tudo", "Tudo"], ...(pode("conteudo") ? [["conteudo", "Posts"]] : []), ["tarefas", "Tarefas"], ["compromissos", "Compromissos"]], estado.camada,
+      (m) => { estado.camada = m; renderizar(); }));
+
+  return [
+    cabecalho("Tarefas", atrasadas ? `${atrasadas} atrasada(s)` : "Tudo em dia", acoesMes, novo),
+    el("div", { class: "barra-visoes" }, visoesTarefas(estado, renderizar), navegador,
+      el("button", { class: "secundario mini botao-filtros", onClick: () => { estado.filtrosAbertos = !estado.filtrosAbertos; renderizar(); } },
+        `Filtros${nFiltros ? ` (${nFiltros})` : ""}`)),
+    filtros
+  ];
+}
+
 export function render({ params, estado, renderizar }) {
   // Modo planejar: #/calendario/<cliente>/<mês>/planejar
   if (params[2] === "planejar" && params[0] && pode("conteudo")) {
@@ -108,32 +188,23 @@ export function render({ params, estado, renderizar }) {
     if (params[0]) estado.cliente = params[0];
     if (/^\d{4}-\d{2}$/.test(params[1] || "")) estado.mes = params[1];
   }
-  estado.mes ??= hojeISO().slice(0, 7);
-  // No celular a grade do mês fica apertada: começa na lista
-  estado.modo ??= window.matchMedia("(max-width: 760px)").matches ? "lista" : "mes";
-  estado.camada ??= "tudo";
-  if (!pode("conteudo") && estado.camada === "conteudo") estado.camada = "tudo";
-  if (estado.responsavel === undefined) estado.responsavel = ehAdmin() ? "" : eu.nome; // igual em Tarefas
+  const topo = topoTarefas(estado, renderizar, { calendario: true });
+  // No celular a grade do mês fica apertada: vira lista do mês
+  estado.modo = window.matchMedia("(max-width: 760px)").matches ? "lista" : "mes";
   const verPosts = pode("conteudo") && ["tudo", "conteudo"].includes(estado.camada);
   const verTarefas = ["tudo", "tarefas"].includes(estado.camada);
   const verCompromissos = ["tudo", "compromissos"].includes(estado.camada);
+  const busca = normalizar(estado.busca);
   const doResponsavel = (t) => !estado.responsavel || (t.responsavel || "") === estado.responsavel;
+  const daMarca = (t) => estado.marca == null || (t.marcaId || "") === estado.marca;
   const [ano, mes] = estado.mes.split("-").map(Number);
   const posts = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && dataPost(t));
-  const marcas = estado.cliente ? marcasDo(estado.cliente) : [];
-  if (!marcas.length) estado.marca = null;
   const filtrados = posts.filter((t) =>
-    (!estado.cliente || t.clienteId === estado.cliente) && doResponsavel(t) &&
-    (estado.marca == null || (t.marcaId || "") === estado.marca) &&
-    (!estado.status || (t.statusConteudo || "ideia") === estado.status));
-
-  const mudarMes = (n) => { const d = new Date(ano, mes - 1 + n, 1); estado.mes = hojeISO(d).slice(0, 7); renderizar(); };
-  const set = (k) => (e) => { estado[k] = e.target.value; renderizar(); };
+    (!estado.cliente || t.clienteId === estado.cliente) && doResponsavel(t) && daMarca(t) && bateBusca(t, busca));
 
   const doMes = filtrados.filter((t) => dataPost(t).startsWith(estado.mes));
   const tarefasCal = verTarefas ? dados.tarefas.filter((t) => t.tipo !== TIPO_CONTEUDO && t.prazo && tarefaVisivel(t) &&
-    (!estado.cliente || t.clienteId === estado.cliente) && doResponsavel(t)) : [];
-  const contagem = STATUS_CONTEUDO.map(([s, r]) => [r, doMes.filter((t) => (t.statusConteudo || "ideia") === s).length]).filter(([, n]) => n);
+    (!estado.cliente || t.clienteId === estado.cliente) && doResponsavel(t) && daMarca(t) && bateBusca(t, busca)) : [];
 
   // Legenda: clientes com posts no mês (clique filtra)
   const doMesTodos = posts.filter((t) => dataPost(t).startsWith(estado.mes));
@@ -146,33 +217,9 @@ export function render({ params, estado, renderizar }) {
       onClick: () => { estado.cliente = estado.cliente === id ? "" : id; renderizar(); }
     }, el("span", { class: "bolinha" }), c?.nome || "Sem cliente", el("small", {}, n)))) : null;
 
-  const acaoCliente = async (fn, titulo) => {
-    const r = estado.cliente ? { clienteId: estado.cliente, mes: estado.mes } : await escolherClienteEMes(titulo, { mes: estado.mes });
-    if (r) fn(r.clienteId, r.mes);
-  };
-
-  const filtros = el("div", { class: "filtros" },
-    estado.cliente && pode("conteudo") ? abas([["ver", "Calendário"], ["planejar", "Planejar mês"]], "ver",
-      () => (location.hash = planejamento.linkPlano(estado.cliente, estado.mes))) : null,
-    el("div", { class: "navegador-mes" },
-      el("button", { class: "icone", "aria-label": "Mês anterior", onClick: () => mudarMes(-1) }, "‹"),
-      el("strong", {}, nomeMes(estado.mes)),
-      el("button", { class: "icone", "aria-label": "Próximo mês", onClick: () => mudarMes(1) }, "›"),
-      el("button", { class: "secundario mini", onClick: () => { estado.mes = hojeISO().slice(0, 7); renderizar(); } }, "Hoje")),
-    el("select", { onChange: (e) => { estado.cliente = e.target.value; estado.marca = null; renderizar(); }, "aria-label": "Cliente" },
-      opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (estado.cliente || "") }, v ? r : "Todos os clientes"))),
-    marcas.length ? el("select", { "aria-label": "Marca", onChange: (e) => { estado.marca = e.target.value === "*" ? null : e.target.value; renderizar(); } },
-      [["*", "Todas as marcas"], ...marcas.map((m) => [m.id, m.nome]), ["", "Institucional do grupo"]]
-        .map(([v, r]) => el("option", { value: v, selected: v === (estado.marca ?? "*") }, r))) : null,
-    seletorResponsavel(estado, renderizar),
-    !verPosts ? null : el("select", { onChange: set("status"), "aria-label": "Etapa" },
-      el("option", { value: "" }, "Todas as etapas"), STATUS_CONTEUDO.map(([v, r]) => el("option", { value: v, selected: v === estado.status }, r))),
-    abas([["tudo", "Tudo"], ...(pode("conteudo") ? [["conteudo", "Posts"]] : []), ["tarefas", "Tarefas"], ["compromissos", "Compromissos"]], estado.camada, (m) => { estado.camada = m; renderizar(); }),
-    abas([["mes", "Grade"], ["lista", "Lista do mês"]], estado.modo, (m) => { estado.modo = m; renderizar(); }));
-
   const [ini, fimP] = [`${estado.mes}-01`, addDias(`${estado.mes}-01`, 41)];
   const compromissosDoPeriodo = compromissosEntre(addDias(ini, -7), fimP)
-    .filter((x) => !estado.cliente || x.c.clienteId === estado.cliente);
+    .filter((x) => (!estado.cliente || x.c.clienteId === estado.cliente) && (!busca || normalizar(x.c.titulo || "").includes(busca)));
 
   let corpo;
   if (estado.modo === "mes") {
@@ -230,17 +277,9 @@ export function render({ params, estado, renderizar }) {
       : vazio("Nada neste mês."));
   }
 
-  return el("div", { class: "tela" },
-    cabecalho("Tarefas",
-      contagem.length && verPosts ? contagem.map(([r, n]) => `${n} ${r.toLowerCase()}`).join(" · ") : "Clique em um dia para criar",
-      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => (location.hash = planejamento.linkPlano(c, m)), "Planejar mês") }, "☷ Planejar mês") : null,
-      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => gerarLinkAprovacao(c, m, estado.cliente === c ? estado.marca ?? undefined : undefined), "Link de aprovação") }, "🔗 Link de aprovação") : null,
-      pode("conteudo") ? el("button", { class: "secundario", onClick: () => acaoCliente((c, m) => exportarPDF(c, m, estado.cliente === c ? estado.marca ?? undefined : undefined), "Exportar PDF") }, "⬇ PDF") : null,
-      el("button", { class: "secundario", onClick: () => abrirCompromisso({ clienteId: estado.cliente || "" }) }, "+ Compromisso"),
-      el("button", { class: pode("conteudo") ? "secundario" : "destaque", onClick: () => abrirTarefa({ clienteId: estado.cliente || "", prazo: hojeISO() }) }, "+ Tarefa"),
-      pode("conteudo") ? el("button", { class: "destaque", onClick: () => novoPost({ clienteId: estado.cliente || "", marcaId: estado.marca || "" }) }, "+ Novo post") : null),
-    visoesTarefas(estado, renderizar),
+  return el("div", { class: "tela tela-tarefas" },
+    ...topo,
     verCompromissos ? avisoPendentes() : null,
-    filtros, verPosts ? legenda : null, corpo,
-    el("p", { class: "nota" }, "Posts aparecem no dia da publicação e as outras tarefas (○) no dia do prazo. Compromissos (◷) são reuniões, gravações e visitas: só eles vão para a Google Agenda. Para exportar ou planejar, filtre um cliente ou escolha na hora."));
+    verPosts ? legenda : null, corpo,
+    el("p", { class: "nota" }, "Posts aparecem no dia da publicação e as outras tarefas (○) no dia do prazo. Compromissos (◷) são reuniões, gravações e visitas: só eles vão para a Google Agenda. Planejar, link de aprovação e PDF ficam em Ações do mês."));
 }

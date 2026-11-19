@@ -839,3 +839,46 @@ img.avatar { object-fit: cover; padding: 0; }
 .botoes-escolha .escolha:hover { border-color: var(--hyper-roxo); background: var(--cor-primaria-clara); }
 .botoes-escolha .escolha.ativo { background: var(--hyper-roxo); color: var(--hyper-branco); border-color: var(--hyper-roxo); }
 .botoes-escolha .escolha[data-valor="concluido"].ativo, .botoes-escolha .escolha[data-valor="publicado"].ativo { background: var(--cor-confirmar); border-color: var(--cor-confirmar); }
+
+/* Logo leva para o Hoje */
+a.marca, .logo-movel { display: block; width: fit-content; border-radius: var(--raio-pequeno); }
+a.marca:focus-visible, .logo-movel:focus-visible { outline: 2px solid var(--hyper-amarelo); outline-offset: 4px; }
+.logo-movel { display: flex; align-items: center; }
+
+/* Tarefas: topo fixo igual nas quatro visões */
+.tela-tarefas .tela-topo { min-height: 64px; }
+.barra-visoes { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 4px 0 12px; min-height: 44px; }
+.barra-visoes .visoes-tarefas { margin: 0; }
+.barra-visoes .navegador-mes { margin-left: auto; }
+.barra-visoes .navegador-mes[hidden] { display: none; }
+.barra-visoes .navegador-mes strong { min-width: 150px; text-align: center; }
+.botao-filtros { display: none; }
+.filtros-tarefas { min-height: 44px; }
+.filtros-tarefas input[type="search"] { width: 220px; }
+.titulo-com-filtro { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.titulo-com-filtro h2 { margin: 0; }
+.titulo-com-filtro select, .coluna header select.mini { width: auto; max-width: 150px; padding: 4px 8px; font-size: 12px; }
+
+/* Menu suspenso (+ Novo, Ações do mês) */
+.menu-suspenso { position: relative; }
+.menu-suspenso-lista {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 200px; display: grid; padding: 6px;
+  background: var(--cor-superficie); border: 1px solid var(--hyper-gelo); border-radius: var(--raio-pequeno); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+}
+.menu-suspenso-lista[hidden] { display: none; }
+.menu-suspenso-lista button {
+  background: none; color: var(--cor-texto); text-align: left; padding: 9px 12px; border-radius: 6px; font-weight: 600; white-space: nowrap;
+}
+.menu-suspenso-lista button:hover { background: var(--cor-primaria-clara); color: var(--hyper-roxo); }
+
+@media (max-width: 760px) {
+  .tela-tarefas .tela-acoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tela-tarefas .tela-acoes > .menu-suspenso { grid-column: auto; }
+  .tela-tarefas .tela-acoes .menu-suspenso > button { width: 100%; }
+  .barra-visoes { gap: 8px; }
+  .barra-visoes .navegador-mes { margin-left: 0; order: 3; width: 100%; justify-content: center; }
+  .botao-filtros { display: inline-flex; margin-left: auto; }
+  .filtros-tarefas { display: none; }
+  .filtros-tarefas.aberto { display: flex; }
+  .filtros-tarefas input[type="search"] { width: 100%; }
+}

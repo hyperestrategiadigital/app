@@ -1,25 +1,26 @@
 // Tarefas: quadro por status (A fazer / Em andamento / Concluído) ou lista, com filtros.
 import { quitarCobranca } from "../recorrencias.js";
-import { el, hojeISO, addDias, normalizar, vazio } from "../ui.js";
-import { dados, atualizar, opcoesClientes, registrarAtividade } from "../db.js";
-import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, visoesTarefas, seletorResponsavel, opcoesResponsaveis } from "./componentes.js";
-import { novoPost } from "./calendario.js";
-import { eu, ehAdmin, tarefaVisivel, pode } from "../permissoes.js";
-import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, etapaDoStatus } from "../constantes.js";
+import { el, hojeISO, addDias, normalizar, vazio, fmtData } from "../ui.js";
+import { dados, atualizar, registrarAtividade } from "../db.js";
+import { cartaoTarefa, atrasada, abrirTarefa, opcoesResponsaveis, seloCliente } from "./componentes.js";
+import { topoTarefas, bateBusca } from "./calendario.js";
+import { tarefaVisivel } from "../permissoes.js";
+import { STATUS_TAREFA, TIPO_CONTEUDO, etapaDoStatus } from "../constantes.js";
+import { compromissosEntre } from "../agenda.js";
+import { abrirCompromisso } from "../compromissos.js";
 
 export function render({ estado, renderizar }) {
   // Tarefas e Calendário compartilham o estado (filtros); aqui ficam as visões Quadro, Lista e Carga da equipe
   if (!estado.visao || estado.visao === "calendario") estado.visao = "quadro";
   estado.periodoConcluidas ??= "30";
   const f = estado;
-
-  if (f.responsavel === undefined) f.responsavel = ehAdmin() ? "" : eu.nome; // quem não é admin começa vendo as próprias
+  const topo = topoTarefas(f, renderizar);
   const busca = normalizar(f.busca);
-  const filtradas = dados.tarefas.filter((t) => tarefaVisivel(t) &&
+  const daCamada = (t) => f.camada === "conteudo" ? t.tipo === TIPO_CONTEUDO : f.camada === "tarefas" ? t.tipo !== TIPO_CONTEUDO : true;
+  const filtradas = dados.tarefas.filter((t) => tarefaVisivel(t) && daCamada(t) &&
     (!f.cliente || t.clienteId === f.cliente) &&
-    (!f.tipo || t.tipo === f.tipo) &&
-    (!f.responsavel || (t.responsavel || "") === f.responsavel) &&
-    (!busca || normalizar(t.titulo + " " + (t.checklist || []).map((i) => i.texto).join(" ") + " " + (t.notas || "")).includes(busca)));
+    (f.marca == null || (t.marcaId || "") === f.marca) &&
+    (!f.responsavel || (t.responsavel || "") === f.responsavel) && bateBusca(t, busca));
 
   const limiteConcluidas = f.periodoConcluidas === "tudo" ? "" : addDias(hojeISO(), -Number(f.periodoConcluidas));
   const ordenarPrazo = (a, b) => (a.prazo || "9999").localeCompare(b.prazo || "9999");
@@ -29,23 +30,23 @@ export function render({ estado, renderizar }) {
     concluido: filtradas.filter((t) => t.status === "concluido" && (!limiteConcluidas || (t.concluidoEm || t.prazo || "") >= limiteConcluidas))
       .sort((a, b) => (b.concluidoEm || b.prazo || "").localeCompare(a.concluidoEm || a.prazo || ""))
   };
-  const nAtrasadas = filtradas.filter(atrasada).length;
   const set = (k) => (e) => { f[k] = e.target.value; renderizar(); };
-
-  const filtros = el("div", { class: "filtros" },
-    el("input", { id: "busca-tarefas", type: "search", placeholder: "Buscar tarefa ou entrega...", value: f.busca || "", onInput: set("busca") }),
-    el("select", { onChange: set("cliente"), "aria-label": "Cliente" },
-      opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (f.cliente || "") }, v ? r : "Todos os clientes"))),
-    el("select", { onChange: set("tipo"), "aria-label": "Tipo" },
-      el("option", { value: "" }, "Todos os tipos"), TIPOS_TAREFA.map((t) => el("option", { value: t, selected: t === f.tipo }, t))),
-    seletorResponsavel(f, renderizar));
 
   const seletorPeriodo = el("select", { class: "mini", onChange: set("periodoConcluidas"), "aria-label": "Período das concluídas" },
     [["7", "últimos 7 dias"], ["30", "últimos 30 dias"], ["90", "últimos 90 dias"], ["tudo", "todas"]]
       .map(([v, r]) => el("option", { value: v, selected: v === f.periodoConcluidas }, r)));
 
   let corpo;
-  if (f.visao === "quadro") {
+  if (f.camada === "compromissos") {
+    // Compromissos não são tarefas: aqui aparecem os próximos 60 dias (no calendário, no dia de cada um)
+    const proximos = compromissosEntre(hojeISO(), addDias(hojeISO(), 60))
+      .filter((x) => (!f.cliente || x.c.clienteId === f.cliente) && (!busca || normalizar(x.c.titulo || "").includes(busca)));
+    corpo = el("div", { class: "lista" }, el("h2", {}, `Próximos compromissos (${proximos.length})`),
+      proximos.length ? proximos.map((x) => el("div", { class: "linha-tabela linha-compromisso", onClick: () => abrirCompromisso(x.c) },
+        el("span", { class: "data-mini" }, `${fmtData(x.data, true)}${x.c.hora ? " " + x.c.hora : ""}`),
+        seloCliente(x.c.clienteId), el("strong", {}, x.c.titulo),
+        el("span", { class: "etiqueta compromisso" }, x.c.tipo || "Compromisso"))) : vazio("Nenhum compromisso nos próximos 60 dias."));
+  } else if (f.visao === "quadro") {
     corpo = el("div", { class: "quadro" }, STATUS_TAREFA.map(([st, rotulo]) =>
       el("section", {
         class: "coluna", dataset: { status: st },
@@ -78,15 +79,11 @@ export function render({ estado, renderizar }) {
     corpo = el("div", { class: "lista" },
       el("h2", {}, `Abertas (${abertas.length})`),
       abertas.length ? abertas.map((t) => cartaoTarefa(t)) : vazio("Nenhuma tarefa aberta com esses filtros."),
-      el("h2", { class: "com-acao" }, `Concluídas (${colunas.concluido.length})`, seletorPeriodo),
+      el("div", { class: "titulo-com-filtro" }, el("h2", {}, `Concluídas (${colunas.concluido.length})`), seletorPeriodo),
       colunas.concluido.slice(0, 300).map((t) => cartaoTarefa(t)));
   }
 
-  return el("div", { class: "tela" },
-    cabecalho("Tarefas", nAtrasadas ? `${nAtrasadas} atrasada(s)` : "Tudo em dia",
-      pode("conteudo") ? el("button", { class: "secundario", onClick: () => novoPost({ clienteId: f.cliente || "" }) }, "+ Novo post") : null,
-      el("button", { class: "destaque", onClick: () => abrirTarefa({ clienteId: f.cliente || "", prazo: hojeISO() }) }, "+ Nova tarefa")),
-    visoesTarefas(f, renderizar), filtros, corpo);
+  return el("div", { class: "tela tela-tarefas" }, ...topo, corpo);
 }
 
 /** Quantas tarefas e posts abertos cada pessoa tem: atrasadas e por dia nos próximos 7 dias. */
