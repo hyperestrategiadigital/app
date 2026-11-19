@@ -1,6 +1,6 @@
 // Tráfego pago: contas de anúncio por cliente, verba e diário de manutenções.
 import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, diasAte, linkExterno, vazio, fecharModais } from "../ui.js";
-import { dados, criar, atualizar, excluir, opcoesClientes, clientesAtivos } from "../db.js";
+import { dados, criar, atualizar, excluir, opcoesClientes, clientesAtivos, marcasDo } from "../db.js";
 import { cabecalho, seloCliente, corCliente } from "./componentes.js";
 import { PLATAFORMAS } from "../constantes.js";
 
@@ -24,6 +24,9 @@ export function abrirConta(conta = {}) {
   const editando = !!conta.id;
   return formulario(editando ? "Editar conta de anúncio" : "Nova conta de anúncio", [
     { nome: "clienteId", rotulo: "Cliente", tipo: "select", opcoes: opcoesClientes(false), obrigatorio: true, largura: "metade" },
+    // Grupo: de qual marca é a conta (vazio = do grupo todo)
+    { nome: "marcaId", rotulo: "Marca", tipo: "select", largura: "metade",
+      opcoesDe: (v) => [["", "Do grupo todo"], ...marcasDo(v.clienteId).map((m) => [m.id, m.nome])], mostrarSe: (v) => marcasDo(v.clienteId).length > 0 },
     { nome: "plataforma", rotulo: "Plataforma", tipo: "select", opcoes: PLATAFORMAS, largura: "metade" },
     { nome: "idConta", rotulo: "ID da conta", dica: "Meta: act_123... · Google: 123-456-7890", largura: "metade" },
     { nome: "verbaMensal", rotulo: "Verba mensal (R$)", tipo: "number", largura: "metade" },
@@ -32,7 +35,10 @@ export function abrirConta(conta = {}) {
     { nome: "ativo", rotulo: "Conta ativa", tipo: "checkbox", padrao: true }
   ], conta, {
     extras: editando ? [botaoExcluir("contasAds", conta, "Excluir esta conta de anúncio?")] : [],
-    aoSalvar: async (v) => { editando ? await atualizar("contasAds", conta.id, v) : await criar("contasAds", v); avisar("Conta salva."); }
+    aoSalvar: async (v) => {
+      if (!marcasDo(v.clienteId).some((m) => m.id === v.marcaId)) v.marcaId = "";
+      editando ? await atualizar("contasAds", conta.id, v) : await criar("contasAds", v); avisar("Conta salva.");
+    }
   });
 }
 

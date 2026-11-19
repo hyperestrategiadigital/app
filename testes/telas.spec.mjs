@@ -28,12 +28,12 @@ const BANCO = {
   }
 };
 
-async function abrir(page, { usuario, membros, semMenu = false } = {}) {
+async function abrir(page, { usuario, membros, semMenu = false, extra = null } = {}) {
   const erros = [];
   if (usuario) await page.addInitScript((u) => { window.__usuario = u; }, usuario);
   page.on("pageerror", (e) => erros.push(String(e)));
   await rotearMocks(page);
-  return abrirDepois(page, { membros, semMenu, erros });
+  return abrirDepois(page, { membros, semMenu, erros, extra });
 }
 
 async function rotearMocks(page) {
@@ -45,8 +45,10 @@ async function rotearMocks(page) {
   });
 }
 
-async function abrirDepois(page, { membros, semMenu, erros }) {
-  const banco = membros ? { ...BANCO, [`${E}/membros`]: membros } : BANCO;
+async function abrirDepois(page, { membros, semMenu, erros, extra = null }) {
+  const banco = { ...BANCO, ...(membros ? { [`${E}/membros`]: membros } : {}) };
+  // extra: coleções a mais ou a juntar (ex.: { tarefas: {...} })
+  for (const [col, docs] of Object.entries(extra || {})) banco[`${E}/${col}`] = { ...(banco[`${E}/${col}`] || {}), ...docs };
   await page.addInitScript((b) => { if (!localStorage.getItem("fake-fs-store")) localStorage.setItem("fake-fs-store", JSON.stringify(b)); }, banco);
   await page.goto("/");
   if (semMenu) await page.waitForTimeout(500);
@@ -202,7 +204,7 @@ test("administrador adiciona usuário por e-mail e ele entra já liberado, só c
   await admin.fill("#f-email", "Luisa@Exemplo.com");
   await admin.locator(".modal .chip-check", { hasText: "Conteúdo" }).locator("input").check();
   await admin.locator(".modal select[aria-label=Clientes]").selectOption("alguns");
-  await admin.locator(".modal .lista-clientes-acesso .chip-check", { hasText: "Loja Exemplo" }).locator("input").check();
+  await admin.locator(".modal .lista-clientes-acesso:visible .chip-check", { hasText: "Loja Exemplo" }).locator("input").check();
   await admin.click(".modal button[type=submit]");
   await expect(admin.locator("#conteudo")).toContainText("Convites aguardando");
   const banco = await admin.evaluate(() => localStorage.getItem("fake-fs-store"));
@@ -245,7 +247,7 @@ test("primeiro acesso sem convite: pede acesso e o administrador libera", async 
   await admin.goto("/#/usuarios");
   const cartao = admin.locator(".cartao-membro", { hasText: "Matheus" });
   await expect(cartao).toContainText("Aguardando liberação");
-  await cartao.locator(".destaque-admin input").check();
+  await cartao.locator(".tipo-acesso label", { hasText: "Administrador" }).locator("input").check();
   await cartao.getByRole("button", { name: "Liberar acesso" }).click();
   await expect.poll(() => admin.evaluate(() => window.__store["espacos/hyper/membros"].matheus)).toMatchObject({ status: "ativo", papel: "admin", pedido: null });
   await ctx2.close();
@@ -639,7 +641,7 @@ test("grupo: escolhe a marca antes e a ficha fica igual à de um cliente comum",
   await expect(page).toHaveURL(/#\/clientes\/grupo\/marca\/ma/);
   await expect(page.locator("#conteudo h1")).toHaveText("Marca A");
   const abas = await page.locator(".ficha .abas [role=tab]").allTextContents();
-  expect(abas).toEqual(["Marca", "Contas", "Resultados"]); // contrato, tráfego e financeiro ficam no geral do grupo
+  expect(abas).toEqual(["Marca", "Contas", "Resultados", "Tráfego pago"]); // contrato e financeiro ficam no geral do grupo
   await page.getByRole("tab", { name: "Contas" }).click();
   await expect(page.locator(".cartao-conta")).toHaveCount(1);
   await page.getByRole("button", { name: "Editar redes" }).click();
@@ -665,4 +667,65 @@ test("grupo: escolhe a marca antes e a ficha fica igual à de um cliente comum",
   await page.getByRole("tab", { name: "Contas" }).click();
   await page.getByRole("button", { name: "Editar redes" }).click();
   await expect(page.locator("#f-googleMeuNegocio")).toBeVisible();
+});
+
+test("portal do cliente: só as marcas dele, aprova, pede ajuste e sugere post", async ({ page }) => {
+  const erros = await abrir(page, {
+    usuario: { uid: "cli", displayName: "Carla Cliente", email: "carla@exemplo.com" }, semMenu: true,
+    membros: {
+      hyper: { nome: "Hyper", email: "hyper@exemplo.com", papel: "admin", status: "ativo" },
+      cli: { nome: "Carla Cliente", email: "carla@exemplo.com", papel: "cliente", status: "ativo", permissoes: [], acessoClientes: "alguns", clientes: ["grupo"], marcas: ["ma"] }
+    },
+    extra: {
+      marcas: { ma: { nome: "Marca A", clienteId: "grupo", ativo: true, paleta: ["#2D6CDF"], tomDeVoz: "Animado e próximo", instagram: "@marcaa" },
+        mb: { nome: "Marca B", clienteId: "grupo", ativo: true, paleta: ["#B4415A"] } },
+      tarefas: {
+        pa: { titulo: "Post para aprovar", tipo: "Conteúdo", clienteId: "grupo", marcaId: "ma", status: "andamento", statusConteudo: "aprovacao", dataPublicacao: dia(3), prazo: dia(3), copy: "Legenda do post A", checklist: [] },
+        pc: { titulo: "Post com ajuste", tipo: "Conteúdo", clienteId: "grupo", marcaId: "ma", status: "andamento", statusConteudo: "aprovacao", dataPublicacao: dia(4), prazo: dia(4), checklist: [] },
+        pb: { titulo: "Post da outra marca", tipo: "Conteúdo", clienteId: "grupo", marcaId: "mb", status: "andamento", statusConteudo: "aprovacao", dataPublicacao: dia(3), prazo: dia(3), checklist: [] }
+      }
+    }
+  });
+  await expect(page.locator("#menu")).toContainText("Início");
+  const menu = await page.locator("#menu a").allTextContents();
+  expect(menu.join(" ")).not.toMatch(/Tarefas|Financeiro|Clientes|Ajustes/);
+  await expect(page.locator("#conteudo")).toContainText("Para aprovar (2)");
+  await expect(page.locator("#conteudo")).not.toContainText("Post da outra marca");
+  await expect(page.locator("#conteudo")).not.toContainText("Revisar campanhas");
+
+  await page.locator(".portal-post", { hasText: "Post para aprovar" }).getByRole("button", { name: /Aprovar/ }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pa.statusConteudo)).toBe("aprovado");
+
+  await page.locator(".portal-post", { hasText: "Post com ajuste" }).getByRole("button", { name: "Pedir ajuste" }).click();
+  await page.fill("#f-comentario", "Trocar a foto");
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pc.aprovacaoCliente?.comentario)).toBe("Trocar a foto");
+  expect(await page.evaluate(() => window.__store["espacos/hyper/tarefas"].pc.statusConteudo)).toBe("producao");
+
+  await page.getByRole("button", { name: "+ Sugerir um post" }).click();
+  await page.fill("#f-titulo", "Ideia da Carla");
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Ideia da Carla")))
+    .toMatchObject({ tipo: "Conteúdo", clienteId: "grupo", marcaId: "ma", statusConteudo: "ideia", sugeridoPeloCliente: "Carla Cliente" });
+
+  await page.goto("/#/marca");
+  await expect(page.locator("#conteudo")).toContainText("Animado e próximo");
+  await page.goto("/#/financeiro"); // tela da equipe: volta para o Início
+  await expect(page.locator("#conteudo h1")).toContainText("Olá, Carla");
+  expect(erros).toEqual([]);
+});
+
+test("administrador adiciona uma pessoa do cliente com uma marca só; financeiro não é área da equipe", async ({ page }) => {
+  await abrir(page, { extra: { marcas: { ma: { nome: "Marca A", clienteId: "grupo", ativo: true, paleta: [] } } } });
+  await page.goto("/#/usuarios");
+  await page.getByRole("button", { name: /Adicionar usuário/ }).click();
+  await expect(page.locator(".modal .chip-check", { hasText: "Financeiro" })).toHaveCount(0);
+  await page.fill("#f-nome", "Carla");
+  await page.fill("#f-email", "Carla@Exemplo.com");
+  await page.locator(".modal .tipo-acesso label", { hasText: "Cliente" }).click();
+  await page.locator(".modal .lista-clientes-acesso:visible .chip-check", { hasText: "Grupo Exemplo" }).locator("input").check();
+  await page.locator(".modal .lista-marcas-acesso .chip-check", { hasText: "Marca A" }).locator("input").check();
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/convites"]?.["carla@exemplo.com"]))
+    .toMatchObject({ papel: "cliente", acessoClientes: "alguns", clientes: ["grupo"], marcas: ["ma"], permissoes: [] });
 });

@@ -166,7 +166,7 @@ export function abrirTarefa(tarefa = {}) {
 /** Pessoas mencionadas com @PrimeiroNome (ou @Nome Completo) no texto. */
 function mencionados(texto) {
   const t = normalizar(texto);
-  return dados.membros.filter((m) => m.status === "ativo" && m.id !== eu.uid && m.nome && m.email &&
+  return dados.membros.filter((m) => m.status === "ativo" && m.papel !== "cliente" && m.id !== eu.uid && m.nome && m.email &&
     (t.includes("@" + normalizar(m.nome)) || t.includes("@" + normalizar(m.nome.split(" ")[0]))));
 }
 

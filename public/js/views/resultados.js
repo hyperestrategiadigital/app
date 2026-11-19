@@ -25,7 +25,8 @@ function periodo(chave) {
 
 const cache = new Map(); // chave → { carregando, dados, erro }
 
-export function abaResultados(c, estado, renderizar) {
+/** `leitura`: portal do cliente (sem trocar a página nem abrir o post da equipe). */
+export function abaResultados(c, estado, renderizar, { leitura = false } = {}) {
   estado.resPeriodo ??= "30";
   // A marca é a escolhida ao abrir a ficha (num grupo); vale para as abas Marca, Contas e Resultados
   const { marca } = marcaEscolhida(c, estado);
@@ -46,7 +47,7 @@ export function abaResultados(c, estado, renderizar) {
         catch (erro) { avisar(erro.message, "erro"); e.currentTarget.disabled = false; }
       } }, "Conectar Facebook / Instagram")));
 
-  if (!pageId) return el("div", {}, seletorMarca, ligarPagina(c, marca, renderizar));
+  if (!pageId) return el("div", {}, seletorMarca, leitura ? vazio("A página desta marca ainda não foi ligada aos relatórios. A Hyper liga para você.") : ligarPagina(c, marca, renderizar));
 
   const [de, ate] = periodo(estado.resPeriodo);
   const chave = `${pageId}|${de}|${ate}`;
@@ -64,12 +65,12 @@ export function abaResultados(c, estado, renderizar) {
     el("span", { class: "subtitulo" }, `${fmtData(de, true)} a ${fmtData(ate, true)} · conectado como ${contaMeta()}`),
     el("span", { class: "espaco" }),
     el("button", { class: "link", onClick: () => { cache.delete(chave); renderizar(); } }, "Atualizar"),
-    el("button", { class: "link", onClick: async () => { await atualizar(marca ? "marcas" : "clientes", alvo.id, { facebookPageId: "" }); renderizar(); } }, "Trocar página"));
+    leitura ? null : el("button", { class: "link", onClick: async () => { await atualizar(marca ? "marcas" : "clientes", alvo.id, { facebookPageId: "" }); renderizar(); } }, "Trocar página"));
 
   if (item.carregando) return el("div", {}, seletorMarca, topo, el("p", { class: "subtitulo" }, "Buscando os números na Meta…"));
   if (item.erro) return el("div", {}, seletorMarca, topo, el("p", { class: "faixa-alerta" }, "Não consegui ler os resultados: ", item.erro));
   const r = item.dados;
-  return el("div", { class: "aba-resultados" }, seletorMarca, topo, painel(r, c, marca));
+  return el("div", { class: "aba-resultados" }, seletorMarca, topo, painel(r, c, marca, leitura));
 }
 
 /** Escolher qual página do Facebook (e o Instagram ligado a ela) é deste cliente ou marca. */
@@ -90,7 +91,7 @@ function ligarPagina(c, marca, renderizar) {
   return caixa;
 }
 
-function painel(r, c, marca) {
+function painel(r, c, marca, leitura = false) {
   const blocoMetricas = (titulo, lista) => el("div", {},
     el("h3", {}, titulo),
     el("div", { class: "resumo resumo-metricas" }, lista.map((m) => el("div", { class: "numero", title: m.erro || "" },
@@ -126,7 +127,7 @@ function painel(r, c, marca) {
             el("div", { class: "cartao-meta" },
               [["views", "👁"], ["reach", "alcance"], ["likes", "❤"], ["comments", "💬"], ["shares", "↗"], ["saved", "🔖"]]
                 .filter(([k]) => p.numeros[k] != null).map(([k, r]) => el("span", { class: "etiqueta", title: k }, `${r} ${fmtNum(p.numeros[k])}`))),
-            doApp ? el("button", { class: "link", onClick: () => abrirTarefa(doApp) }, `Post do app: ${doApp.titulo}`) : null));
+            doApp ? (leitura ? el("span", { class: "subtitulo" }, `Post: ${doApp.titulo}`) : el("button", { class: "link", onClick: () => abrirTarefa(doApp) }, `Post do app: ${doApp.titulo}`)) : null));
       })) : vazio("Nenhum post no Instagram neste período.")
     ] : null);
 }

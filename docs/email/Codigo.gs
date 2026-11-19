@@ -115,7 +115,7 @@ function apagarSegredo() { P.deleteProperty('SEGREDO'); }
 
 function resumoDiario(somentePara) {
   const hoje = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd');
-  const membros = lerColecao('membros').filter((m) => m.status === 'ativo' && m.email && m.resumoDiario !== false);
+  const membros = lerColecao('membros').filter((m) => m.status === 'ativo' && m.papel !== 'cliente' && m.email && m.resumoDiario !== false);
   const tarefas = lerColecao('tarefas').filter((t) => t.status !== 'concluido');
   const compromissos = lerColecao('compromissos').filter((c) => ocorreEm(c, hoje));
   const clientes = {};
@@ -181,7 +181,7 @@ function sincronizarAgenda() {
     const desde = new Date(Date.now() - 30 * 86400000), ate = new Date(Date.now() + 400 * 86400000);
     // E-mails: membros (e-mail da agenda escolhido em Minha conta) + equipe sem conta
     const emailDe = {};
-    lerColecao('membros').filter((m) => m.status === 'ativo').forEach((m) => { if (m.nome) emailDe[m.nome] = m.emailAgenda || m.email; });
+    lerColecao('membros').filter((m) => m.status === 'ativo' && m.papel !== 'cliente').forEach((m) => { if (m.nome) emailDe[m.nome] = m.emailAgenda || m.email; });
     const equipe = lerColecao('config').find((c) => c.id === 'equipe');
     ((equipe && equipe.pessoas) || []).forEach((p) => { if (p.nome && p.email && !emailDe[p.nome]) emailDe[p.nome] = p.email; });
     const clientes = {};

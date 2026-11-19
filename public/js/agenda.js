@@ -63,7 +63,7 @@ export const emailsParticipantes = (c) => {
 /** Equipe = pessoas com conta no espaço (membros) + pessoas sem conta cadastradas em Ajustes. */
 export const configEquipe = () => {
   const lista = [
-    ...dados.membros.filter((m) => m.status !== "pendente").map((m) => ({ nome: m.nome || m.email, email: m.emailAgenda || m.email || "" })),
+    ...dados.membros.filter((m) => m.status !== "pendente" && m.papel !== "cliente").map((m) => ({ nome: m.nome || m.email, email: m.emailAgenda || m.email || "" })),
     ...(dados.config.find((c) => c.id === "equipe")?.pessoas || [])
   ];
   const vistos = new Set();

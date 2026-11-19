@@ -16,9 +16,21 @@ service cloud.firestore {
       function membro() { return logado() && exists(caminhoMembro()) && get(caminhoMembro()).data.status == 'ativo'; }
       function dono() { return logado() && get(/databases/$(database)/documents/espacos/$(esp)).data.dono == request.auth.uid; }
       function admin() { return dono() || (membro() && get(caminhoMembro()).data.papel == 'admin'); }
-      function pode(area) { return admin() || (membro() && area in get(caminhoMembro()).data.permissoes); }
-      function ativo() { return dono() || membro(); }
+      // Pessoa do cliente (papel "cliente"): não é da equipe. Só vê o portal do cliente (regras "Portal do cliente").
+      function cliente() { return !dono() && membro() && get(caminhoMembro()).data.get('papel', '') == 'cliente'; }
+      // O Financeiro (valores, contratos, orçamentos) é só dos administradores
+      function pode(area) { return admin() || (membro() && !cliente() && area != 'financeiro' && area in get(caminhoMembro()).data.permissoes); }
+      // Equipe da Hyper (dono, administradores e básicos). Clientes ficam de fora de tudo que usa ativo().
+      function ativo() { return dono() || (membro() && !cliente()); }
       function eu() { return get(caminhoMembro()).data; }
+      // Portal do cliente: os clientes dele e, se a lista "marcas" tiver itens, só essas marcas
+      function clientesDele() { return eu().get('clientes', []); }
+      function marcasDele() { return eu().get('marcas', []); }
+      function postDoCliente(d) {
+        return d.get('tipo', '') == 'Conteúdo'
+          && ((marcasDele().size() > 0 && d.get('marcaId', '') in marcasDele())
+              || (marcasDele().size() == 0 && d.get('clienteId', '') in clientesDele()));
+      }
       // Acesso por cliente: "todos" (padrão) ou "alguns" (só os ids em membros/{uid}.clientes).
       // Itens sem cliente ("") ficam visíveis para todos; no financeiro, só para quem vê todos.
       function todosClientes() { return admin() || eu().get('acessoClientes', 'todos') != 'alguns'; }
@@ -38,7 +50,8 @@ service cloud.firestore {
           && novo.papel == get(caminhoConvite()).data.papel
           && novo.permissoes == get(caminhoConvite()).data.permissoes
           && novo.get('acessoClientes', 'todos') == get(caminhoConvite()).data.get('acessoClientes', 'todos')
-          && novo.get('clientes', []) == get(caminhoConvite()).data.get('clientes', []);
+          && novo.get('clientes', []) == get(caminhoConvite()).data.get('clientes', [])
+          && novo.get('marcas', []) == get(caminhoConvite()).data.get('marcas', []);
       }
 
       // O documento do espaço: qualquer pessoa logada lê (para saber se existe e pedir acesso).
@@ -74,26 +87,38 @@ service cloud.firestore {
 
       // Dados por cliente (quem tem acesso só a alguns clientes vê só os deles)
       match /clientes/{id} {
-        allow read: if ativo() && doCliente(id);
+        allow read: if (ativo() && doCliente(id)) || (cliente() && id in clientesDele());
         allow write: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(id);
       }
       match /marcas/{id} {
-        allow read: if ativo() && podeLerEstrito(resource.data);
+        allow read: if (ativo() && podeLerEstrito(resource.data))
+                    || (cliente() && ((marcasDele().size() > 0 && id in marcasDele()) || (marcasDele().size() == 0 && resource.data.clienteId in clientesDele())));
         allow create: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(request.resource.data));
         allow update: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
         allow delete: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(resource.data));
       }
       match /tarefas/{id} {
-        allow read: if ativo() && podeLer(resource.data);
+        allow read: if (ativo() && podeLer(resource.data)) || (cliente() && postDoCliente(resource.data));
         allow delete: if ativo() && doCliente(cli(resource.data));
         allow create: if ativo() && doCliente(cli(request.resource.data));
         allow update: if ativo() && doCliente(cli(resource.data)) && doCliente(cli(request.resource.data));
+        // Cliente sugere um post (entra como ideia, para a equipe produzir)
+        allow create: if cliente() && postDoCliente(request.resource.data)
+                      && request.resource.data.statusConteudo == 'ideia' && request.resource.data.status == 'a_fazer'
+                      && request.resource.data.keys().hasOnly(['tipo', 'clienteId', 'marcaId', 'titulo', 'dataPublicacao', 'prazo', 'formato', 'rede', 'copy', 'notas', 'statusConteudo', 'status', 'responsavel', 'sugeridoPeloCliente', 'criadoEm']);
+        // Cliente aprova ou pede ajuste num post que está em aprovação, sem mexer em mais nada
+        allow update: if cliente() && postDoCliente(resource.data)
+                      && resource.data.get('statusConteudo', '') == 'aprovacao'
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statusConteudo', 'status', 'aprovacaoCliente', 'atualizadoEm'])
+                      && ((request.resource.data.statusConteudo == 'aprovado' && request.resource.data.status == 'andamento')
+                          || (request.resource.data.statusConteudo == 'producao' && request.resource.data.status == 'andamento'));
 
         // Comentários e histórico: quem vê a tarefa vê e comenta; cada um apaga só o seu (o administrador, qualquer um)
         function tarefa() { return get(/databases/$(database)/documents/espacos/$(esp)/tarefas/$(id)).data; }
         match /atividade/{a} {
-          allow read: if ativo() && podeLer(tarefa());
-          allow create: if ativo() && request.resource.data.uid == request.auth.uid && doCliente(cli(tarefa()))
+          allow read: if (ativo() && podeLer(tarefa())) || (cliente() && postDoCliente(tarefa()));
+          allow create: if (ativo() || (cliente() && postDoCliente(tarefa()))) && request.resource.data.uid == request.auth.uid
+                        && (cliente() || doCliente(cli(tarefa())))
                         && request.resource.data.texto is string && request.resource.data.texto.size() <= 3000;
           allow delete: if admin() || (ativo() && resource.data.uid == request.auth.uid);
         }
@@ -115,7 +140,13 @@ service cloud.firestore {
       }
 
       // Conteúdo
-      match /clientes/{id}/artes/{arte} { allow read, write: if pode('conteudo') && doCliente(id); }
+      match /clientes/{id}/artes/{arte} {
+        allow read, write: if pode('conteudo') && doCliente(id);
+        // Cliente vê os criativos dos posts dele (para aprovar); com marcas limitadas, só os dessas marcas
+        // (cada criativo guarda o marcaId do post; a consulta vem filtrada por marcaId)
+        allow read: if cliente() && id in clientesDele()
+                    && (marcasDele().size() == 0 || resource.data.marcaId in marcasDele());
+      }
 
       // Tráfego pago
       match /contasAds/{id} {
@@ -193,7 +224,8 @@ service cloud.firestore {
       match /config/{doc} {
         allow read: if (doc == 'openai' && pode('conteudo')) || (doc == 'email' && admin())
           || (doc == 'comercial' && pode('financeiro') && todosClientes())
-          || (!(doc in ['openai', 'email', 'comercial']) && ativo());
+          || (!(doc in ['openai', 'email', 'comercial']) && ativo())
+          || (doc == 'meta' && cliente());
         allow write: if admin();
       }
 

@@ -4,53 +4,95 @@
 import { el, avisar, confirmar, hojeISO, vazio, formulario } from "../ui.js";
 import { dados, atualizar, excluir, espacoInfo, salvarComId, listarConvites, salvarConvite, excluirConvite, gravarEmLote, carregarArquivo } from "../db.js";
 import { cabecalho, avatar, opcoesResponsaveis } from "./componentes.js";
-import { AREAS, eu, rotuloArea } from "../permissoes.js";
+import { AREAS, AREAS_EQUIPE, eu, rotuloArea } from "../permissoes.js";
 import { descreverPedido } from "./conta.js";
 import { emailConvite, emailLiberado, emailMaisAcesso, emailAtivo, sincronizarAdmins } from "../emails.js";
 
 const clientesOrdenados = () => [...dados.clientes].filter((c) => c.ativo !== false).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 const nomesDe = (ids = []) => ids.map((id) => dados.clientes.find((c) => c.id === id)?.nome).filter(Boolean);
 
-/** Controles de acesso (administrador, áreas, clientes) reaproveitados no cartão e no convite. */
+/**
+ * Controles de acesso reaproveitados no cartão e no convite. Três tipos:
+ * Administrador (tudo, inclusive Financeiro e usuários), Equipe (áreas Conteúdo e/ou Tráfego pago, todos ou alguns
+ * clientes) e Cliente (pessoa do cliente: portal com aprovar, calendário, marca e resultados dos clientes/marcas escolhidos).
+ */
 function editorAcesso(inicial, { travarAdmin = false } = {}) {
-  let admin = inicial.papel === "admin";
+  let tipo = inicial.papel === "admin" ? "admin" : inicial.papel === "cliente" ? "cliente" : "equipe";
+  const nomeGrupo = `tipo-${Math.random().toString(36).slice(2, 8)}`;
+  const radios = [["admin", "Administrador", "Tudo, inclusive Financeiro, usuários e ajustes"], ["equipe", "Equipe", "Só as áreas e clientes marcados"], ["cliente", "Cliente", "Portal do cliente: aprovar posts, calendário, marca e resultados"]]
+    .map(([v, r, d]) => el("label", { class: "chip-check", title: d }, el("input", { type: "radio", name: nomeGrupo, value: v, checked: tipo === v, disabled: travarAdmin && v !== "admin" }), r));
+  const dica = el("p", { class: "subtitulo" });
+
+  // Equipe: áreas (o Financeiro é só de administrador) e clientes
   const marcado = new Set(inicial.permissoes || []);
-  const checks = AREAS.map(([v, r, desc]) => {
-    const c = el("input", { type: "checkbox", value: v, checked: admin || marcado.has(v), disabled: admin });
-    return el("label", { class: "chip-check", title: desc }, c, r);
-  });
-  const caixaAdmin = el("input", { type: "checkbox", checked: admin, disabled: travarAdmin });
+  const checks = AREAS_EQUIPE.map(([v, r, desc]) => el("label", { class: "chip-check", title: desc }, el("input", { type: "checkbox", value: v, checked: marcado.has(v) }), r));
   const modo = el("select", { "aria-label": "Clientes" },
     el("option", { value: "todos", selected: (inicial.acessoClientes || "todos") !== "alguns" }, "Todos os clientes"),
     el("option", { value: "alguns", selected: inicial.acessoClientes === "alguns" }, "Só alguns clientes"));
   const escolhidos = new Set(inicial.clientes || []);
   const listaClientes = el("div", { class: "multi lista-clientes-acesso" }, clientesOrdenados().map((c) =>
     el("label", { class: "chip-check" }, el("input", { type: "checkbox", value: c.id, checked: escolhidos.has(c.id) }), c.nome)));
-  const blocoClientes = el("div", { class: "campo" }, el("span", {}, "Clientes que pode ver"), modo, listaClientes);
-  const atualizarVisao = () => {
-    checks.forEach((l) => { const i = l.querySelector("input"); i.disabled = admin; if (admin) i.checked = true; });
-    blocoClientes.hidden = admin;
-    listaClientes.hidden = modo.value !== "alguns";
+  const blocoEquipe = el("div", {}, el("div", { class: "multi" }, checks),
+    el("div", { class: "campo" }, el("span", {}, "Clientes que pode ver"), modo, listaClientes));
+
+  // Cliente: de qual cliente é e, se for grupo, quais marcas
+  const marcasEscolhidas = new Set(inicial.marcas || []);
+  const listaCliente = el("div", { class: "multi lista-clientes-acesso" }, clientesOrdenados().map((c) =>
+    el("label", { class: "chip-check" }, el("input", { type: "checkbox", value: c.id, checked: inicial.papel === "cliente" && escolhidos.has(c.id) }), c.nome)));
+  const listaMarcas = el("div", { class: "lista-marcas-acesso" });
+  const desenharMarcas = () => {
+    const ids = [...listaCliente.querySelectorAll("input:checked")].map((i) => i.value);
+    const grupos = ids.map((id) => [dados.clientes.find((c) => c.id === id), (dados.marcas || []).filter((m) => m.clienteId === id && m.ativo !== false)]).filter(([, ms]) => ms.length);
+    listaMarcas.replaceChildren(...grupos.map(([c, ms]) => el("div", { class: "campo" },
+      el("span", {}, `Marcas de ${c.nome} (nenhuma marcada = todas, inclusive os posts institucionais)`),
+      el("div", { class: "multi" }, ms.map((m) => el("label", { class: "chip-check" },
+        el("input", { type: "checkbox", value: m.id, checked: marcasEscolhidas.has(m.id), onChange: (e) => { if (e.target.checked) marcasEscolhidas.add(m.id); else marcasEscolhidas.delete(m.id); } }), m.nome))))));
   };
-  caixaAdmin.addEventListener("change", () => { admin = caixaAdmin.checked; atualizarVisao(); });
+  listaCliente.addEventListener("change", desenharMarcas);
+  desenharMarcas();
+  const blocoCliente = el("div", {}, el("div", { class: "campo" }, el("span", {}, "Cliente(s) desta pessoa"), listaCliente), listaMarcas);
+
+  const atualizarVisao = () => {
+    tipo = radios.map((l) => l.querySelector("input")).find((i) => i.checked)?.value || "equipe";
+    blocoEquipe.hidden = tipo !== "equipe";
+    blocoCliente.hidden = tipo !== "cliente";
+    listaClientes.hidden = modo.value !== "alguns";
+    dica.textContent = radios.find((l) => l.querySelector("input").value === tipo)?.title || "";
+  };
+  radios.forEach((l) => l.querySelector("input").addEventListener("change", atualizarVisao));
   modo.addEventListener("change", atualizarVisao);
   atualizarVisao();
   return {
     elemento: el("div", { class: "membro-acessos" },
-      el("label", { class: "chip-check destaque-admin" }, caixaAdmin, "Administrador (tudo, inclusive usuários)"),
-      el("div", { class: "multi" }, checks),
-      blocoClientes),
+      el("div", { class: "multi tipo-acesso", role: "radiogroup", "aria-label": "Tipo de acesso" }, radios), dica,
+      blocoEquipe, blocoCliente),
     ler: () => {
-      if (admin) return { papel: "admin", permissoes: AREAS.map(([v]) => v), acessoClientes: "todos", clientes: [] };
+      if (tipo === "admin") return { papel: "admin", permissoes: AREAS.map(([v]) => v), acessoClientes: "todos", clientes: [], marcas: [] };
+      if (tipo === "cliente") {
+        const clientes = [...listaCliente.querySelectorAll("input:checked")].map((i) => i.value);
+        const marcas = [...marcasEscolhidas].filter((id) => clientes.includes((dados.marcas || []).find((m) => m.id === id)?.clienteId));
+        return { papel: "cliente", permissoes: [], acessoClientes: "alguns", clientes, marcas };
+      }
       const alguns = modo.value === "alguns";
       return {
         papel: "basico",
         permissoes: checks.map((l) => l.querySelector("input")).filter((i) => i.checked).map((i) => i.value),
         acessoClientes: alguns ? "alguns" : "todos",
-        clientes: alguns ? [...listaClientes.querySelectorAll("input:checked")].map((i) => i.value) : []
+        clientes: alguns ? [...listaClientes.querySelectorAll("input:checked")].map((i) => i.value) : [],
+        marcas: []
       };
     }
   };
+}
+
+/** Texto curto do acesso (etiquetas do cartão e do convite). */
+function resumoAcesso(m) {
+  if (m.papel === "admin") return "Administrador";
+  if (m.papel === "cliente") {
+    const marcas = (m.marcas || []).map((id) => (dados.marcas || []).find((x) => x.id === id)?.nome).filter(Boolean);
+    return `Cliente · ${marcas.length ? marcas.join(", ") : nomesDe(m.clientes).join(", ") || "nenhum cliente"}`;
+  }
+  return [(m.permissoes || []).filter((a) => a !== "financeiro").map(rotuloArea).join(" · ") || "Equipe (básico)", m.acessoClientes === "alguns" ? `${(m.clientes || []).length} cliente(s)` : null].filter(Boolean).join(" · ");
 }
 
 /** Junta ao acesso atual o que a pessoa pediu (para o administrador só conferir e salvar). */
@@ -75,6 +117,7 @@ function cartaoMembro(m) {
   const salvar = async (botao, { aprovarPedido = false } = {}) => {
     botao.disabled = true;
     const acesso = editor.ler();
+    if (acesso.papel === "cliente" && !acesso.clientes.length) { avisar("Marque de qual cliente essa pessoa é.", "erro"); botao.disabled = false; return; }
     if (acesso.acessoClientes === "alguns" && !acesso.clientes.length && !(await confirmar("Nenhum cliente marcado: a pessoa não vai ver nenhum cliente. Salvar assim?"))) { botao.disabled = false; return; }
     try {
       await atualizar("membros", m.id, { ...acesso, status: "ativo", liberadoPor: eu.email, liberadoEm: hojeISO(), ...(aprovarPedido || pendente ? { pedido: null } : {}) });
@@ -88,7 +131,7 @@ function cartaoMembro(m) {
   };
   const etiqueta = pendente ? ["alerta", "Aguardando liberação"] : temPedido ? ["alerta", "Pediu mais acesso"]
     : m.papel === "admin" || ehDono ? ["compromisso", "Administrador"]
-    : ["ok", [(m.permissoes || []).length ? m.permissoes.map(rotuloArea).join(" · ") : "Básico", m.acessoClientes === "alguns" ? `${(m.clientes || []).length} cliente(s)` : null].filter(Boolean).join(" · ")];
+    : ["ok", resumoAcesso(m)];
   return el("article", { class: `cartao-membro ${pendente || temPedido ? "pendente" : ""}` },
     el("div", { class: "membro-topo" },
       avatar(m, { grande: true }),
@@ -138,6 +181,7 @@ function abrirConvite(renderizar, inicial = {}) {
       const email = v.email.trim().toLowerCase();
       if (dados.membros.some((m) => (m.email || "").toLowerCase() === email)) throw new Error("Esse e-mail já está no espaço. Ajuste o acesso no cartão da pessoa.");
       const convite = { nome: v.nome, email, ...editor.ler() };
+      if (convite.papel === "cliente" && !convite.clientes.length) throw new Error("Marque de qual cliente essa pessoa é.");
       await salvarConvite(convite);
       if (inicial.email && inicial.email !== email) await excluirConvite(inicial.email);
       const enviado = await emailConvite({ ...convite, nomesClientes: nomesDe(convite.clientes) }).catch((e) => { avisar("Convite salvo, mas o e-mail falhou: " + e.message, "erro"); return null; });
@@ -155,7 +199,7 @@ function blocoConvites(renderizar) {
     el("p", { class: "subtitulo" }, "Quando a pessoa entrar com esse e-mail, ela já entra com o acesso definido."),
     convites.map((c) => el("div", { class: "linha-tabela" },
       el("strong", {}, c.nome || c.email), el("span", {}, c.email),
-      el("span", { class: "etiqueta" }, c.papel === "admin" ? "Administrador" : [(c.permissoes || []).map(rotuloArea).join(", ") || "Básico", c.acessoClientes === "alguns" ? `${(c.clientes || []).length} cliente(s)` : null].filter(Boolean).join(" · ")),
+      el("span", { class: "etiqueta" }, resumoAcesso(c)),
       el("span", { class: "espaco" }),
       emailAtivo() ? el("button", { class: "link", onClick: async () => {
         try { await emailConvite({ ...c, nomesClientes: nomesDe(c.clientes) }); avisar("E-mail reenviado."); } catch (e) { avisar(e.message, "erro"); }

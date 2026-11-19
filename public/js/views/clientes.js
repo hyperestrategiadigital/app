@@ -35,7 +35,7 @@ export function abrirCliente(cliente = {}) {
       { nome: "pagamento", rotulo: "Pagamento", tipo: "select", opcoes: [["", "—"], ["pos", "Pós-pago"], ["pre", "Pré-pago"]], largura: "metade" },
       { nome: "verbaAnuncios", rotulo: "Verba de anúncios (anotação)", dica: "Ex.: R$ 600/mês", largura: "metade" }] : []),
     { tipo: "secao", rotulo: "Outros" },
-    { nome: "observacoes", rotulo: "Observações", tipo: "textarea", linhas: 3 },
+    { nome: "observacoes", rotulo: "Observações", tipo: "textarea", linhas: 3, dica: "Quem tiver acesso de cliente também lê estas observações." },
     { nome: "ativo", rotulo: "Cliente ativo", tipo: "checkbox", padrao: true }
   ], valores, {
     largo: true,
@@ -144,13 +144,14 @@ function ficha(id, estado, renderizar, resto = []) {
     ...(pode("conteudo") ? [["marca", "Marca"]] : []),
     ...(pode("conteudo") || pode("trafego") ? [["contas", "Contas"]] : []),
     ...(pode("conteudo") || pode("trafego") ? [["resultados", "Resultados"]] : []),
-    ...(geral && pode("trafego") ? [["trafego", "Tráfego pago"]] : []),
+    ...(pode("trafego") ? [["trafego", "Tráfego pago"]] : []),
     ...(geral && pode("financeiro") ? [["financeiro", "Financeiro"]] : [])];
   if (!abasPermitidas.some(([v]) => v === estado.aba)) estado.aba = abasPermitidas[0]?.[0] || "";
   const ts = dados.tarefas.filter((t) => t.clienteId === id && tarefaVisivel(t) && (!escolhida || t.marcaId === escolhida.id));
   const abertas = ts.filter((t) => t.status !== "concluido");
   const atrasadas = abertas.filter(atrasada).length;
-  const contas = dados.contasAds.filter((x) => x.clienteId === id);
+  // Na ficha de uma marca, só as contas de anúncio dela; no geral do grupo, todas (com a marca indicada)
+  const contas = dados.contasAds.filter((x) => x.clienteId === id && (!escolhida || x.marcaId === escolhida.id));
   const mans = dados.manutencoes.filter((x) => x.clienteId === id).sort((a, b) => b.data.localeCompare(a.data));
   const fins = dados.financeiro.filter((x) => x.clienteId === id).sort((a, b) => (b.vencimento || "").localeCompare(a.vencimento || ""));
 
@@ -164,14 +165,14 @@ function ficha(id, estado, renderizar, resto = []) {
     resultados: () => abaResultados(c, estado, renderizar),
     trafego: () => [
       el("div", { class: "com-acao" }, el("h2", {}, "Contas de anúncio"),
-        el("button", { onClick: () => abrirConta({ clienteId: id }) }, "+ Conta")),
+        el("button", { onClick: () => abrirConta({ clienteId: id, marcaId: escolhida?.id || "" }) }, "+ Conta")),
       contas.length ? contas.map((x) => el("div", { class: "linha-tabela", onClick: () => abrirConta(x) },
-        el("strong", {}, x.plataforma), el("span", {}, x.idConta || ""), el("span", {}, x.verbaMensal ? `${fmtMoeda(x.verbaMensal)}/mês` : ""), el("span", {}, x.objetivo || ""),
+        el("strong", {}, x.plataforma), !escolhida && x.marcaId ? el("span", { class: "etiqueta" }, porId("marcas", x.marcaId)?.nome || "") : null, el("span", {}, x.idConta || ""), el("span", {}, x.verbaMensal ? `${fmtMoeda(x.verbaMensal)}/mês` : ""), el("span", {}, x.objetivo || ""),
         el("a", { href: x.plataforma === "Google Ads" ? linkGoogleAds() : linkGerenciadorMeta(x), target: "_blank", rel: "noopener", class: "link", onClick: (e) => e.stopPropagation() }, "gerenciador ↗")))
         : vazio("Nenhuma conta cadastrada."),
-      el("div", { class: "com-acao" }, el("h2", {}, "Manutenções"),
+      escolhida ? el("p", { class: "nota" }, `As manutenções ficam no geral do grupo ${c.nome}.`) : el("div", { class: "com-acao" }, el("h2", {}, "Manutenções"),
         el("button", { onClick: () => abrirManutencao({ clienteId: id, data: hojeISO() }) }, "+ Registro")),
-      mans.length ? mans.slice(0, 30).map((m) => el("div", { class: "linha-tabela", onClick: () => abrirManutencao(m) },
+      escolhida ? null : mans.length ? mans.slice(0, 30).map((m) => el("div", { class: "linha-tabela", onClick: () => abrirManutencao(m) },
         el("span", { class: "data-mini" }, fmtData(m.data, true)), el("strong", {}, m.plataforma), el("span", { class: "resumo-texto" }, m.acoes || "")))
         : vazio("Nenhuma manutenção registrada.")],
     financeiro: () => [

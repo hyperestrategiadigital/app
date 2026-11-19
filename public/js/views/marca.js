@@ -247,7 +247,7 @@ export async function juntarUm(destino, origem, progresso, marcaExistente) {
   if (pode("conteudo")) {
     progresso(`${origem.nome}: copiando criativos…`);
     const artes = await listarSub(caminhoArtes(origem.id)).catch(() => []);
-    for (const { id, ...a } of artes) await salvarSub(caminhoArtes(destino.id), a, id);
+    for (const { id, ...a } of artes) await salvarSub(caminhoArtes(destino.id), { ...a, marcaId }, id);
   }
   await atualizar("clientes", origem.id, { ativo: false, viraMarcaDe: destino.id, marcaId });
   return marcaId;
@@ -287,7 +287,7 @@ export async function separarMarca(grupo, marca, progresso = () => {}) {
     progresso(`${marca.nome}: movendo criativos…`);
     const ids = new Set([...tarefas, ...arquivo].map((t) => t.id));
     const artes = (await listarSub(caminhoArtes(grupo.id)).catch(() => [])).filter((a) => ids.has(a.tarefaId));
-    for (const { id: i, ...a } of artes) { await salvarSub(caminhoArtes(id), a, i); await excluirSub(caminhoArtes(grupo.id), i); }
+    for (const { id: i, ...a } of artes) { await salvarSub(caminhoArtes(id), { ...a, marcaId: "" }, i); await excluirSub(caminhoArtes(grupo.id), i); }
   }
   await excluir("marcas", marca.id, { lixeira: false });
   return id;

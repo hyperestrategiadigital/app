@@ -46,7 +46,9 @@ export async function enviarEmail({ para, assunto, html }) {
 }
 
 const rotulos = (areas = []) => areas.map((a) => ({ conteudo: "Conteúdo", trafego: "Tráfego pago", financeiro: "Financeiro" }[a] || a)).join(", ");
-const descreverAcesso = ({ papel, permissoes = [], acessoClientes, nomesClientes = [] }) => [
+const descreverAcesso = ({ papel, permissoes = [], acessoClientes, nomesClientes = [] }) => papel === "cliente"
+  ? `Acesso de cliente de <b>${esc(nomesClientes.join(", ") || "—")}</b>: aprovar posts, ver o calendário, a identidade da marca e os resultados.`
+  : [
   papel === "admin" ? "<b>Administrador</b> (tudo, inclusive usuários)" : permissoes.length ? `Áreas: <b>${esc(rotulos(permissoes))}</b>` : "Acesso básico (Hoje, Tarefas, compromissos e clientes)",
   papel !== "admin" && acessoClientes === "alguns" ? `Clientes: <b>${esc(nomesClientes.join(", ") || "nenhum ainda")}</b>` : null
 ].filter(Boolean).join("<br>");
