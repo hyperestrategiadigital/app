@@ -121,7 +121,8 @@ test("post com marca, status único, planejar no calendário e criar dentro do p
   await abrir(page);
   await page.evaluate(async () => { const db = await import("/js/db.js"); await db.salvarComId("marcas", "mx", { nome: "Marca X", clienteId: "grupo", ativo: true, paleta: ["#B4415A"] }); });
   await page.goto("/#/calendario/grupo");
-  await page.getByRole("button", { name: "+ Novo post" }).click();
+  await page.getByRole("button", { name: /\+ Novo/ }).click();
+  await page.getByRole("menuitem", { name: /Post/ }).click();
   await page.fill("#f-titulo", "Post da marca X");
   await page.selectOption("#f-marcaId", { label: "Marca X" });
   await page.locator("#f-statusConteudo").getByRole("radio", { name: "Em aprovação" }).click();
@@ -134,7 +135,8 @@ test("post com marca, status único, planejar no calendário e criar dentro do p
   const prompt = await page.evaluate(async (id) => { const p = await import("/js/prompts.js"); const db = await import("/js/db.js"); return p.promptCopy(db.porId("tarefas", id)); }, post[0]);
   expect(prompt).toContain("marca Marca X, do cliente Grupo Exemplo");
 
-  await page.getByRole("tab", { name: "Planejar mês" }).click();
+  await page.getByRole("button", { name: /Ações do mês/ }).click();
+  await page.getByRole("menuitem", { name: /Planejar mês/ }).click();
   await expect(page).toHaveURL(new RegExp(`#/calendario/grupo/${MES}/planejar`));
   await expect(page.locator("#conteudo h1")).toContainText("Planejamento");
 
@@ -584,7 +586,8 @@ test("status da tarefa em botões e grupo que sumiu volta para a lista", async (
   });
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].grupo.ativo)).toBe(true);
   await page.goto("/#/tarefas");
-  await page.getByRole("button", { name: "+ Nova tarefa" }).click();
+  await page.getByRole("button", { name: /\+ Novo/ }).click();
+  await page.getByRole("menuitem", { name: /Tarefa/ }).click();
   await page.fill("#f-titulo", "Estúdio");
   await page.selectOption("#f-tipo", { index: 1 });
   await expect(page.locator("#f-clienteId option", { hasText: "Grupo Exemplo" })).toHaveCount(1);
@@ -596,3 +599,25 @@ test("status da tarefa em botões e grupo que sumiu volta para a lista", async (
   await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Estúdio")?.status)).toBe("andamento");
 });
 
+
+test("topo de Tarefas igual nas quatro visões e logo leva para o Hoje", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/tarefas");
+  const medidas = [];
+  for (const visao of ["Calendário", "Quadro", "Lista", "Equipe"]) {
+    await page.locator(".visoes-tarefas").getByRole("tab", { name: new RegExp(visao) }).click();
+    await expect(page.locator("#conteudo h1")).toHaveText("Tarefas");
+    await expect(page.getByRole("button", { name: /\+ Novo/ })).toBeVisible();
+    await expect(page.locator("#busca-tarefas")).toBeVisible();
+    const caixa = await page.locator(".filtros-tarefas").boundingBox();
+    medidas.push(Math.round(caixa.y));
+    await expect(page.locator(".navegador-mes")).toBeVisible({ visible: visao === "Calendário" });
+  }
+  expect(new Set(medidas).size).toBe(1); // os filtros não mudam de lugar
+  await page.getByRole("button", { name: /\+ Novo/ }).click();
+  await expect(page.getByRole("menuitem")).toHaveCount(3);
+  await page.locator("#conteudo h1").click();
+  await expect(page.getByRole("menuitem")).toHaveCount(0);
+  await page.locator(".lateral-menu a.marca").click();
+  await expect(page).toHaveURL(/#\/hoje/);
+});
