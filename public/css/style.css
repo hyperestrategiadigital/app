@@ -910,3 +910,23 @@ a.marca:focus-visible, .logo-movel:focus-visible { outline: 2px solid var(--hype
 .portal-texto { white-space: pre-wrap; line-height: 1.55; margin: 0; }
 .paleta-leitura, .portal-redes { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 @media (max-width: 760px) { .portal-artes img { height: 200px; } }
+
+/* Studio */
+.studio-selo { background: var(--cor-primaria-clara); color: var(--hyper-roxo); }
+.studio-kit { border-left: 4px solid var(--selo); margin-bottom: 16px; }
+.studio-kit p { margin: 6px 0 0; }
+.studio-kit-topo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.studio-kit .paleta-leitura { margin: 0; }
+.studio-modos { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.studio-modo {
+  display: grid; gap: 6px; padding: 20px; border-radius: var(--raio); background: var(--cor-superficie);
+  border: 1px solid var(--hyper-gelo); border-top: 4px solid var(--selo); color: var(--cor-texto); text-decoration: none;
+}
+.studio-modo:hover { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); }
+.studio-modo strong { font-family: var(--fonte-titulo); font-style: italic; font-size: 22px; color: var(--hyper-roxo); }
+.studio-modo span:last-child { color: var(--cor-texto-suave); font-size: 14px; }
+.studio-icone { font-size: 30px; }
+.tela-studio .bloco { margin-bottom: 16px; }
+.grade-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 14px; }
+.studio-dicas { margin: 6px 0 0; padding-left: 18px; line-height: 1.6; }
+.studio-referencia { max-height: 420px; border-radius: var(--raio-pequeno); }

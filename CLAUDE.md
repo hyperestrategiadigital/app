@@ -43,6 +43,7 @@ Toda interface deste repositório segue `docs/identidade-visual.md`.
 - Cor principal do cliente = `paleta[0]` (também gravada em `cor`); use `corCliente()` de `views/componentes.js`. Campos de cor usam `campoCor()` de `ui.js` (sempre mostram a cor, não só o código).
 - Tarefas têm `responsavel` (equipe = membros do espaço + pessoas sem conta em `config/equipe`). Tarefa do tipo "Reunião" vira compromisso.
 - Exportação para o cliente é só PDF. Arte final é feita no Canva (pedido para o Claude em `promptCanva`), não dentro do app.
+- Studio (`views/studio.js`, `#/studio/<conta>/<foto|conteudo|ideias>`): equipe e cliente escolhem a marca (`contasDoStudio()`); pedidos em `prompts.js` (`promptFotos`, `promptIdeias`, `promptCopy`, `promptCanva`). Equipe salva com `abrirTarefa`; cliente envia com `criarSugestao()` de `views/portal.js` (só os campos que as regras aceitam). IA dentro do app (OpenAI) só para a equipe com Conteúdo.
 - A chave da OpenAI fica em `espacos/hyper/config/openai` (só admin grava; só quem tem Conteúdo lê). Nunca coloque chaves no código: o repositório é público.
 
 ## Publicação

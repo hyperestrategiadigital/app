@@ -58,12 +58,12 @@ async function abrirDepois(page, { membros, semMenu, erros, extra = null }) {
 
 test("todas as telas abrem sem erro e o menu agrupa a administração", async ({ page }) => {
   const erros = await abrir(page);
-  for (const rota of ["hoje", "tarefas", "calendario", "clientes", "trafego", "financeiro", "rotinas", "relatorios", "usuarios", "config"]) {
+  for (const rota of ["hoje", "tarefas", "calendario", "clientes", "studio", "trafego", "financeiro", "rotinas", "relatorios", "usuarios", "config"]) {
     await page.goto(`/#/${rota}`);
     await expect(page.locator("#conteudo h1").first()).toBeVisible();
   }
   await expect(page.locator(".menu-grupo summary")).toHaveText(/Administração/);
-  await expect(page.locator("#menu > a")).toHaveCount(6); // Tarefas e Calendário são um item só
+  await expect(page.locator("#menu > a")).toHaveCount(7); // Tarefas e Calendário são um item só; + Studio
   await expect(page.locator("#menu")).toContainText("Creators");
   for (const rota of ["lixeira", "creators"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
   expect(erros).toEqual([]);
@@ -728,4 +728,45 @@ test("administrador adiciona uma pessoa do cliente com uma marca só; financeiro
   await page.click(".modal button[type=submit]");
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/convites"]?.["carla@exemplo.com"]))
     .toMatchObject({ papel: "cliente", acessoClientes: "alguns", clientes: ["grupo"], marcas: ["ma"], permissoes: [] });
+});
+
+test("Studio da equipe: escolhe a marca, vê o kit e transforma ideias em post", async ({ page }) => {
+  const erros = await abrir(page);
+  await page.goto("/#/studio");
+  await expect(page.locator("#menu")).toContainText("Studio");
+  await page.locator(".cartao-marca", { hasText: "Loja Exemplo" }).click();
+  await expect(page.locator(".studio-modo")).toHaveCount(3);
+  await expect(page.locator(".studio-kit")).toContainText("Leve e direto"); // tom de voz da marca
+  await page.locator(".studio-modo", { hasText: "Studio fotográfico" }).click();
+  await expect(page.locator("#conteudo")).toContainText("Na hora de fotografar");
+  await page.goto("/#/studio/loja/ideias");
+  await page.fill("#studio-texto", "Formato | Tema | Gancho | Por quê\n1. Reels | Bastidores da loja | Você nunca viu isso | Aproxima\n- Carrossel | 5 looks de verão | Qual é o seu? | Salvamentos");
+  await page.getByRole("button", { name: "Organizar ideias" }).click();
+  await expect(page.locator(".portal-post")).toHaveCount(2);
+  await page.locator(".portal-post", { hasText: "Bastidores da loja" }).getByRole("button", { name: "+ Virar post" }).click();
+  await expect(page.locator("#f-titulo")).toHaveValue("Bastidores da loja");
+  await page.click(".modal button[type=submit]");
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Bastidores da loja")))
+    .toMatchObject({ tipo: "Conteúdo", clienteId: "loja", formato: "Reels" });
+  expect(erros).toEqual([]);
+});
+
+test("Studio do cliente: cria a legenda e envia para a Hyper como sugestão", async ({ page }) => {
+  await abrir(page, {
+    usuario: { uid: "cli", displayName: "Carla Cliente", email: "carla@exemplo.com" }, semMenu: true,
+    membros: {
+      hyper: { nome: "Hyper", email: "hyper@exemplo.com", papel: "admin", status: "ativo" },
+      cli: { nome: "Carla Cliente", email: "carla@exemplo.com", papel: "cliente", status: "ativo", permissoes: [], acessoClientes: "alguns", clientes: ["loja"], marcas: [] }
+    }
+  });
+  await expect(page.locator("#menu")).toContainText("Studio");
+  await page.goto("/#/studio");
+  await expect(page).toHaveURL(/#\/studio\/loja/); // uma marca só: entra direto
+  await page.locator(".studio-modo", { hasText: "Studio de conteúdo" }).click();
+  await page.fill("#studio-titulo", "Promoção de inverno");
+  await page.fill("#studio-copy", "Chegou o inverno na Loja!");
+  await page.getByRole("button", { name: "Enviar para a Hyper" }).click();
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Promoção de inverno")))
+    .toMatchObject({ clienteId: "loja", statusConteudo: "ideia", copy: "Chegou o inverno na Loja!", sugeridoPeloCliente: "Carla Cliente" });
+  await expect(page.locator(".modal")).toHaveCount(0);
 });

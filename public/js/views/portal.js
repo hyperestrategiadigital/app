@@ -100,6 +100,15 @@ function abrirPost(t) {
 
 /* ---------------- Sugerir um post ---------------- */
 
+/** Grava a sugestão do cliente: post como "ideia" para a equipe (só os campos que as regras aceitam). */
+export function criarSugestao(k, v) {
+  return criar("tarefas", {
+    tipo: TIPO_CONTEUDO, clienteId: k.clienteId, marcaId: k.marcaId, titulo: v.titulo, dataPublicacao: v.dataPublicacao || "", prazo: v.dataPublicacao || "",
+    formato: v.formato || "", rede: v.rede || "", copy: v.copy || "", notas: v.notas || "",
+    statusConteudo: "ideia", status: "a_fazer", responsavel: "", sugeridoPeloCliente: eu.nome || eu.email
+  });
+}
+
 export function sugerirPost() {
   const contas = contasDoPortal();
   if (!contas.length) return avisar("Nenhuma marca liberada para você ainda.", "erro");
@@ -123,12 +132,7 @@ export function sugerirPost() {
       window.open("https://claude.ai/new", "_blank", "noopener");
     } }, "✨ Legenda com o Claude")],
     aoSalvar: async (v) => {
-      const k = contaDe(v.conta);
-      await criar("tarefas", {
-        tipo: TIPO_CONTEUDO, clienteId: k.clienteId, marcaId: k.marcaId, titulo: v.titulo, dataPublicacao: v.dataPublicacao || "", prazo: v.dataPublicacao || "",
-        formato: v.formato || "", rede: v.rede || "", copy: v.copy || "", notas: v.notas || "",
-        statusConteudo: "ideia", status: "a_fazer", responsavel: "", sugeridoPeloCliente: eu.nome || eu.email
-      });
+      await criarSugestao(contaDe(v.conta), v);
       avisar("Sugestão enviada para a Hyper.");
     }
   });
@@ -146,7 +150,8 @@ export const inicio = {
     const nome = (eu.nome || "").split(" ")[0];
     return el("div", { class: "tela tela-portal" },
       cabecalho(`Olá${nome ? `, ${nome}` : ""}!`, contasDoPortal().map((k) => k.nome).join(" · ") || "Bem-vindo ao Hyper Studio",
-        el("button", { class: "destaque", onClick: sugerirPost }, "+ Sugerir um post")),
+        el("button", { class: "secundario", onClick: sugerirPost }, "+ Sugerir um post"),
+        el("a", { class: "botao-link destaque", href: "#/studio" }, "✦ Abrir o Studio")),
       el("h2", {}, `Para aprovar (${paraAprovar.length})`),
       paraAprovar.length ? el("div", { class: "portal-lista" }, paraAprovar.map((t) => cartaoPost(t, { completo: true })))
         : vazio("Nada esperando a sua aprovação. Quando a Hyper mandar posts, eles aparecem aqui."),
