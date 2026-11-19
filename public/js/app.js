@@ -12,7 +12,7 @@ import { el, avisar, hojeISO, quandoErro } from "./ui.js";
 import { eu, pode, ehAdmin, AREAS } from "./permissoes.js";
 import { gerarRecorrencias } from "./recorrencias.js";
 import { abrirBusca, definirTelas, ativarAtalhoBusca } from "./busca.js";
-import { completarPostsSemFormato, migrarReunioes, migrarTipos, alinharStatusPosts, marcarCompromissosParaAgenda } from "./migracoes.js";
+import { completarPostsSemFormato, migrarReunioes, migrarTipos, alinharStatusPosts, marcarCompromissosParaAgenda, reativarGruposSumidos } from "./migracoes.js";
 
 import * as hoje from "./views/hoje.js";
 import * as tarefas from "./views/tarefas.js";
@@ -257,7 +257,7 @@ async function entrar(usuario) {
   // Rotinas automáticas e ajustes de dados antigos: só o administrador roda
   if (ehAdmin()) {
     gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
-    completarPostsSemFormato().then(migrarReunioes).then(migrarTipos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).then(marcarCompromissosParaAgenda).then((n) => { if (n) sincronizarAgenda(); }).catch((e) => console.error("Migração:", e));
+    reativarGruposSumidos().then(completarPostsSemFormato).then(migrarReunioes).then(migrarTipos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).then(marcarCompromissosParaAgenda).then((n) => { if (n) sincronizarAgenda(); }).catch((e) => console.error("Migração:", e));
   }
 }
 

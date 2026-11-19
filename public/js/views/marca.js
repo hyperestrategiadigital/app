@@ -204,6 +204,7 @@ export function juntarClientes(c) {
  * marcaExistente), junta nela (sem duplicar) e só completa os campos de identidade que estiverem vazios.
  */
 export async function juntarUm(destino, origem, progresso, marcaExistente) {
+  if (destino.id === origem.id) throw new Error(`${origem.nome} não pode virar marca dele mesmo.`);
   const chaveNome = (s) => normalizar(s).replace(/[^a-z0-9]/g, "");
   const existente = marcaExistente || (dados.marcas || []).find((m) => m.clienteId === destino.id && chaveNome(m.nome) === chaveNome(origem.nome));
   const marcaId = existente?.id || `m-${origem.id}`;

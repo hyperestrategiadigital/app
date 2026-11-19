@@ -829,3 +829,13 @@ img.avatar { object-fit: cover; padding: 0; }
   .linha-importar { grid-template-columns: 1fr; }
 }
 .tabela-precos { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; padding: 10px 12px; background: var(--cor-primaria-clara); border-radius: var(--raio-pequeno); font-size: 13px; }
+
+/* Escolha única em botões (status da tarefa, etapa do post) */
+.botoes-escolha { display: flex; flex-wrap: wrap; gap: 6px; }
+.botoes-escolha .escolha {
+  background: var(--cor-superficie); color: var(--cor-texto); border: 1px solid var(--hyper-gelo);
+  padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+}
+.botoes-escolha .escolha:hover { border-color: var(--hyper-roxo); background: var(--cor-primaria-clara); }
+.botoes-escolha .escolha.ativo { background: var(--hyper-roxo); color: var(--hyper-branco); border-color: var(--hyper-roxo); }
+.botoes-escolha .escolha[data-valor="concluido"].ativo, .botoes-escolha .escolha[data-valor="publicado"].ativo { background: var(--cor-confirmar); border-color: var(--cor-confirmar); }

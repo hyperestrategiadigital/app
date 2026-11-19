@@ -155,6 +155,15 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
       entrada = el("div", { class: "multi" }, (c.opcoes || []).map((o) =>
         el("label", { class: "chip-check" }, el("input", { type: "checkbox", value: o, checked: sel.has(o) }), o)));
       entrada.valor = () => [...entrada.querySelectorAll("input:checked")].map((i) => i.value);
+    } else if (c.tipo === "botoes") {
+      // Escolha única em botões (ex.: status): um clique muda, sem menu cascata
+      let atual = v || c.opcoes?.[0]?.[0] || "";
+      entrada = el("div", { class: "botoes-escolha", role: "radiogroup", "aria-label": c.rotulo });
+      const desenhar = () => entrada.replaceChildren(...(c.opcoes || []).map(([valor, rotulo]) =>
+        el("button", { type: "button", role: "radio", class: `escolha ${valor === atual ? "ativo" : ""}`, "data-valor": valor, "aria-checked": String(valor === atual),
+          onClick: () => { atual = valor; desenhar(); entrada.dispatchEvent(new Event("change", { bubbles: true })); } }, rotulo)));
+      desenhar();
+      entrada.valor = () => atual;
     } else if (c.tipo === "checklist") {
       entrada = editorChecklist(v || []);
     } else if (c.tipo === "cor") {
@@ -167,7 +176,7 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
     entradas[c.nome] = { c, entrada };
     const id = `f-${c.nome}`;
     entrada.id = id;
-    const rotulo = el("label", { class: `campo ${c.largura || ""} ${c.tipo === "checkbox" ? "campo-check" : ""}`, for: id },
+    const rotulo = el(c.tipo === "botoes" ? "div" : "label", { class: `campo ${c.largura || ""} ${c.tipo === "checkbox" ? "campo-check" : ""}`, for: c.tipo === "botoes" ? undefined : id },
       c.tipo === "checkbox" ? [entrada, el("span", {}, c.rotulo)] : [el("span", {}, c.rotulo), entrada]);
     grade.append(rotulo);
     if (c.mostrarSe) condicionais.push({ c, elemento: rotulo, entrada });
@@ -176,7 +185,7 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
     const out = {};
     for (const [nome, { c, entrada }] of Object.entries(entradas)) {
       if (c.tipo === "checkbox") out[nome] = entrada.checked;
-      else if (c.tipo === "multi" || c.tipo === "checklist" || c.tipo === "cor") out[nome] = entrada.valor();
+      else if (c.tipo === "multi" || c.tipo === "checklist" || c.tipo === "cor" || c.tipo === "botoes") out[nome] = entrada.valor();
       else if (c.tipo === "number") out[nome] = entrada.value === "" ? null : Number(entrada.value);
       else out[nome] = entrada.value.trim();
     }

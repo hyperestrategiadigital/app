@@ -1,5 +1,5 @@
 // Ajustes automáticos de dados antigos, rodados uma vez ao entrar.
-import { dados, gravarEmLote, excluir, salvarComId } from "./db.js";
+import { dados, gravarEmLote, excluir, salvarComId, atualizar } from "./db.js";
 import { hojeISO, addDias } from "./ui.js";
 import { TIPO_CONTEUDO, TIPO_ANTIGO, statusDaEtapa } from "./constantes.js";
 
@@ -73,4 +73,14 @@ export async function marcarCompromissosParaAgenda() {
   const itens = dados.compromissos.filter((c) => !c.sincronizar && !c.naoSincronizar && (c.data >= hoje || (c.repetir && (!c.repetirAte || c.repetirAte >= hoje))));
   if (itens.length) await gravarEmLote("compromissos", itens.map(({ id, ...c }) => ({ id, ...c, sincronizar: true })));
   return itens.length;
+}
+
+// Conserto: o "Organizar grupos" antigo podia juntar um grupo nele mesmo (cliente com o mesmo nome de uma marca dele),
+// deixando o grupo inativo e sumido das listas. Reativa cliente inativo que tem marcas ativas ou que "virou marca" de si mesmo.
+export async function reativarGruposSumidos() {
+  const marcas = dados.marcas || [];
+  const sumidos = dados.clientes.filter((c) => c.ativo === false &&
+    (c.viraMarcaDe === c.id || marcas.some((m) => m.clienteId === c.id && m.ativo !== false)));
+  for (const c of sumidos) await atualizar("clientes", c.id, { ativo: true, viraMarcaDe: "", marcaId: "" });
+  return sumidos.length;
 }
