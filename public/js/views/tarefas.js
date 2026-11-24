@@ -8,6 +8,7 @@ import { tarefaVisivel } from "../permissoes.js";
 import { STATUS_TAREFA, TIPO_CONTEUDO, etapaDoStatus } from "../constantes.js";
 import { compromissosEntre } from "../agenda.js";
 import { abrirCompromisso } from "../compromissos.js";
+import { dentroDaProducao } from "../producao.js";
 
 export function render({ params = [], estado, renderizar }) {
   // Tarefas e Calendário compartilham o estado (filtros); aqui ficam as visões Quadro, Lista e Carga da equipe
@@ -20,7 +21,9 @@ export function render({ params = [], estado, renderizar }) {
   const f = estado;
   const topo = topoTarefas(f, renderizar);
   const busca = normalizar(f.busca);
-  const daCamada = (t) => f.camada === "conteudo" ? t.tipo === TIPO_CONTEUDO : f.camada === "tarefas" ? t.tipo !== TIPO_CONTEUDO : true;
+  // Em "Tudo" e "Tarefas", os posts que estão dentro de um "Produzir semana" ficam na checklist dessa tarefa;
+  // na aba "Posts" aparecem todos
+  const daCamada = (t) => f.camada === "conteudo" ? t.tipo === TIPO_CONTEUDO : f.camada === "tarefas" ? t.tipo !== TIPO_CONTEUDO : !dentroDaProducao(t);
   const filtradas = dados.tarefas.filter((t) => tarefaVisivel(t) && daCamada(t) &&
     (!f.cliente || t.clienteId === f.cliente) &&
     (f.marca == null || (t.marcaId || "") === f.marca) &&

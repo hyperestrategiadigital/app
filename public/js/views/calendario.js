@@ -13,8 +13,7 @@ import { abrirModal } from "../ui.js";
 import { pode, eu, ehAdmin, tarefaVisivel } from "../permissoes.js";
 
 const ICONE_FORMATO = {
-  "Feed estático": "▣", "Carrossel": "▤", "Reels": "▶", "Story": "◫", "Sequência de stories": "◫",
-  "Vídeo (YouTube)": "▶", "TikTok": "▶", "Anúncio estático": "$", "Anúncio em vídeo": "$", "WhatsApp": "✉", "Blog": "¶",
+  "Estático": "▣", "Carrossel": "▤", "Vídeo": "▶", "Story": "◫", "WhatsApp": "✉", "Blog": "¶",
   "Artigo": "¶", "E-mail marketing": "✉"
 };
 

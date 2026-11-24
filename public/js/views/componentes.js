@@ -6,8 +6,10 @@ import { avisarMencao } from "../emails.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, normalizar, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo, desfazerExclusao, listarAtividade, registrarAtividade, excluirAtividade } from "../db.js";
-import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa, MODELOS_PADRAO } from "../constantes.js";
+import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, FORMATO_PADRAO, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa, MODELOS_PADRAO } from "../constantes.js";
 import { promptCopy } from "../prompts.js";
+import { temChave, gerarTexto } from "../openai.js";
+import { producaoDoPost, postsDaProducao } from "../producao.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
 import { abrirCompromisso } from "../compromissos.js";
 import { configEquipe, responsaveis, responsavelPadrao } from "../agenda.js";
@@ -73,7 +75,10 @@ export function abrirTarefa(tarefa = {}) {
   const conteudo = (v) => v.tipo === TIPO_CONTEUDO;
   const valores = { ...tarefa };
   if (!editando && tarefa.tipo === undefined) valores.tipo = TIPO_CONTEUDO;
-  if (!editando && !valores.checklist?.length) valores.checklist = modeloChecklist({ formato: "Feed estático", ...valores });
+  if (!editando && !valores.checklist?.length) valores.checklist = modeloChecklist({ formato: FORMATO_PADRAO, ...valores });
+  // Post criado à mão é "extra": fica solto nas tarefas. Os do planejamento entram no "Produzir semana".
+  if (!editando && valores.extra === undefined) valores.extra = true;
+  const producao = editando ? producaoDoPost(tarefa) : null;
   const campos = [
     { nome: "titulo", rotulo: "Tarefa / tema do post", obrigatorio: true, dica: "Ex.: Black Week — plano anual" },
     { nome: "status", rotulo: "Status", tipo: "botoes", opcoes: STATUS_TAREFA, padrao: "a_fazer", mostrarSe: (v) => !conteudo(v) },
@@ -85,13 +90,14 @@ export function abrirTarefa(tarefa = {}) {
       mostrarSe: (v) => marcasDo(v.clienteId).length > 0 },
 
     { tipo: "secao", rotulo: "Post (aparece no calendário de conteúdo)", mostrarSe: conteudo },
-    { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: "Feed estático", largura: "metade", mostrarSe: conteudo },
+    { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: FORMATO_PADRAO, largura: "metade", mostrarSe: conteudo },
     { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: REDES, padrao: "Instagram", largura: "metade", mostrarSe: conteudo },
     { nome: "dataPublicacao", rotulo: "Data de publicação", tipo: "date", padrao: tarefa.prazo || hojeISO(), obrigatorio: true, largura: "metade", mostrarSe: conteudo },
     { nome: "hora", rotulo: "Horário", tipo: "time", largura: "metade", mostrarSe: conteudo },
     { nome: "objetivo", rotulo: "Objetivo", dica: "Ex.: vender plano anual, gerar leads", largura: "metade", mostrarSe: conteudo },
-    { nome: "roteiro", rotulo: "Briefing / roteiro", tipo: "textarea", linhas: 3, mostrarSe: conteudo },
-    { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 4, dica: "Cole aqui a copy aprovada", mostrarSe: conteudo },
+    { nome: "roteiro", rotulo: "Briefing (a ideia do post)", tipo: "textarea", linhas: 3, dica: "O que o post precisa dizer: assunto, oferta, dados, referências…", mostrarSe: conteudo },
+    { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 5, dica: "Clique em \"✨ Criar copy\" ou escreva aqui", mostrarSe: conteudo },
+    { nome: "extra", rotulo: "Post extra: aparece solto nas tarefas, fora do \"Produzir semana\"", tipo: "checkbox", mostrarSe: conteudo },
 
     { tipo: "secao", rotulo: "Tarefa" },
     { nome: "responsavel", rotulo: "Responsável", tipo: "select", opcoes: opcoesResponsaveis(tarefa.responsavel), padrao: responsavelPadrao(), largura: "metade" },
@@ -102,16 +108,7 @@ export function abrirTarefa(tarefa = {}) {
     { nome: "notas", rotulo: "Observações", tipo: "textarea", linhas: 2 }
   ];
   const ultimoForm = () => [...document.querySelectorAll(".modal form")].pop();
-  const lerForm = () => ultimoForm()?.lerValores?.() || {};
   const extras = [
-    el("button", {
-      type: "button", class: "secundario mini so-conteudo",
-      onClick: async () => {
-        try { await navigator.clipboard.writeText(promptCopy(lerForm())); avisar("Prompt copiado! Cole no Claude para gerar a copy."); }
-        catch { avisar("Não consegui copiar o prompt.", "erro"); }
-        window.open("https://claude.ai/new", "_blank", "noopener");
-      }
-    }, "✨ Copy com o Claude"),
     editando && ehConteudo(tarefa) ? el("a", {
       class: "botao-link secundario mini so-conteudo", target: "_blank", rel: "noopener",
       href: tarefa.rede === "LinkedIn" && redesDe(tarefa.clienteId, tarefa.marcaId).linkedin ? linkLinkedinAdmin(redesDe(tarefa.clienteId, tarefa.marcaId)) : linkAgendadorMeta(redesDe(tarefa.clienteId, tarefa.marcaId)),
@@ -135,6 +132,13 @@ export function abrirTarefa(tarefa = {}) {
   });
   // Botões de conteúdo só aparecem quando o tipo é Conteúdo
   const form = ultimoForm();
+  // "✨ Criar copy" junto do campo da copy: briefing + identidade da marca
+  const rotuloCopy = form?.querySelector("#f-copy")?.closest(".campo")?.querySelector(":scope > span");
+  if (rotuloCopy) { rotuloCopy.classList.add("rotulo-com-botao"); rotuloCopy.append(botaoCriarCopy(form)); }
+  // Post que está dentro de um "Produzir semana": aviso com atalho
+  if (form && producao) form.querySelector(".form-grade").before(el("p", { class: "faixa-info" },
+    `Este post faz parte de "${producao.titulo}". `,
+    el("button", { type: "button", class: "link", onClick: () => abrirTarefa(producao) }, "Abrir a produção da semana")));
   // Criativos anexados ao post (imagens guardadas no banco)
   if (form) form.querySelector(".acoes").before(secaoCriativos(tarefa));
   // Ajuste pedido pelo cliente no link de aprovação
@@ -142,7 +146,7 @@ export function abrirTarefa(tarefa = {}) {
   // Comentários (com @menção) e histórico de mudanças
   if (form && tarefa.id) form.querySelector(".acoes").before(secaoAtividade(tarefa));
   // Rotina "Produzir semana": mostra ao vivo os posts da semana seguinte do cliente
-  if (form && tarefa.semanaInicio) form.querySelector(".acoes").before(secaoSemana(tarefa));
+  if (form && tarefa.semanaInicio) form.querySelector(".form-grade").after(secaoSemana(tarefa));
   if (form && tarefa.atalho) form.querySelector(".acoes").prepend(el("a", { class: "botao-link secundario mini", href: tarefa.atalho, onClick: () => fecharModais() },
     tarefa.rotina === "planejamento" ? "☷ Abrir planejamento" : tarefa.rotina === "cobranca" ? "$ Abrir financeiro" : "▦ Abrir calendário"));
   // Reunião não é tarefa: vira compromisso (calendário de compromissos + Google Agenda)
@@ -161,6 +165,40 @@ export function abrirTarefa(tarefa = {}) {
   form?.addEventListener("change", alternar);
   alternar();
   return promessa;
+}
+
+/**
+ * Botão "✨ Criar copy": junta o briefing do post com a identidade da marca (tom de voz, persona, diretrizes).
+ * Com a chave da OpenAI (equipe com Conteúdo) escreve direto no campo; sem ela, copia o pedido para o Claude.
+ */
+function botaoCriarCopy(form) {
+  const campoCopy = form.querySelector("#f-copy");
+  const aqui = pode("conteudo") && temChave();
+  const botao = el("button", { type: "button", class: "destaque mini", onClick: async () => {
+    const v = form.lerValores();
+    if (!v.roteiro?.trim()) { avisar("Preencha o briefing primeiro: é dele que sai a copy.", "erro"); form.querySelector("#f-roteiro")?.focus(); return; }
+    if (!aqui) {
+      try { await navigator.clipboard.writeText(promptCopy(v)); avisar("Pedido copiado! Cole no Claude e traga a copy para cá."); }
+      catch { avisar("Não consegui copiar o pedido.", "erro"); }
+      window.open("https://claude.ai/new", "_blank", "noopener");
+      return;
+    }
+    if (campoCopy.value.trim() && !(await confirmar("Trocar a copy que já está escrita por uma nova?"))) return;
+    const rotulo = botao.textContent;
+    botao.disabled = true; botao.textContent = "Escrevendo…";
+    try {
+      campoCopy.value = await gerarTexto({
+        sistema: "Você é copywriter da Hyper Estratégia Digital. Responda só com a legenda final pronta para publicar, em português do Brasil, sem títulos nem explicações.",
+        pedido: promptCopy(v, { soLegenda: true })
+      });
+      campoCopy.dispatchEvent(new Event("input", { bubbles: true }));
+      avisar("Copy criada. Revise e salve.");
+    } catch (e) { avisar(e.message, "erro"); }
+    botao.disabled = false; botao.textContent = rotulo;
+  } }, "✨ Criar copy");
+  botao.title = aqui ? "Escreve a copy com o briefing acima e a identidade da marca" : "Monta o pedido com o briefing acima e a identidade da marca e abre o Claude";
+  botao.classList.add("so-conteudo");
+  return botao;
 }
 
 /** Pessoas mencionadas com @PrimeiroNome (ou @Nome Completo) no texto. */
@@ -227,20 +265,37 @@ function mudancas(antes, depois) {
 }
 export const registrarMudanca = (antes, depois) => { const texto = mudancas(antes, { ...antes, ...depois }); if (texto) registrarAtividade(antes.id, { texto }); };
 
+/**
+ * "Produzir semana": os posts da semana como checklist. Marcar = produzido (fica no post, campo `produzido`).
+ * Clicar no post abre o card dele por cima; ao fechar, a lista se atualiza.
+ */
 function secaoSemana(tarefa) {
   const fim = addDias(tarefa.semanaInicio, 6);
-  const posts = dados.tarefas
-    .filter((t) => t.tipo === TIPO_CONTEUDO && (!tarefa.clienteId || t.clienteId === tarefa.clienteId))
-    .map((t) => ({ t, d: t.dataPublicacao || t.prazo || "" }))
-    .filter(({ d }) => d >= tarefa.semanaInicio && d <= fim)
-    .sort((a, b) => a.d.localeCompare(b.d));
-  return el("div", { class: "semana-producao" },
-    el("h3", { class: "form-secao" }, `Posts de ${fmtData(tarefa.semanaInicio, true)} a ${fmtData(fim, true)} (${posts.length})`),
-    posts.length ? posts.map(({ t, d }) => el("button", { type: "button", class: "linha-tabela", onClick: () => { fecharModais(); abrirTarefa(t); } },
-      el("span", { class: "data-mini" }, fmtData(d, true)), el("strong", {}, `${t.formato || "Post"} | ${t.titulo}`),
-      el("span", { class: `etiqueta st-${t.statusConteudo || "ideia"}` }, rotuloStatusConteudo(t.statusConteudo || "ideia")),
-      t.qtdArtes ? el("span", { class: "progresso-mini" }, `🖼 ${t.qtdArtes}`) : null))
-      : el("p", { class: "subtitulo" }, "Nenhum post planejado para essa semana. Planeje o mês do cliente primeiro."));
+  const caixa = el("div", { class: "semana-producao" });
+  const desenhar = () => {
+    const posts = postsDaProducao(tarefa);
+    const feitos = posts.filter((p) => p.produzido).length;
+    caixa.replaceChildren(
+      el("h3", { class: "form-secao" }, `Posts da semana · ${fmtData(tarefa.semanaInicio, true)} a ${fmtData(fim, true)}`,
+        posts.length ? el("span", { class: "contador" }, `${feitos}/${posts.length} produzidos`) : null),
+      posts.length ? el("ul", { class: "checklist-producao" }, posts.map((p) => el("li", { class: p.produzido ? "feito" : "" },
+        el("input", { type: "checkbox", checked: !!p.produzido, "aria-label": `Produzido: ${p.titulo}`, onChange: async (e) => {
+          const marcado = e.target.checked;
+          await atualizar("tarefas", p.id, { produzido: marcado });
+          registrarAtividade(p.id, { texto: marcado ? "marcou como produzido" : "desmarcou o produzido" });
+          desenhar();
+        } }),
+        el("button", { type: "button", class: "item-producao", title: "Abrir o post", onClick: async () => { await abrirTarefa(porId("tarefas", p.id) || p); desenhar(); } },
+          el("span", { class: "data-mini" }, fmtData(p.dataPublicacao || p.prazo, true)),
+          el("span", { class: "etiqueta formato" }, p.formato || "Post"),
+          el("strong", {}, p.titulo),
+          p.marcaId ? el("span", { class: "etiqueta" }, porId("marcas", p.marcaId)?.nome || "") : null,
+          el("span", { class: `etiqueta st-${p.statusConteudo || "ideia"}` }, rotuloStatusConteudo(p.statusConteudo || "ideia"))))))
+        : el("p", { class: "subtitulo" }, "Nenhum post planejado para essa semana. Planeje o mês do cliente primeiro."),
+      posts.length && feitos === posts.length ? el("p", { class: "faixa-ok" }, "Tudo produzido! Pode concluir esta tarefa.") : null);
+  };
+  desenhar();
+  return caixa;
 }
 
 function secaoCriativos(tarefa) {
@@ -280,12 +335,12 @@ function secaoCriativos(tarefa) {
 export async function salvarTarefa(original, v) {
   // Tarefa nova: se o checklist ficou com o modelo de outro formato/tipo, troca pelo certo
   if (!original.id) {
-    const doInicio = JSON.stringify(modeloChecklist({ formato: "Feed estático", ...original }).map((i) => i.texto));
+    const doInicio = JSON.stringify(modeloChecklist({ formato: FORMATO_PADRAO, ...original }).map((i) => i.texto));
     const atual = JSON.stringify((v.checklist || []).map((i) => i.texto));
     if (!v.checklist?.length || atual === doInicio) v.checklist = modeloChecklist(v);
   }
   if (v.tipo !== TIPO_CONTEUDO) {
-    for (const k of ["formato", "rede", "dataPublicacao", "hora", "statusConteudo", "objetivo", "roteiro", "copy"]) delete v[k];
+    for (const k of ["formato", "rede", "dataPublicacao", "hora", "statusConteudo", "objetivo", "roteiro", "copy", "extra"]) delete v[k];
   } else {
     if (!v.prazo) v.prazo = v.dataPublicacao;
     v.statusConteudo ||= "ideia";
@@ -330,6 +385,14 @@ export async function alternarConcluida(t) {
   });
 }
 
+/** "▣ 3/8 posts" no card do Produzir semana. */
+function progressoProducao(t) {
+  const posts = postsDaProducao(t);
+  if (!posts.length) return null;
+  const feitos = posts.filter((p) => p.produzido).length;
+  return el("span", { class: `progresso-mini ${feitos === posts.length ? "completo" : ""}`, title: "Posts produzidos" }, `▣ ${feitos}/${posts.length} posts`);
+}
+
 export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
   const feitos = (t.checklist || []).filter((i) => i.feito).length;
   const total = (t.checklist || []).length;
@@ -349,6 +412,7 @@ export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
         ehConteudo(t) && t.statusConteudo ? el("span", { class: `etiqueta st-${t.statusConteudo}` }, rotuloStatusConteudo(t.statusConteudo)) : null,
         t.status === "andamento" ? el("span", { class: "etiqueta andamento" }, "Em andamento") : null,
         total ? el("span", { class: "progresso-mini" }, `☑ ${feitos}/${total}`) : null,
+        t.semanaInicio ? progressoProducao(t) : null,
         t.qtdComentarios ? el("span", { class: "progresso-mini", title: "Comentários" }, `💬 ${t.qtdComentarios}`) : null,
         ehConteudo(t) ? seloResposta(t) : null,
         ehConteudo(t) && t.qtdArtes ? el("span", { class: "progresso-mini", title: "Criativos anexados" }, `🖼 ${t.qtdArtes}`) : null,

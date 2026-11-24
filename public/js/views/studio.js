@@ -99,7 +99,7 @@ function dicasDeFoto(id, formato) {
 }
 
 function telaFoto(conta, id, estado, renderizar) {
-  const e = (estado.foto ??= { formato: "Feed estático" });
+  const e = (estado.foto ??= { formato: "Estático" });
   return [
     el("section", { class: "bloco" },
       el("h2", {}, "Direção de fotos da marca"),
@@ -185,12 +185,16 @@ function telaConteudo(conta, id, estado, renderizar) {
 
 /* ---------------- Ideias ---------------- */
 
+/** "Reels", "Feed", "carrossel"… → um dos FORMATOS. */
+const formatoDoTexto = (t = "") => /reels?|v[ií]deo|tiktok|shorts/i.test(t) ? "Vídeo" : /stor(y|ies)/i.test(t) ? "Story" : /carrossel/i.test(t) ? "Carrossel"
+  : /feed|est[aá]tico|post/i.test(t) ? "Estático" : FORMATOS.find((f) => t.toLowerCase().includes(f.toLowerCase())) || "";
+
 /** Linhas "Formato | Tema | Gancho | Por quê" → ideias. Aceita também listas simples. */
 export function lerIdeias(texto = "") {
   return texto.split("\n").map((l) => l.replace(/^\s*(\d+[.)-]|[-*•])\s*/, "").trim()).filter((l) => l && !/^formato\s*\|/i.test(l) && !/^[-|\s]+$/.test(l))
     .map((l) => {
       const p = l.split("|").map((x) => x.trim().replace(/\*\*/g, ""));
-      if (p.length >= 2) return { formato: FORMATOS.find((f) => p[0].toLowerCase().includes(f.toLowerCase().split(" ")[0])) || "", tema: p[1], gancho: p[2] || "", porque: p[3] || "" };
+      if (p.length >= 2) return { formato: formatoDoTexto(p[0]), tema: p[1], gancho: p[2] || "", porque: p[3] || "" };
       return { formato: "", tema: l.replace(/\*\*/g, ""), gancho: "", porque: "" };
     }).filter((i) => i.tema);
 }

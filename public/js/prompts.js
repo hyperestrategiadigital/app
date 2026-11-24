@@ -5,7 +5,8 @@ import { fmtData } from "./ui.js";
 
 const ehVertical = (f) => /story|reels|tiktok|vídeo|video/i.test(f || "");
 
-export function promptCopy(post) {
+/** Pedido de copy. `soLegenda`: só a legenda final (para escrever direto no campo do post). */
+export function promptCopy(post, { soLegenda = false } = {}) {
   const c = identidade(post.clienteId, post.marcaId);
   const deMarca = c.marcaId && c.clienteNome;
   const linhas = [
@@ -28,6 +29,9 @@ export function promptCopy(post) {
     post.objetivo ? `- Objetivo: ${post.objetivo}` : null,
     post.roteiro ? `- Briefing / roteiro:\n${post.roteiro}` : null,
     "",
+    soLegenda ? "## O que entregar\nSó a legenda final, pronta para publicar, com gancho forte na primeira linha, chamada para ação e, se for Instagram, 5 a 10 hashtags no fim. Sem títulos, sem opções, sem explicações." : null,
+    soLegenda ? "" : null,
+    soLegenda ? "Escreva em português do Brasil." : null,
     "## O que entregar",
     post.formato === "Carrossel" ? "- Texto de cada lâmina (capa forte + 5 a 8 lâminas + lâmina final com CTA)" : null,
     ehVertical(post.formato) ? "- Gancho dos 3 primeiros segundos e roteiro curto" : null,
@@ -39,6 +43,7 @@ export function promptCopy(post) {
     "",
     "Escreva em português do Brasil."
   ];
+  if (soLegenda) { const i = linhas.indexOf("## O que entregar"); return linhas.slice(0, i).filter((l) => l !== null).join("\n"); }
   return linhas.filter((l) => l !== null).join("\n");
 }
 
@@ -66,7 +71,7 @@ export function promptCanva({ post = {}, cliente = {}, formato, tamanho, texto =
     `Crie no Canva uma arte para ${cliente.marcaId ? `a marca ${cliente.nome} (cliente ${cliente.clienteNome})` : `o cliente ${cliente.nome || "(sem cliente)"}`} usando a imagem que anexei nesta mensagem como fundo.`,
     "",
     "## Peça",
-    `- Formato: ${formato || post.formato || "Feed estático"} (${tamanho ? `${tamanho[0]}×${tamanho[1]} px` : "1080×1350 px"})`,
+    `- Formato: ${formato || post.formato || "Estático"} (${tamanho ? `${tamanho[0]}×${tamanho[1]} px` : "1080×1350 px"})`,
     post.titulo ? `- Tema do post: ${post.titulo}` : null,
     post.dataPublicacao ? `- Publicação: ${fmtData(post.dataPublicacao)}${post.hora ? ` às ${post.hora}` : ""}` : null,
     post.objetivo ? `- Objetivo: ${post.objetivo}` : null,
@@ -144,6 +149,6 @@ export function promptIdeias(c, { quantidade = 10, foco = "", mes = "", jaPlanej
     jaPlanejados.length ? `- Já planejados (não repita): ${jaPlanejados.slice(0, 30).join("; ")}` : null,
     "",
     "Para cada ideia, uma linha no formato: Formato | Tema | Gancho (primeira frase) | Por que funciona.",
-    "Varie os formatos (Reels, Carrossel, Story, Feed estático) e siga as diretrizes da marca."
+    "Use só estes formatos: Estático, Carrossel, Vídeo, Story. Varie os formatos e siga as diretrizes da marca."
   ].filter((l) => l !== null).join("\n");
 }

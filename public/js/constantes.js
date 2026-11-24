@@ -12,7 +12,7 @@ export const TIPO_CONTEUDO = "Conteúdo";
 // 8 tipos + "Reunião", que não vira tarefa: abre como compromisso
 export const TIPO_FINANCEIRO = "Financeiro / Comercial";
 export const TIPOS_TAREFA = [
-  "Conteúdo", "Produção", "Vídeo / Roteiro", "Tráfego pago", TIPO_FINANCEIRO, "Planejamento", "Organização", "Outro", "Reunião"
+  "Conteúdo", "Produção", "Vídeo / Roteiro", "Tráfego pago", TIPO_FINANCEIRO, "Planejamento", "Organização", "Reunião", "Outro"
 ];
 /** Tipos antigos → novos (aplicado uma vez nas tarefas existentes). */
 export const TIPO_ANTIGO = {
@@ -23,15 +23,19 @@ export const ehConteudo = (t) => t?.tipo === TIPO_CONTEUDO;
 
 export const SERVICOS = ["Social media", "Meta Ads", "Google Ads", "Vídeo", "Site / LP", "Consultoria"];
 
-export const FORMATOS = [
-  "Feed estático", "Carrossel", "Reels", "Story", "Sequência de stories", "Vídeo (YouTube)",
-  "TikTok", "Anúncio estático", "Anúncio em vídeo", "Artigo", "E-mail marketing", "WhatsApp", "Blog", "Outro"
-];
+// Formato = o tipo de peça (a rede é outro campo). Vídeo vale para Reels, TikTok, Shorts e YouTube.
+export const FORMATOS = ["Estático", "Carrossel", "Vídeo", "Story", "Artigo", "E-mail marketing", "WhatsApp", "Blog", "Outro"];
+export const FORMATO_PADRAO = "Estático";
+/** Formatos antigos → novos (aplicado uma vez nos posts e nos modelos de checklist). */
+export const FORMATO_ANTIGO = {
+  "Feed estático": "Estático", "Anúncio estático": "Estático", "Reels": "Vídeo", "TikTok": "Vídeo", "Vídeo (YouTube)": "Vídeo",
+  "Anúncio em vídeo": "Vídeo", "Sequência de stories": "Story", "Stories": "Story"
+};
+export const formatoAtual = (f) => FORMATO_ANTIGO[f] || f || "";
 // Proporção da arte por formato (largura x altura) usada no menu Criar
 export const PROPORCAO_FORMATO = {
-  "Feed estático": [1080, 1350], "Carrossel": [1080, 1350], "Anúncio estático": [1080, 1350],
-  "Story": [1080, 1920], "Sequência de stories": [1080, 1920], "Reels": [1080, 1920], "TikTok": [1080, 1920], "Anúncio em vídeo": [1080, 1920],
-  "Vídeo (YouTube)": [1920, 1080], "Blog": [1600, 900], "Artigo": [1600, 900], "E-mail marketing": [1200, 628], "WhatsApp": [1080, 1080], "Outro": [1080, 1080]
+  "Estático": [1080, 1350], "Carrossel": [1080, 1350], "Vídeo": [1080, 1920], "Story": [1080, 1920],
+  "Blog": [1600, 900], "Artigo": [1600, 900], "E-mail marketing": [1200, 628], "WhatsApp": [1080, 1080], "Outro": [1080, 1080]
 };
 export const REDES = ["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn", "WhatsApp", "E-mail", "Site"];
 
@@ -76,15 +80,12 @@ export const DIAS_SEMANA = [
 // Modelos de checklist: tarefa ou post novo sem checklist já nasce com estes passos.
 // O administrador muda em Ajustes → Modelos de checklist (config/modelos).
 export const MODELOS_PADRAO = {
-  "Feed estático": ["Briefing", "Copy", "Arte no Canva", "Aprovação do cliente", "Agendar"],
+  "Estático": ["Briefing", "Copy", "Arte no Canva", "Aprovação do cliente", "Agendar"],
   "Carrossel": ["Roteiro das lâminas", "Copy", "Arte no Canva", "Aprovação do cliente", "Agendar"],
-  "Reels": ["Roteiro", "Gravação", "Edição", "Capa", "Legenda", "Aprovação do cliente", "Agendar"],
+  "Vídeo": ["Roteiro", "Gravação", "Edição", "Capa", "Legenda", "Aprovação do cliente", "Agendar"],
   "Story": ["Roteiro", "Arte ou gravação", "Publicar"],
   "Artigo": ["Pauta com o autor", "Texto", "Revisão", "Imagem de capa", "Aprovação do cliente", "Publicar"],
   "E-mail marketing": ["Texto", "Layout do e-mail", "Lista de envio", "Aprovação do cliente", "Agendar envio"],
-  "Sequência de stories": ["Roteiro", "Artes ou gravações", "Aprovação do cliente", "Publicar"],
-  "Anúncio estático": ["Briefing", "Copy", "Arte", "Aprovação do cliente", "Subir no gerenciador"],
-  "Anúncio em vídeo": ["Roteiro", "Gravação", "Edição", "Aprovação do cliente", "Subir no gerenciador"],
   "Tráfego pago": ["Conferir resultados", "Ajustar orçamentos", "Pausar o que não performa", "Registrar manutenção"],
   "Planejamento": ["Planejar os posts no calendário", "Enviar link de aprovação ao cliente", "Ajustar com o retorno"],
   "Vídeo / Roteiro": ["Roteiro", "Gravação", "Edição", "Revisão"]

@@ -118,7 +118,7 @@ export function sugerirPost() {
     contas.length > 1 ? { nome: "conta", rotulo: "Marca", tipo: "select", opcoes: contas.map((k) => [k.chave, k.nome]), obrigatorio: true } : null,
     { nome: "titulo", rotulo: "Tema / ideia", obrigatorio: true, dica: "Ex.: promoção de Natal, bastidores da equipe" },
     { nome: "dataPublicacao", rotulo: "Quando publicar (se tiver data)", tipo: "date", largura: "metade" },
-    { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: "Feed estático", largura: "metade" },
+    { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: "Estático", largura: "metade" },
     { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: REDES, padrao: "Instagram", largura: "metade" },
     { nome: "copy", rotulo: "Legenda (opcional)", tipo: "textarea", linhas: 5, dica: "Escreva aqui ou use o botão para o Claude escrever no tom de voz da marca." },
     { nome: "notas", rotulo: "Observações para a Hyper", tipo: "textarea", linhas: 3 }
