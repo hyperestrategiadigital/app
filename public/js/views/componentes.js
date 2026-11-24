@@ -267,9 +267,13 @@ function mencionados(texto) {
 function secaoAtividade(tarefa) {
   const lista = el("div", { class: "atividade-lista" }, el("p", { class: "subtitulo" }, "Carregando…"));
   const quando = (ms) => new Date(ms).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  // Só a leitura mais recente desenha a lista (a primeira, ao abrir, pode chegar depois de um comentário novo)
+  let versao = 0;
   const carregar = async () => {
+    const minha = ++versao;
     try {
       const itens = await listarAtividade(tarefa.id);
+      if (minha !== versao) return;
       lista.replaceChildren(...(itens.length ? itens.map((a) => a.tipo === "comentario"
         ? el("div", { class: "comentario" },
           avatar(dados.membros.find((m) => m.id === a.uid) || a.nome),
@@ -289,12 +293,13 @@ function secaoAtividade(tarefa) {
     const pessoas = mencionados(texto);
     await registrarAtividade(tarefa.id, { tipo: "comentario", texto, mencoes: pessoas.map((m) => m.nome) });
     atualizar("tarefas", tarefa.id, { qtdComentarios: (porId("tarefas", tarefa.id)?.qtdComentarios || 0) + 1 }).catch(() => {});
-    let avisados = 0;
-    for (const m of pessoas) if (await avisarMencao({ para: m.email, nomePara: m.nome, tarefa, texto })) avisados++;
-    if (pessoas.length) avisar(avisados ? `Comentário enviado. ${avisados} pessoa(s) avisada(s) por e-mail.` : "Comentário enviado (e-mails automáticos desligados).");
+    // O comentário aparece na hora; os e-mails das @menções saem depois (podem levar alguns segundos)
     caixa.value = "";
     botao.disabled = false;
     carregar();
+    let avisados = 0;
+    for (const m of pessoas) if (await avisarMencao({ para: m.email, nomePara: m.nome, tarefa, texto })) avisados++;
+    if (pessoas.length) avisar(avisados ? `Comentário enviado. ${avisados} pessoa(s) avisada(s) por e-mail.` : "Comentário enviado (e-mails automáticos desligados).");
   };
   caixa.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar(caixa.nextSibling.querySelector("button")); } });
   carregar();
