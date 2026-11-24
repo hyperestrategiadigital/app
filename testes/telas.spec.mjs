@@ -832,6 +832,7 @@ test("Hoje: cada dia dos próximos 7 dias abre e fecha", async ({ page }) => {
   await expect(dia2).toHaveAttribute("open", "");
   await dia2.locator("summary").click();
   await expect(page.locator(".cartao-tarefa", { hasText: "Tarefa depois de amanhã" })).toBeHidden();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("hyper-dias-recolhidos") || "")).toContain("-");
   await page.reload();
   await page.getByRole("tab", { name: "Equipe" }).click();
   await expect(page.locator(".cartao-tarefa", { hasText: "Tarefa depois de amanhã" })).toBeHidden(); // lembra que fechou
