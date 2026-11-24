@@ -3,7 +3,7 @@
 // no Canva e devolver o link de edição. O link e a imagem ficam anexados no post.
 import { el, avisar, vazio, linkExterno, baixar, abrirModal } from "../ui.js";
 import { porId, atualizar, identidade } from "../db.js";
-import { FORMATOS, PROPORCAO_FORMATO } from "../constantes.js";
+import { FORMATOS, PROPORCAO_FORMATO, formatoAtual } from "../constantes.js";
 import { promptImagem, promptCanva } from "../prompts.js";
 import { gerarImagem, temChave, tamanhoAPI } from "../openai.js";
 import { salvarArte, comprimirImagem, lerComoDataURL } from "../arquivos.js";
@@ -20,7 +20,7 @@ export function redirecionar({ params }) {
 /** Abre o Criar para um post (tarefa do tipo Conteúdo). */
 export function abrirCriarArte(postInicial) {
   const estado = {
-    formato: postInicial.formato || "Feed estático", espacoTexto: "base", qualidade: "medium", imagens: [], selecionada: null,
+    formato: formatoAtual(postInicial.formato) || "Estático", espacoTexto: "base", qualidade: "medium", imagens: [], selecionada: null,
     descricao: [postInicial.titulo, postInicial.roteiro, postInicial.objetivo ? `Objetivo: ${postInicial.objetivo}` : ""].filter(Boolean).join(". "),
     texto: { titulo: postInicial.titulo || "", apoio: "", cta: "", observacoes: "" }
   };

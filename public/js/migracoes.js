@@ -1,7 +1,7 @@
 // Ajustes automáticos de dados antigos, rodados uma vez ao entrar.
 import { dados, gravarEmLote, excluir, salvarComId, atualizar } from "./db.js";
 import { hojeISO, addDias } from "./ui.js";
-import { TIPO_CONTEUDO, TIPO_ANTIGO, statusDaEtapa } from "./constantes.js";
+import { TIPO_CONTEUDO, TIPO_ANTIGO, FORMATO_ANTIGO, statusDaEtapa } from "./constantes.js";
 
 export async function completarPostsSemFormato() {
   const faltando = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && !t.formato);
@@ -17,14 +17,31 @@ export function deduzirPost(titulo = "", prazo = "") {
   const t = titulo.toLowerCase();
   const formato = /carrossel/.test(t) ? "Carrossel"
     : /stor(y|ies)/.test(t) ? "Story"
-    : /reels?|v[ií]deo/.test(t) ? "Reels"
+    : /reels?|v[ií]deo|tiktok/.test(t) ? "Vídeo"
     : /whats/.test(t) ? "WhatsApp"
-    : "Feed estático";
+    : "Estático";
   // "(23/11)" no título é a data de publicação
   const m = titulo.match(/\((\d{1,2})\/(\d{1,2})\)/);
   let dataPublicacao = prazo;
   if (m && prazo) dataPublicacao = `${prazo.slice(0, 4)}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   return { formato, rede: formato === "WhatsApp" ? "WhatsApp" : "Instagram", dataPublicacao, statusConteudo: "ideia" };
+}
+
+/**
+ * Formatos antigos (Feed estático, Reels, TikTok, Sequência de stories…) → novos (Estático, Vídeo, Story…),
+ * nos posts e nas chaves dos modelos de checklist.
+ */
+export async function migrarFormatos() {
+  const posts = dados.tarefas.filter((t) => FORMATO_ANTIGO[t.formato]);
+  for (let i = 0; i < posts.length; i += 400)
+    await gravarEmLote("tarefas", posts.slice(i, i + 400).map(({ id, ...t }) => ({ id, ...t, formato: FORMATO_ANTIGO[t.formato] })));
+  const modelos = dados.config.find((c) => c.id === "modelos");
+  if (modelos?.modelos && Object.keys(modelos.modelos).some((k) => FORMATO_ANTIGO[k])) {
+    const novos = {};
+    for (const [k, passos] of Object.entries(modelos.modelos)) { const n = FORMATO_ANTIGO[k] || k; if (!novos[n]) novos[n] = passos; }
+    await atualizar("config", "modelos", { modelos: novos });
+  }
+  return posts.length;
 }
 
 // Reuniões abertas criadas como tarefa viram compromissos (aparecem no calendário e vão para a Google Agenda).

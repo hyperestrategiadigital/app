@@ -4,7 +4,7 @@ import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal
 import { dados, porId, criar, atualizar, excluir, clientesAtivos, marcasDo } from "../db.js";
 import { cabecalho, abas, modeloChecklist } from "./componentes.js";
 import { responsavelPadrao } from "../agenda.js";
-import { FORMATOS, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
+import { FORMATOS, formatoAtual, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
 import { postsDoMes, dataPost, exportarPDF, nomeMes, temPrefixo } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
 import { gerarLinkAprovacao } from "../aprovacoes.js";
@@ -22,7 +22,7 @@ function linhaDePost(t) {
 
 function linhaNova(data, base = {}) {
   return {
-    chave: novaChave(), id: null, dataPublicacao: data, hora: base.hora || "", formato: base.formato || "Feed estático",
+    chave: novaChave(), id: null, dataPublicacao: data, hora: base.hora || "", formato: formatoAtual(base.formato) || "Estático",
     rede: base.rede || "Instagram", titulo: "", objetivo: "", roteiro: "", prazo: "", statusConteudo: "ideia", marcaId: base.marcaId || ""
   };
 }
@@ -84,7 +84,7 @@ export function render({ params, estado, renderizar }) {
   const preencher = async () => {
     const r = await formulario("Preencher o mês", [
       { nome: "dias", rotulo: "Dias da semana com post", tipo: "multi", opcoes: DIAS_SEMANA.map(([, n]) => n) },
-      { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: "Feed estático", largura: "metade" },
+      { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: "Estático", largura: "metade" },
       { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: REDES, padrao: "Instagram", largura: "metade" },
       { nome: "hora", rotulo: "Horário", tipo: "time", largura: "metade" },
       { nome: "pularExistentes", rotulo: "Pular dias que já têm post", tipo: "checkbox", padrao: true }
@@ -250,20 +250,20 @@ function telaEscolha() {
 
 // "Estático | Tema" → { formato, titulo }. Prefixos do jeito que você já escreve na planilha.
 const PREFIXOS = [
-  [/^est[aá]tico/i, "Feed estático"], [/^feed/i, "Feed estático"], [/^carrossel/i, "Carrossel"],
-  [/^reels?/i, "Reels"], [/^v[ií]deo/i, "Reels"], [/^stor(y|ies)/i, "Story"], [/^whats/i, "WhatsApp"],
-  [/^tiktok/i, "TikTok"], [/^tr[aá]fego/i, "Anúncio estático"], [/^an[uú]ncio/i, "Anúncio estático"], [/^blog/i, "Blog"],
+  [/^est[aá]tico/i, "Estático"], [/^feed/i, "Estático"], [/^carrossel/i, "Carrossel"],
+  [/^reels?/i, "Vídeo"], [/^v[ií]deo/i, "Vídeo"], [/^stor(y|ies)/i, "Story"], [/^whats/i, "WhatsApp"],
+  [/^tiktok/i, "Vídeo"], [/^tr[aá]fego/i, "Estático"], [/^an[uú]ncio/i, "Estático"], [/^blog/i, "Blog"],
   [/^artigo/i, "Artigo"], [/^e-?mail/i, "E-mail marketing"]
 ];
-export function lerTextoRapido(texto, formatoPadrao = "Feed estático") {
+export function lerTextoRapido(texto, formatoPadrao = "Estático") {
   return texto.split(";").map((parte) => parte.trim()).filter(Boolean).map((parte) => {
     const [prefixo, ...resto] = parte.split("|");
     if (resto.length) {
       const achado = PREFIXOS.find(([re]) => re.test(prefixo.trim()));
       if (achado) return { formato: achado[1], titulo: resto.join("|").trim() };
     }
-    // Prefixo desconhecido (ex.: "Comercial | ..."): mantém o texto inteiro como tema, em Feed estático
-    return { formato: resto.length ? "Feed estático" : formatoPadrao, titulo: parte };
+    // Prefixo desconhecido (ex.: "Comercial | ..."): mantém o texto inteiro como tema, em Estático
+    return { formato: resto.length ? "Estático" : formatoPadrao, titulo: parte };
   });
 }
 

@@ -7,12 +7,21 @@ import { configOpenAI } from "../openai.js";
 import { agendaConectada } from "../agenda.js";
 import { rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
+import { dentroDaProducao } from "../producao.js";
 import { pode, tarefaVisivel, eu, ehAdmin } from "../permissoes.js";
 import { compromissosEntre } from "../agenda.js";
 import { abrirCompromisso, cartaoCompromisso, avisoPendentes } from "../compromissos.js";
 
 const lerPreferencia = () => { try { return localStorage.getItem("hyper-hoje-visao"); } catch { return null; } };
 const guardar = (chave, valor) => { try { localStorage.setItem(chave, valor); } catch {} };
+/** Dias fechados em "Próximos 7 dias" (só datas de hoje em diante, para a lista não crescer). */
+function lerRecolhidos() {
+  try { return (JSON.parse(localStorage.getItem("hyper-dias-recolhidos") || "[]") || []).filter((d) => d >= hojeISO()); } catch { return []; }
+}
+function guardarRecolhido(dia, fechado) {
+  const atuais = lerRecolhidos().filter((d) => d !== dia);
+  guardar("hyper-dias-recolhidos", JSON.stringify(fechado ? [...atuais, dia] : atuais));
+}
 
 /** Lista de primeiros passos do administrador (some quando tudo estiver pronto ou ao dispensar). */
 function primeirosPassos(renderizar) {
@@ -63,12 +72,13 @@ export function render({ estado = {}, renderizar = () => {} } = {}) {
   estado.visao ??= lerPreferencia() || (todasVisiveis.some((t) => minha(t) && t.status !== "concluido") ? "minhas" : "equipe");
   const soMinhas = estado.visao === "minhas";
   const visiveis = soMinhas ? todasVisiveis.filter(minha) : todasVisiveis;
-  const abertas = visiveis.filter((t) => t.status !== "concluido");
+  // Posts que estão dentro de um "Produzir semana" não aparecem soltos: ficam na checklist dessa tarefa
+  const abertas = visiveis.filter((t) => t.status !== "concluido" && !dentroDaProducao(t));
   const atrasadas = abertas.filter(atrasada).sort((a, b) => a.prazo.localeCompare(b.prazo));
   const deHoje = abertas.filter((t) => t.prazo === hoje);
   const semana = abertas.filter((t) => t.prazo > hoje && t.prazo <= fimSemana).sort((a, b) => a.prazo.localeCompare(b.prazo));
   const semPrazo = abertas.filter((t) => !t.prazo);
-  const concluidasHoje = visiveis.filter((t) => t.status === "concluido" && t.concluidoEm === hoje).length;
+  const concluidasHoje = visiveis.filter((t) => t.status === "concluido" && t.concluidoEm === hoje && !dentroDaProducao(t)).length;
 
   const conteudos = (pode("conteudo") ? visiveis : [])
     .filter((c) => c.tipo === TIPO_CONTEUDO && dataPost(c) >= hoje && dataPost(c) <= fimSemana && c.statusConteudo !== "publicado")
@@ -83,14 +93,20 @@ export function render({ estado = {}, renderizar = () => {} } = {}) {
   const saudacao = new Date().getHours() < 12 ? "Bom dia" : new Date().getHours() < 18 ? "Boa tarde" : "Boa noite";
   const dataExtenso = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
 
+  // Próximos dias: cada dia abre e fecha (o que você fechou fica fechado neste navegador)
+  const recolhidos = lerRecolhidos();
   const grupoPorDia = (lista) => {
     const dias = {};
     lista.forEach((t) => (dias[t.prazo] ??= []).push(t));
-    return Object.entries(dias).map(([d, ts]) =>
-      el("div", { class: "grupo-dia" },
-        el("h3", {}, `${fmtDiaSemana(d)} · ${fmtData(d, true)}`, el("span", { class: "contador" }, ts.length)),
-        ts.map((t) => cartaoTarefa(t))));
+    return Object.entries(dias).map(([d, ts]) => {
+      const caixa = el("details", { class: "grupo-dia", open: !recolhidos.includes(d) },
+        el("summary", {}, el("h3", {}, `${fmtDiaSemana(d)} · ${fmtData(d, true)}`, el("span", { class: "contador" }, ts.length))),
+        ts.map((t) => cartaoTarefa(t)));
+      caixa.addEventListener("toggle", () => guardarRecolhido(d, !caixa.open));
+      return caixa;
+    });
   };
+  const alternarTodos = (abrir) => { guardar("hyper-dias-recolhidos", JSON.stringify(abrir ? [] : [...new Set(semana.map((t) => t.prazo))])); renderizar(); };
 
   return el("div", { class: "tela" },
     cabecalho(`${saudacao}${eu.nome ? `, ${eu.nome.split(" ")[0]}` : ""}!`, dataExtenso.charAt(0).toUpperCase() + dataExtenso.slice(1),
@@ -114,7 +130,10 @@ export function render({ estado = {}, renderizar = () => {} } = {}) {
         atrasadas.length ? [el("h2", { class: "titulo-alerta" }, `Atrasadas (${atrasadas.length})`), atrasadas.map((t) => cartaoTarefa(t))] : null,
         el("h2", {}, `Hoje (${deHoje.length})`),
         deHoje.length ? deHoje.map((t) => cartaoTarefa(t)) : vazio(soMinhas ? "Nada seu vencendo hoje. 🎉" : "Nada vencendo hoje. 🎉"),
-        el("h2", {}, "Próximos 7 dias"),
+        el("div", { class: "com-acao" }, el("h2", {}, "Próximos 7 dias"),
+          semana.length ? el("div", { class: "acoes-dias" },
+            el("button", { class: "link", onClick: () => alternarTodos(true) }, "Abrir todos"),
+            el("button", { class: "link", onClick: () => alternarTodos(false) }, "Fechar todos")) : null),
         semana.length ? grupoPorDia(semana) : vazio("Semana livre por enquanto."),
         semPrazo.length ? [el("h2", {}, `Sem prazo (${semPrazo.length})`), semPrazo.map((t) => cartaoTarefa(t))] : null),
 

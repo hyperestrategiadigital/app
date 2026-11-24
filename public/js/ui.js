@@ -92,9 +92,11 @@ export function baixar(origem, nome) {
 }
 
 /* ---------------- Modal ---------------- */
-export function abrirModal(titulo, conteudo, { largo = false } = {}) {
-  const fechar = () => { fundo.remove(); document.removeEventListener("keydown", esc); };
-  const esc = (e) => { if (e.key === "Escape") fechar(); };
+export function abrirModal(titulo, conteudo, { largo = false, aoFechar = null } = {}) {
+  let aberto = true;
+  const fechar = () => { if (!aberto) return; aberto = false; fundo.remove(); document.removeEventListener("keydown", esc); aoFechar?.(); };
+  // Com uma janela aberta por cima de outra (ex.: post dentro do Produzir semana), o Esc fecha só a de cima
+  const esc = (e) => { if (e.key === "Escape" && [...document.querySelectorAll(".modal-fundo")].pop() === fundo) fechar(); };
   const caixa = el("div", { class: `modal${largo ? " modal-largo" : ""}`, role: "dialog", "aria-modal": "true" },
     el("div", { class: "modal-topo" },
       el("h2", {}, titulo),
@@ -219,8 +221,8 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
         botao.disabled = true;
         try {
           if (aoSalvar) await aoSalvar(out);
+          resolver(out); // antes de fechar: fechar resolve com null
           fechar();
-          resolver(out);
         } catch (erro) {
           console.error(erro);
           avisar("Não foi possível salvar: " + erro.message, "erro");
@@ -232,7 +234,7 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
       el("button", { type: "button", class: "negar", onClick: () => { fechar(); resolver(null); } }, "Cancelar"),
       el("button", { type: "submit", class: "confirmar" }, rotuloSalvar)));
     form.lerValores = lerValores;
-    fechar = abrirModal(titulo, form, { largo });
+    fechar = abrirModal(titulo, form, { largo, aoFechar: () => resolver(null) });
   });
 }
 

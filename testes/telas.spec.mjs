@@ -23,7 +23,7 @@ const BANCO = {
   [`${E}/tarefas`]: {
     t1: { titulo: "Revisar campanhas", tipo: "Tráfego pago", clienteId: "grupo", status: "a_fazer", prazo: dia(0), checklist: [] },
     t2: { titulo: "Roteiro do reels", tipo: "Roteiro", clienteId: "loja", status: "andamento", prazo: dia(2), checklist: [] },
-    p1: { titulo: "Promo da semana", tipo: "Conteúdo", clienteId: "loja", status: "concluido", statusConteudo: "ideia", formato: "Feed estático", rede: "Instagram", dataPublicacao: dia(1), prazo: dia(0), checklist: [] },
+    p1: { titulo: "Promo da semana", tipo: "Conteúdo", clienteId: "loja", status: "concluido", statusConteudo: "ideia", formato: "Estático", rede: "Instagram", dataPublicacao: dia(1), prazo: dia(0), checklist: [] },
     velha: { titulo: "Entrega antiga", tipo: "Outro", clienteId: "grupo", status: "concluido", concluidoEm: dia(-200), prazo: dia(-200), checklist: [] }
   }
 };
@@ -291,7 +291,7 @@ test("comentário com @menção e histórico na tarefa", async ({ page }) => {
 
 test("aprovação do cliente por link: o cliente aprova e o post muda de etapa", async ({ page, context }) => {
   await abrir(page);
-  await page.evaluate(async () => { const db = await import("/js/db.js"); await db.salvarComId("tarefas", "p2", { titulo: "Post para aprovar", tipo: "Conteúdo", clienteId: "grupo", formato: "Reels", rede: "Instagram", dataPublicacao: new Date().toISOString().slice(0, 10), statusConteudo: "producao", status: "andamento", checklist: [] }); });
+  await page.evaluate(async () => { const db = await import("/js/db.js"); await db.salvarComId("tarefas", "p2", { titulo: "Post para aprovar", tipo: "Conteúdo", clienteId: "grupo", formato: "Vídeo", rede: "Instagram", dataPublicacao: new Date().toISOString().slice(0, 10), statusConteudo: "producao", status: "andamento", checklist: [] }); });
   await page.evaluate(async () => { const a = await import("/js/aprovacoes.js"); await a.gerarLinkAprovacao("grupo", new Date().toISOString().slice(0, 7)); });
   const link = await page.locator(".modal input[readonly]").inputValue();
   expect(link).toMatch(/aprovar\.html\?t=[a-f0-9]{32}$/);
@@ -747,7 +747,7 @@ test("Studio da equipe: escolhe a marca, vê o kit e transforma ideias em post",
   await expect(page.locator("#f-titulo")).toHaveValue("Bastidores da loja");
   await page.click(".modal button[type=submit]");
   await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Bastidores da loja")))
-    .toMatchObject({ tipo: "Conteúdo", clienteId: "loja", formato: "Reels" });
+    .toMatchObject({ tipo: "Conteúdo", clienteId: "loja", formato: "Vídeo" });
   expect(erros).toEqual([]);
 });
 
@@ -769,4 +769,73 @@ test("Studio do cliente: cria a legenda e envia para a Hyper como sugestão", as
   await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Promoção de inverno")))
     .toMatchObject({ clienteId: "loja", statusConteudo: "ideia", copy: "Chegou o inverno na Loja!", sugeridoPeloCliente: "Carla Cliente" });
   await expect(page.locator(".modal")).toHaveCount(0);
+});
+
+test("Produzir semana: posts planejados viram checklist dentro da tarefa; extras ficam soltos", async ({ page }) => {
+  const erros = await abrir(page, { extra: { tarefas: {
+    prod: { titulo: "Produzir semana — Loja Exemplo", tipo: "Produção", clienteId: "loja", prazo: dia(0), status: "a_fazer", semanaInicio: dia(2), rotina: "producao", checklist: [] },
+    pA: { titulo: "Post planejado A", tipo: "Conteúdo", clienteId: "loja", formato: "Carrossel", rede: "Instagram", dataPublicacao: dia(3), prazo: dia(2), statusConteudo: "ideia", status: "a_fazer", checklist: [] },
+    pB: { titulo: "Post planejado B", tipo: "Conteúdo", clienteId: "loja", formato: "Reels", rede: "Instagram", dataPublicacao: dia(4), prazo: dia(3), statusConteudo: "ideia", status: "a_fazer", checklist: [] },
+    pX: { titulo: "Post extra X", tipo: "Conteúdo", clienteId: "loja", formato: "Story", rede: "Instagram", dataPublicacao: dia(3), prazo: dia(2), statusConteudo: "ideia", status: "a_fazer", extra: true, checklist: [] }
+  } } });
+  // Formato antigo vira o novo
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pB.formato)).toBe("Vídeo");
+
+  await page.goto("/#/tarefas");
+  await page.locator(".visoes-tarefas").getByRole("tab", { name: /Quadro/ }).click();
+  await expect(page.locator("#conteudo")).toContainText("Produzir semana — Loja Exemplo");
+  await expect(page.locator(".cartao-tarefa", { hasText: "Produzir semana" })).toContainText("0/2 posts");
+  await expect(page.locator(".cartao-tarefa", { hasText: "Post planejado A" })).toHaveCount(0);
+  await expect(page.locator(".cartao-tarefa", { hasText: "Post extra X" })).toHaveCount(1);
+  // Na aba Posts aparecem todos
+  await page.locator(".filtros-tarefas").getByRole("tab", { name: "Posts" }).click();
+  await expect(page.locator(".cartao-tarefa", { hasText: "Post planejado A" })).toHaveCount(1);
+  await page.locator(".filtros-tarefas").getByRole("tab", { name: "Tudo" }).click();
+
+  await page.locator(".cartao-tarefa", { hasText: "Produzir semana" }).click();
+  await expect(page.locator(".checklist-producao li")).toHaveCount(2);
+  // Clicar no item abre o post por cima; Esc fecha só o post
+  await page.locator(".item-producao", { hasText: "Post planejado A" }).click();
+  await expect(page.locator(".modal")).toHaveCount(2);
+  await expect(page.locator(".modal").last()).toContainText("Editar post");
+  await expect(page.locator(".modal").last().locator(".faixa-info")).toContainText("Produzir semana");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".modal")).toHaveCount(1);
+  // Ticar = produzido
+  await page.locator(".checklist-producao li", { hasText: "Post planejado A" }).locator("input").check();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pA.produzido)).toBe(true);
+  await expect(page.locator(".semana-producao")).toContainText("1/2 produzidos");
+  expect(erros).toEqual([]);
+});
+
+test("post novo: formatos novos, nasce como extra e Criar copy pede o briefing", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/tarefas");
+  await page.getByRole("button", { name: /\+ Novo/ }).click();
+  await page.getByRole("menuitem", { name: /Post/ }).click();
+  const opcoes = await page.locator("#f-formato option").allTextContents();
+  expect(opcoes).toEqual(["Estático", "Carrossel", "Vídeo", "Story", "Artigo", "E-mail marketing", "WhatsApp", "Blog", "Outro"]);
+  const tipos = await page.locator("#f-tipo option").allTextContents();
+  expect(tipos[tipos.length - 1]).toBe("Outro");
+  await expect(page.locator("#f-extra")).toBeChecked();
+  await page.getByRole("button", { name: "✨ Criar copy" }).click();
+  await expect(page.locator(".aviso").last()).toContainText("Preencha o briefing");
+});
+
+test("Hoje: cada dia dos próximos 7 dias abre e fecha", async ({ page }) => {
+  await abrir(page, { extra: { tarefas: {
+    d2: { titulo: "Tarefa depois de amanhã", tipo: "Organização", clienteId: "", prazo: dia(2), status: "a_fazer", checklist: [] }
+  } } });
+  await page.goto("/#/hoje");
+  await page.getByRole("tab", { name: "Equipe" }).click();
+  const dia2 = page.locator("details.grupo-dia", { hasText: "Tarefa depois de amanhã" });
+  await expect(dia2).toHaveAttribute("open", "");
+  await dia2.locator("summary").click();
+  await expect(page.locator(".cartao-tarefa", { hasText: "Tarefa depois de amanhã" })).toBeHidden();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("hyper-dias-recolhidos") || "")).toContain("-");
+  await page.reload();
+  await page.getByRole("tab", { name: "Equipe" }).click();
+  await expect(page.locator(".cartao-tarefa", { hasText: "Tarefa depois de amanhã" })).toBeHidden(); // lembra que fechou
+  await page.getByRole("button", { name: "Abrir todos" }).click();
+  await expect(page.locator(".cartao-tarefa", { hasText: "Tarefa depois de amanhã" })).toBeVisible();
 });

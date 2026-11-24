@@ -13,7 +13,7 @@ import { eu, pode, ehAdmin, ehCliente, AREAS, AREAS_EQUIPE } from "./permissoes.
 import { gerarRecorrencias } from "./recorrencias.js";
 import { marcarArtesComMarca } from "./arquivos.js";
 import { abrirBusca, definirTelas, ativarAtalhoBusca } from "./busca.js";
-import { completarPostsSemFormato, migrarReunioes, migrarTipos, alinharStatusPosts, marcarCompromissosParaAgenda, reativarGruposSumidos } from "./migracoes.js";
+import { completarPostsSemFormato, migrarReunioes, migrarTipos, migrarFormatos, alinharStatusPosts, marcarCompromissosParaAgenda, reativarGruposSumidos } from "./migracoes.js";
 
 import * as hoje from "./views/hoje.js";
 import * as tarefas from "./views/tarefas.js";
@@ -281,7 +281,7 @@ async function entrar(usuario) {
   if (ehAdmin()) {
     gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
     marcarArtesComMarca().catch((e) => console.warn("Criativos:", e.message));
-    reativarGruposSumidos().then(completarPostsSemFormato).then(migrarReunioes).then(migrarTipos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).then(marcarCompromissosParaAgenda).then((n) => { if (n) sincronizarAgenda(); }).catch((e) => console.error("Migração:", e));
+    reativarGruposSumidos().then(completarPostsSemFormato).then(migrarReunioes).then(migrarTipos).then(migrarFormatos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).then(marcarCompromissosParaAgenda).then((n) => { if (n) sincronizarAgenda(); }).catch((e) => console.error("Migração:", e));
   }
 }
 

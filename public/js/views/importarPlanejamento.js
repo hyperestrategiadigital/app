@@ -4,7 +4,7 @@
 // - Cada post tem id fixo (plan-…): importar de novo o mesmo arquivo não duplica e não mexe no que já existe.
 import { el, avisar, abrirModal, normalizar, fmtData } from "../ui.js";
 import { dados, porId, criar, atualizar, salvarComId, marcasDo } from "../db.js";
-import { TIPO_CONTEUDO, FORMATOS, statusDaEtapa } from "../constantes.js";
+import { TIPO_CONTEUDO, FORMATOS, formatoAtual, statusDaEtapa } from "../constantes.js";
 import { modeloChecklist } from "./componentes.js";
 import { registrarAtividade } from "../db.js";
 import { responsavelPadrao } from "../agenda.js";
@@ -87,7 +87,7 @@ export function previaPlanejamento(plano) {
         const id = `plan-${hash(`${clienteId}|${p.data}|${p.marca || ""}|${normalizar(p.titulo)}`)}`;
         const jaExiste = porId("tarefas", id) || dados.tarefas.some((t) => t.clienteId === clienteId && (t.dataPublicacao || t.prazo) === p.data && normalizar(t.titulo) === normalizar(p.titulo));
         if (jaExiste) { pulados++; continue; }
-        const formato = FORMATOS.includes(p.formato) ? p.formato : "Feed estático";
+        const formato = FORMATOS.includes(formatoAtual(p.formato)) ? formatoAtual(p.formato) : "Estático";
         botao.textContent = `Criando ${novos + 1}…`;
         await salvarComId("tarefas", id, {
           titulo: p.titulo, tipo: TIPO_CONTEUDO, clienteId, marcaId: idsMarca[p.marca || ""] || "",
