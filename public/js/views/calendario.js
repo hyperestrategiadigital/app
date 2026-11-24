@@ -3,7 +3,8 @@
 import * as planejamento from "./planejamento.js";
 import { gerarLinkAprovacao, seloResposta } from "../aprovacoes.js";
 import { el, hojeISO, addDias, fmtData, vazio, formulario, dataDe, avisar, normalizar } from "../ui.js";
-import { dados, marcasDo, porId, opcoesClientes, nomeCliente, atualizar, registrarAtividade } from "../db.js";
+import { dados, marcasDo, porId, opcoesClientes, nomeCliente, atualizar, registrarAtividade, identidade } from "../db.js";
+import { pilaresDe } from "../prompts.js";
 import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca, mudarEtapa, proximaEtapa, visoesTarefas, seletorResponsavel, atrasada } from "./componentes.js";
 import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost, exportarPDF, nomeMes } from "../exportacao.js";
@@ -21,8 +22,8 @@ export { corCliente };
 
 /** Abre um novo post no calendário (tarefa do tipo Conteúdo). */
 export function novoPost({ data = hojeISO(), clienteId = "", marcaId = "" } = {}) {
-  const prazo = addDias(data, -1) < hojeISO() ? hojeISO() : addDias(data, -1);
-  return abrirTarefa({ tipo: TIPO_CONTEUDO, dataPublicacao: data, prazo, clienteId, marcaId, statusConteudo: "ideia" });
+  // Sem prazo: o formulário calcula pela antecedência do formato e acompanha se você trocar a data ou o formato
+  return abrirTarefa({ tipo: TIPO_CONTEUDO, dataPublicacao: data, clienteId, marcaId, statusConteudo: "ideia" });
 }
 
 /** Pergunta cliente e mês quando a ação precisa de um só cliente. */
@@ -216,6 +217,15 @@ export function render({ params, estado, renderizar }) {
       onClick: () => { estado.cliente = estado.cliente === id ? "" : id; renderizar(); }
     }, el("span", { class: "bolinha" }), c?.nome || "Sem cliente", el("small", {}, n)))) : null;
 
+  // Pilares do mês (com um cliente filtrado): quantos posts de cada pilar, para ver se o mês está equilibrado
+  const pilares = estado.cliente ? pilaresDe(identidade(estado.cliente, estado.marca ?? undefined)) : [];
+  const usados = [...new Set([...pilares, ...doMes.map((t) => t.pilar).filter(Boolean)])];
+  const semPilar = doMes.filter((t) => !t.pilar).length;
+  const resumoPilares = usados.length && doMes.length ? el("div", { class: "resumo-pilares", "aria-label": "Pilares de conteúdo do mês" },
+    el("strong", {}, "Pilares do mês:"),
+    usados.map((p) => { const n = doMes.filter((t) => t.pilar === p).length; return el("span", { class: `etiqueta ${n ? "" : "vazio"}`, title: n ? "" : "Nenhum post deste pilar no mês" }, `${p} · ${n}`); }),
+    semPilar ? el("span", { class: "subtitulo" }, `${semPilar} sem pilar`) : null) : null;
+
   const [ini, fimP] = [`${estado.mes}-01`, addDias(`${estado.mes}-01`, 41)];
   const compromissosDoPeriodo = compromissosEntre(addDias(ini, -7), fimP)
     .filter((x) => (!estado.cliente || x.c.clienteId === estado.cliente) && (!busca || normalizar(x.c.titulo || "").includes(busca)));
@@ -279,6 +289,6 @@ export function render({ params, estado, renderizar }) {
   return el("div", { class: "tela tela-tarefas" },
     ...topo,
     verCompromissos ? avisoPendentes() : null,
-    verPosts ? legenda : null, corpo,
+    verPosts ? legenda : null, verPosts ? resumoPilares : null, corpo,
     el("p", { class: "nota" }, "Posts aparecem no dia da publicação e as outras tarefas (○) no dia do prazo. Compromissos (◷) são reuniões, gravações e visitas: só eles vão para a Google Agenda. Planejar, link de aprovação e PDF ficam em Ações do mês."));
 }

@@ -19,9 +19,12 @@ const novoToken = () => [...crypto.getRandomValues(new Uint8Array(16))].map((b) 
 const existente = (clienteId, mes, marcaId) => (dados.aprovacoes || []).find((a) =>
   a.clienteId === clienteId && a.mes === mes && (a.marcaId || "") === (marcaId || "") && a.expiraEm > Date.now());
 
-/** Cria (ou atualiza) o link de aprovação do mês e mostra para copiar ou mandar no WhatsApp. */
-export async function gerarLinkAprovacao(clienteId, mes, marcaId) {
-  const posts = postsDoMes(clienteId, mes, marcaId === undefined ? undefined : marcaId)
+/**
+ * Cria (ou atualiza) o link de aprovação do mês e mostra para copiar ou mandar no WhatsApp.
+ * Com `lista` e `rotulo`, o link é de um conjunto de posts (ex.: a semana do "Produzir semana"); `mes` vira a chave do link.
+ */
+export async function gerarLinkAprovacao(clienteId, mes, marcaId, { lista = null, rotulo = "" } = {}) {
+  const posts = (lista || postsDoMes(clienteId, mes, marcaId === undefined ? undefined : marcaId))
     .filter((t) => t.statusConteudo !== "publicado");
   if (!posts.length) { avisar("Nenhum post a aprovar neste mês.", "erro"); return; }
   const marca = identidade(clienteId, marcaId || undefined);
@@ -30,7 +33,7 @@ export async function gerarLinkAprovacao(clienteId, mes, marcaId) {
   const fechar = abrirModal("Link de aprovação", el("p", { class: "subtitulo" }, "Preparando o link…"));
   try {
     await salvarComId("aprovacoes", token, {
-      clienteId, marcaId: marcaId || "", mes, nome: marca.nome || "", cor: marca.cor || marca.paleta?.[0] || "",
+      clienteId, marcaId: marcaId || "", mes, rotulo: rotulo || "", nome: marca.nome || "", cor: marca.cor || marca.paleta?.[0] || "",
       posts: posts.map((t) => ({
         id: t.id, titulo: t.titulo || "", formato: t.formato || "", rede: t.rede || "", data: dataPost(t), hora: t.hora || "",
         objetivo: t.objetivo || "", roteiro: t.roteiro || "", copy: t.copy || "", linkCanva: t.linkCanva || ""
@@ -55,18 +58,19 @@ export async function gerarLinkAprovacao(clienteId, mes, marcaId) {
       delete dados.respostasCliente[r.id];
     }
     for (const t of posts) if (["ideia", "producao"].includes(t.statusConteudo || "ideia") || t.ajusteCliente) {
-      await atualizar("tarefas", t.id, { statusConteudo: "aprovacao", status: statusDaEtapa("aprovacao"), ajusteCliente: "" });
+      await atualizar("tarefas", t.id, { statusConteudo: "aprovacao", status: statusDaEtapa("aprovacao"), ajusteCliente: "", aprovacaoDesde: Date.now() });
     }
     fechar();
-    mostrarLink(token, marca.nome, mes, posts.length);
+    mostrarLink(token, marca.nome, mes, posts.length, rotulo);
   } catch (e) { fechar(); avisar("Não consegui criar o link: " + e.message, "erro"); }
 }
 
-function mostrarLink(token, nome, mes, n) {
+function mostrarLink(token, nome, mes, n, rotulo = "") {
   const link = linkAprovacao(token);
-  const texto = `Oi! Segue o planejamento de ${nomeMes(mes)} de ${nome} para você aprovar. É só abrir, ver cada post e clicar em Aprovar ou Pedir ajuste: ${link}`;
+  const periodo = rotulo || nomeMes(mes);
+  const texto = `Oi! Segue ${rotulo ? `o conteúdo da ${rotulo}` : `o planejamento de ${nomeMes(mes)}`} de ${nome} para você aprovar. É só abrir, ver cada post e clicar em Aprovar ou Pedir ajuste: ${link}`;
   abrirModal("Link de aprovação", el("div", {},
-    el("p", {}, `${n} post(s) de ${nomeMes(mes)}. O link vale ${DIAS_VALIDADE} dias e não pede login. Os posts foram para a etapa "Em aprovação".`),
+    el("p", {}, `${n} post(s) de ${periodo}. O link vale ${DIAS_VALIDADE} dias e não pede login. Os posts foram para a etapa "Em aprovação".`),
     el("input", { type: "text", value: link, readonly: true, onFocus: (e) => e.target.select() }),
     el("div", { class: "acoes" },
       el("button", { class: "destaque", onClick: async () => { await navigator.clipboard.writeText(texto).catch(() => {}); avisar("Mensagem com o link copiada."); } }, "Copiar mensagem"),

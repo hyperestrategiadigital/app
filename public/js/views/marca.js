@@ -348,6 +348,7 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
     campoTexto(alvo, "tomDeVoz", "Tom de voz", "Como a marca fala: próxima, técnica, bem-humorada... palavras que usa e que evita.", 4, { sugestao: true }),
     campoTexto(alvo, "persona", "Persona", "Quem é o cliente ideal: nome fictício, idade, rotina, dores, desejos, objeções.", 5, { sugestao: true }),
     campoTexto(alvo, "publico", "Público-alvo", "Ex.: mulheres 25-45, região de Sorocaba, classe B.", 3, { sugestao: true }),
+    campoTexto(alvo, "pilares", "Pilares de conteúdo", "Um por linha. Ex.: Educativo, Bastidores, Prova social, Oferta. Cada post escolhe um pilar, e o calendário mostra se o mês está equilibrado.", 4),
     campoTexto(alvo, "diretrizes", "Diretrizes de conteúdo",
       "Pilares e linha editorial, estrutura das legendas, CTAs, rodapé padrão, hashtags, emojis, séries fixas e o que nunca fazer. É o que a IA segue em cada post.", 8, { sugestao: true }),
     campoTexto(alvo, "estiloVisual", "Estilo de imagem",

@@ -93,7 +93,7 @@ async function iniciar() {
       const aprovados = aprovacao.posts.filter((p) => respostas[p.id]?.status === "aprovado").length;
       fetch(aprovacao.emailUrl, { method: "POST", body: JSON.stringify({
         tipo: "aviso-admins", nome: campoNome.value.trim(), email: aprovacao.nome,
-        detalhe: `Respondeu a aprovação de ${nomeMes(aprovacao.mes)} de ${aprovacao.nome}: ${aprovados} aprovado(s), ${n - aprovados} com ajuste.`,
+        detalhe: `Respondeu a aprovação de ${aprovacao.rotulo || nomeMes(aprovacao.mes)} de ${aprovacao.nome}: ${aprovados} aprovado(s), ${n - aprovados} com ajuste.`,
         link: location.origin + location.pathname.replace(/aprovar\.html$/, "") + "#/calendario"
       }) }).catch(() => {});
     }
@@ -103,7 +103,7 @@ async function iniciar() {
   const posts = [...aprovacao.posts].sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora));
   raiz.replaceChildren(
     el("header", { class: "tela-topo ficha-topo" },
-      el("div", {}, el("h1", {}, aprovacao.nome || "Planejamento"), el("p", { class: "subtitulo" }, `Conteúdo de ${nomeMes(aprovacao.mes)} · ${posts.length} post(s)`))),
+      el("div", {}, el("h1", {}, aprovacao.nome || "Planejamento"), el("p", { class: "subtitulo" }, `Conteúdo ${aprovacao.rotulo ? `da ${aprovacao.rotulo}` : `de ${nomeMes(aprovacao.mes)}`} · ${posts.length} post(s)`))),
     el("section", { class: "bloco" },
       el("p", {}, "Veja cada post e clique em ", el("strong", {}, "Aprovar"), " ou ", el("strong", {}, "Pedir ajuste"), ". Suas respostas vão direto para a equipe da Hyper."),
       el("label", { class: "campo", for: "aprov-nome" }, el("span", {}, "Seu nome"), campoNome),

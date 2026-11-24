@@ -690,6 +690,7 @@ test("portal do cliente: só as marcas dele, aprova, pede ajuste e sugere post",
   const menu = await page.locator("#menu a").allTextContents();
   expect(menu.join(" ")).not.toMatch(/Tarefas|Financeiro|Clientes|Ajustes/);
   await expect(page.locator("#conteudo")).toContainText("Para aprovar (2)");
+  await expect(page.locator(".portal-post").first()).toContainText("Para você aprovar"); // etapas com nomes simples
   await expect(page.locator("#conteudo")).not.toContainText("Post da outra marca");
   await expect(page.locator("#conteudo")).not.toContainText("Revisar campanhas");
 
@@ -838,4 +839,82 @@ test("Hoje: cada dia dos próximos 7 dias abre e fecha", async ({ page }) => {
   await expect(page.locator(".cartao-tarefa", { hasText: "Tarefa depois de amanhã" })).toBeHidden(); // lembra que fechou
   await page.getByRole("button", { name: "Abrir todos" }).click();
   await expect(page.locator(".cartao-tarefa", { hasText: "Tarefa depois de amanhã" })).toBeVisible();
+});
+
+test("Produzir semana: roteiros dos vídeos da semana seguinte, alerta, aprovação e copiar semana", async ({ page }) => {
+  const erros = await abrir(page, { extra: { tarefas: {
+    prod: { titulo: "Produzir semana — Loja Exemplo", tipo: "Produção", clienteId: "loja", prazo: dia(0), status: "a_fazer", semanaInicio: dia(2), rotina: "producao", checklist: [] },
+    pA: { titulo: "Post da semana A", tipo: "Conteúdo", clienteId: "loja", formato: "Estático", rede: "Instagram", dataPublicacao: dia(2), prazo: dia(1), statusConteudo: "producao", status: "andamento", copy: "Legenda A", checklist: [] },
+    pB: { titulo: "Post da semana B", tipo: "Conteúdo", clienteId: "loja", formato: "Carrossel", rede: "Instagram", dataPublicacao: dia(5), prazo: dia(3), statusConteudo: "ideia", status: "a_fazer", checklist: [] },
+    vid: { titulo: "Vídeo da outra semana", tipo: "Conteúdo", clienteId: "loja", formato: "Vídeo", rede: "Instagram", dataPublicacao: dia(10), prazo: dia(7), statusConteudo: "ideia", status: "a_fazer", checklist: [] }
+  } } });
+  await page.goto("/#/tarefas");
+  await page.locator(".visoes-tarefas").getByRole("tab", { name: /Quadro/ }).click();
+  await expect(page.locator(".cartao-tarefa", { hasText: "Produzir semana" })).toContainText("perto da data");
+  await page.locator(".cartao-tarefa", { hasText: "Produzir semana" }).click();
+  await expect(page.locator(".semana-producao .faixa-alerta")).toContainText("2 dias");
+  // Roteiro do vídeo da semana seguinte
+  await expect(page.locator(".semana-producao")).toContainText("Roteiros dos vídeos da semana seguinte");
+  await page.locator(".checklist-producao li", { hasText: "Vídeo da outra semana" }).locator("input").check();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].vid.roteiroPronto)).toBe(true);
+  // Produzido → mandar a semana para aprovação (link da semana)
+  await page.locator(".checklist-producao li", { hasText: "Post da semana A" }).locator("input").check();
+  await expect(page.locator(".aviso")).toContainText("Mandar para aprovação");
+  await page.getByRole("button", { name: /Mandar para aprovação \(1\)/ }).click();
+  await expect(page.locator(".modal").last()).toContainText("Link de aprovação");
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pA.statusConteudo)).toBe("aprovacao");
+  expect(await page.evaluate(() => typeof window.__store["espacos/hyper/tarefas"].pA.aprovacaoDesde)).toBe("number");
+  expect(await page.evaluate(() => Object.values(window.__store["espacos/hyper/aprovacoes"] || {})[0]?.rotulo)).toContain("semana de");
+  await page.keyboard.press("Escape");
+  // Copiar os posts para a semana seguinte
+  await page.getByRole("button", { name: /Copiar para outra semana/ }).click();
+  await page.locator(".modal").last().locator("button[type=submit]").click();
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).filter((t) => t.titulo === "Post da semana B").length)).toBe(2);
+  expect(erros).toEqual([]);
+});
+
+test("Ajustes: menus configuráveis aparecem no card; prazo automático, pilar, briefing e duplicar", async ({ page }) => {
+  await abrir(page, { extra: { clientes: { loja: { nome: "Loja Exemplo", ativo: true, paleta: [], cor: "#C98A00", tomDeVoz: "Leve e direto", pilares: "Educativo\nOferta" } } } });
+  await page.goto("/#/config");
+  await page.getByText("Editar menus").click();
+  const tipos = page.locator(".editor-lista", { hasText: "Tipos de tarefa" });
+  await expect(tipos.locator("li", { hasText: "Conteúdo" }).getByRole("button", { name: /Tirar/ })).toHaveCount(0); // fixo
+  await tipos.locator("input[type=text]").fill("Jurídico");
+  await tipos.getByRole("button", { name: "+ Adicionar" }).click();
+  const formatos = page.locator(".editor-lista", { hasText: "Formatos de post" });
+  await formatos.locator("li", { hasText: "Vídeo" }).locator("input[type=number]").fill("4");
+  await page.getByRole("button", { name: "Salvar menus" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/config"]?.listas?.tipos)).toContain("Jurídico");
+
+  await page.goto("/#/tarefas");
+  await page.getByRole("button", { name: /\+ Novo/ }).click();
+  await page.getByRole("menuitem", { name: /Post/ }).click();
+  expect(await page.locator("#f-tipo option").allTextContents()).toContain("Jurídico");
+  await page.selectOption("#f-clienteId", "loja");
+  await page.selectOption("#f-formato", "Vídeo");
+  await page.fill("#f-dataPublicacao", dia(10));
+  await page.locator("#f-dataPublicacao").dispatchEvent("change");
+  await expect(page.locator("#f-prazo")).toHaveValue(dia(6)); // 4 dias antes (configurado)
+  expect(await page.locator("#f-pilar option").allTextContents()).toEqual(["—", "Educativo", "Oferta"]);
+  await page.selectOption("#f-pilar", "Oferta");
+  await page.getByRole("button", { name: "Montar briefing" }).click();
+  await page.locator(".modal").last().locator("#f-assunto").fill("Aula experimental");
+  await page.locator(".modal").last().locator("#f-cta").fill("Chamar no WhatsApp");
+  await page.locator(".modal").last().locator("button[type=submit]").click();
+  await expect(page.locator("#f-roteiro")).toHaveValue(/Assunto: Aula experimental[\s\S]*Chamada para ação: Chamar no WhatsApp/);
+  await page.fill("#f-titulo", "Post com pilar");
+  await page.locator(".modal button[type=submit]").click();
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Post com pilar")?.pilar)).toBe("Oferta");
+
+  // Duplicar
+  const id = await page.evaluate(() => Object.entries(window.__store["espacos/hyper/tarefas"]).find(([, t]) => t.titulo === "Post com pilar")[0]);
+  await page.evaluate(async (id) => { const c = await import("/js/views/componentes.js"); const db = await import("/js/db.js"); c.abrirTarefa(db.porId("tarefas", id)); }, id);
+  await page.getByRole("button", { name: "⧉ Duplicar" }).click();
+  await expect(page.locator("#f-titulo")).toHaveValue("Post com pilar (cópia)");
+  await page.keyboard.press("Escape");
+
+  // Pilares do mês no calendário (cliente filtrado)
+  await page.goto(`/#/calendario/loja/${dia(10).slice(0, 7)}`);
+  await expect(page.locator(".resumo-pilares")).toContainText("Oferta · 1");
+  await expect(page.locator(".resumo-pilares")).toContainText("Educativo · 0");
 });

@@ -3,6 +3,8 @@
 import { identidade } from "./db.js";
 import { fmtData } from "./ui.js";
 
+/** Pilares de conteúdo da marca (um por linha no campo). */
+export const pilaresDe = (c) => String(c?.pilares || "").split("\n").map((l) => l.replace(/^[-•*\d.)\s]+/, "").trim()).filter(Boolean);
 const ehVertical = (f) => /story|reels|tiktok|vídeo|video/i.test(f || "");
 
 /** Pedido de copy. `soLegenda`: só a legenda final (para escrever direto no campo do post). */
@@ -18,6 +20,7 @@ export function promptCopy(post, { soLegenda = false } = {}) {
     c.tomDeVoz ? `- Tom de voz: ${c.tomDeVoz}` : "- Tom de voz: não informado (use um tom próximo e profissional)",
     c.publico ? `- Público-alvo: ${c.publico}` : null,
     c.persona ? `- Persona: ${c.persona}` : null,
+    c.pilares ? `- Pilares de conteúdo: ${pilaresDe(c).join(", ")}` : null,
     c.instagram ? `- Instagram: ${c.instagram}` : null,
     c.observacoes ? `- Observações: ${c.observacoes}` : null,
     c.diretrizes ? `\n## Diretrizes de conteúdo (siga à risca)\n${c.diretrizes}` : null,
@@ -27,6 +30,7 @@ export function promptCopy(post, { soLegenda = false } = {}) {
     `- Formato: ${post.formato || "-"} · Rede: ${post.rede || "-"}`,
     post.dataPublicacao ? `- Publicação: ${fmtData(post.dataPublicacao)}${post.hora ? ` às ${post.hora}` : ""}` : null,
     post.objetivo ? `- Objetivo: ${post.objetivo}` : null,
+    post.pilar ? `- Pilar de conteúdo: ${post.pilar}` : null,
     post.roteiro ? `- Briefing / roteiro:\n${post.roteiro}` : null,
     "",
     soLegenda ? "## O que entregar\nSó a legenda final, pronta para publicar, com gancho forte na primeira linha, chamada para ação e, se for Instagram, 5 a 10 hashtags no fim. Sem títulos, sem opções, sem explicações." : null,
@@ -104,6 +108,7 @@ function contextoMarca(c) {
     c.tomDeVoz ? `- Tom de voz: ${c.tomDeVoz}` : null,
     c.publico ? `- Público-alvo: ${c.publico}` : null,
     c.persona ? `- Persona: ${c.persona}` : null,
+    c.pilares ? `- Pilares de conteúdo: ${pilaresDe(c).join(", ")}` : null,
     c.estiloVisual ? `- Estilo de imagem: ${c.estiloVisual}` : null,
     c.identidadeVisual ? `- Diagramação: ${c.identidadeVisual}` : null,
     paleta.length ? `- Cores: ${paleta.join(", ")}` : null,
