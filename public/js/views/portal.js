@@ -5,7 +5,7 @@
 import { el, avisar, abrirModal, fecharModais, formulario, fmtData, fmtDiaSemana, hojeISO, addDias, vazio, linkExterno, amostraCor } from "../ui.js";
 import { dados, porId, marcasDo, atualizar, criar, registrarAtividade, identidade } from "../db.js";
 import { eu, marcasRestritas } from "../permissoes.js";
-import { TIPO_CONTEUDO, FORMATOS, REDES, CAMPOS_REDES, rotuloStatusConteudo } from "../constantes.js";
+import { TIPO_CONTEUDO, FORMATOS, REDES, CAMPOS_REDES, rotuloEtapaCliente, FORMATO_PADRAO } from "../constantes.js";
 import { dataPost, nomeMes } from "../exportacao.js";
 import { listarArtesTarefa } from "../arquivos.js";
 import { promptCopy } from "../prompts.js";
@@ -81,7 +81,7 @@ function cartaoPost(t, { completo = false } = {}) {
       el("span", { class: "data-mini" }, dataPost(t) ? `${fmtDiaSemana(dataPost(t))}, ${fmtData(dataPost(t), true)}${t.hora ? ` · ${t.hora}` : ""}` : "sem data"),
       seloConta(t),
       el("span", { class: "etiqueta" }, [t.formato, t.rede].filter(Boolean).join(" · ") || "Post"),
-      el("span", { class: `etiqueta st-${t.statusConteudo || "ideia"}` }, rotuloStatusConteudo(t.statusConteudo || "ideia"))),
+      el("span", { class: `etiqueta st-${t.statusConteudo || "ideia"}` }, rotuloEtapaCliente(t.statusConteudo || "ideia"))),
     el("h3", {}, t.titulo || "(sem tema)"),
     completo ? galeria(t) : null,
     completo && t.copy ? el("div", { class: "portal-copy" }, t.copy) : null,
@@ -91,7 +91,7 @@ function cartaoPost(t, { completo = false } = {}) {
 
 function abrirPost(t) {
   abrirModal(t.titulo || "Post", el("div", {},
-    el("p", { class: "subtitulo" }, [dataPost(t) ? fmtData(dataPost(t)) : "", t.formato, t.rede, rotuloStatusConteudo(t.statusConteudo || "ideia")].filter(Boolean).join(" · ")),
+    el("p", { class: "subtitulo" }, [dataPost(t) ? fmtData(dataPost(t)) : "", t.formato, t.rede, rotuloEtapaCliente(t.statusConteudo || "ideia")].filter(Boolean).join(" · ")),
     galeria(t),
     t.copy ? el("div", { class: "portal-copy" }, t.copy) : el("p", { class: "subtitulo" }, "A legenda ainda não foi escrita."),
     t.aprovacaoCliente?.decisao === "ajuste" ? el("p", { class: "faixa-aviso" }, `Ajuste pedido: ${t.aprovacaoCliente.comentario}`) : null,
@@ -118,7 +118,7 @@ export function sugerirPost() {
     contas.length > 1 ? { nome: "conta", rotulo: "Marca", tipo: "select", opcoes: contas.map((k) => [k.chave, k.nome]), obrigatorio: true } : null,
     { nome: "titulo", rotulo: "Tema / ideia", obrigatorio: true, dica: "Ex.: promoção de Natal, bastidores da equipe" },
     { nome: "dataPublicacao", rotulo: "Quando publicar (se tiver data)", tipo: "date", largura: "metade" },
-    { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: "Estático", largura: "metade" },
+    { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: FORMATO_PADRAO, largura: "metade" },
     { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: REDES, padrao: "Instagram", largura: "metade" },
     { nome: "copy", rotulo: "Legenda (opcional)", tipo: "textarea", linhas: 5, dica: "Escreva aqui ou use o botão para o Claude escrever no tom de voz da marca." },
     { nome: "notas", rotulo: "Observações para a Hyper", tipo: "textarea", linhas: 3 }

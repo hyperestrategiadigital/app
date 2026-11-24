@@ -4,6 +4,7 @@ import {
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes, registrarErro, limparAntigos, porId, notificar } from "./db.js";
+import { aplicarListas } from "./constantes.js";
 import { acompanharRespostas } from "./aprovacoes.js";
 import { sincronizar as sincronizarAgenda } from "./agenda.js";
 import { avisarAdmins, sincronizarAdmins } from "./emails.js";
@@ -125,6 +126,7 @@ function montarNavMovel(nome) {
 }
 
 function renderizar() {
+  aplicarListas(dados.config.find((c) => c.id === "listas")); // menus configurados em Ajustes → Menus e listas
   const { nome, params } = rotaAtual();
   const r = rotas()[nome];
   document.body.classList.toggle("modo-cliente", ehCliente());

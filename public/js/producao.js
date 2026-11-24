@@ -1,9 +1,11 @@
 // Produção da semana: os posts planejados entram na tarefa "Produzir semana" do cliente (rotina de produção),
 // como uma checklist, e não aparecem soltos nas listas de tarefas. Ficam soltos só os posts extras
 // (criados à mão, marcados como "extra") e as sugestões dos clientes. No calendário todos os posts aparecem.
+// Vídeo precisa de roteiro antes: o roteiro dos vídeos da semana S entra no "Produzir semana" de S-7
+// (produzido duas semanas antes da publicação), e a produção do vídeo entra no da própria semana.
 import { dados } from "./db.js";
 import { addDias } from "./ui.js";
-import { TIPO_CONTEUDO } from "./constantes.js";
+import { TIPO_CONTEUDO, FORMATO_VIDEO } from "./constantes.js";
 
 let cache = { ref: null, tamanho: -1, lista: [] };
 /** Tarefas "Produzir semana" (têm semanaInicio). */
@@ -34,3 +36,14 @@ export function postsDaProducao(producao) {
   return dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && !ehAvulso(t) && cobre(producao, t))
     .sort((a, b) => (dataDoPost(a) + (a.hora || "")).localeCompare(dataDoPost(b) + (b.hora || "")));
 }
+
+/** Vídeos da semana SEGUINTE à da produção: o roteiro deles é feito agora (campo `roteiroPronto` no post). */
+export function roteirosDaProducao(producao) {
+  const seguinte = { ...producao, semanaInicio: addDias(producao.semanaInicio, 7) };
+  return dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && t.formato === FORMATO_VIDEO && !ehAvulso(t) && cobre(seguinte, t))
+    .sort((a, b) => dataDoPost(a).localeCompare(dataDoPost(b)));
+}
+
+/** Posts da produção que publicam em até 2 dias e ainda não foram produzidos. */
+export const postsAtrasando = (producao, hoje) => postsDaProducao(producao)
+  .filter((t) => !t.produzido && t.statusConteudo !== "publicado" && dataDoPost(t) <= addDias(hoje, 2));

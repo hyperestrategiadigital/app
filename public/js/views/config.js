@@ -9,7 +9,7 @@ import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js
 import { ehAdmin } from "../permissoes.js";
 import { configMeta } from "../meta.js";
 import { configAgenda, agendaConectada, testarAgenda } from "../agenda.js";
-import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO } from "../constantes.js";
+import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO, REDES, TIPOS_FIXOS, ANTECEDENCIA, LISTAS_PADRAO, antecedenciaDe } from "../constantes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
 
 
@@ -24,6 +24,7 @@ export function render() {
 
     blocoEmail(),
     blocoMeta(),
+    ehAdmin() ? blocoListas() : null,
     blocoModelos(),
     blocoErros(),
     ehAdmin() ? blocoOpenAI() : null,
@@ -66,8 +67,8 @@ function blocoOpenAI() {
 }
 
 
-const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "diretrizes", "estiloVisual", "identidadeVisual", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];
-const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", diretrizes: "diretrizes de conteúdo", estiloVisual: "estilo de imagem", identidadeVisual: "diagramação", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
+const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "pilares", "diretrizes", "estiloVisual", "identidadeVisual", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];
+const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", pilares: "pilares", diretrizes: "diretrizes de conteúdo", estiloVisual: "estilo de imagem", identidadeVisual: "diagramação", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
 const preenchido = (x) => (Array.isArray(x) ? x.filter(Boolean).length : String(x ?? "").trim());
 const chaveNome = (s) => normalizar(s || "").replace(/[^a-z0-9]/g, "");
 /** Cliente pelo nome, aceitando pequenas diferenças ("Domo" acha "Domo Empório"; "Jocelene" acha "Jocelene Fernandes"). */
@@ -264,6 +265,58 @@ function blocoErros() {
 }
 
 /** Modelos de checklist por formato de post e por tipo de tarefa (um passo por linha). */
+/**
+ * Menus e listas: tipos de tarefa, formatos de post (com os dias de antecedência da produção) e redes.
+ * Fica em config/listas; o que sair da lista continua aparecendo nos itens que já usam.
+ */
+function blocoListas() {
+  const editor = (titulo, inicial, { fixos = [], comDias = false, dica = "" } = {}) => {
+    let itens = [...inicial];
+    const dias = { ...ANTECEDENCIA };
+    const lista = el("ul", { class: "lista-editavel" });
+    const novo = el("input", { type: "text", placeholder: "Novo item", "aria-label": `Novo item em ${titulo}` });
+    const desenhar = () => lista.replaceChildren(...itens.map((item, i) => el("li", {},
+      el("span", { class: "lista-editavel-nome" }, item, fixos.includes(item) ? el("small", { class: "subtitulo" }, " (fixo)") : null),
+      comDias ? el("label", { class: "dias-antecedencia", title: "Dias antes da publicação para o prazo de produção" },
+        el("input", { type: "number", min: 0, max: 30, value: dias[item] ?? antecedenciaDe(item), "aria-label": `Dias de antecedência de ${item}`,
+          onInput: (e) => { dias[item] = Number(e.target.value) || 0; } }), " dia(s) antes") : null,
+      el("button", { type: "button", class: "icone", "aria-label": `Subir ${item}`, disabled: i === 0, onClick: () => { [itens[i - 1], itens[i]] = [itens[i], itens[i - 1]]; desenhar(); } }, "↑"),
+      el("button", { type: "button", class: "icone", "aria-label": `Descer ${item}`, disabled: i === itens.length - 1, onClick: () => { [itens[i + 1], itens[i]] = [itens[i], itens[i + 1]]; desenhar(); } }, "↓"),
+      fixos.includes(item) ? el("span", { class: "icone" }) : el("button", { type: "button", class: "icone", "aria-label": `Tirar ${item}`, onClick: () => { itens.splice(i, 1); desenhar(); } }, "✕"))));
+    const adicionar = () => {
+      const v = novo.value.trim();
+      if (!v) return;
+      if (itens.some((x) => x.toLowerCase() === v.toLowerCase())) { avisar(`"${v}" já está na lista.`, "erro"); return; }
+      itens.push(v); novo.value = ""; desenhar(); novo.focus();
+    };
+    novo.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); adicionar(); } });
+    desenhar();
+    return {
+      elemento: el("div", { class: "editor-lista" }, el("h3", {}, titulo), dica ? el("p", { class: "subtitulo" }, dica) : null, lista,
+        el("div", { class: "linha-adicionar" }, novo, el("button", { type: "button", class: "secundario mini", onClick: adicionar }, "+ Adicionar"))),
+      ler: () => itens,
+      lerDias: () => Object.fromEntries(itens.map((f) => [f, dias[f] ?? antecedenciaDe(f)])),
+      restaurar: (padrao) => { itens = [...padrao]; desenhar(); }
+    };
+  };
+  const tipos = editor("Tipos de tarefa", TIPOS_TAREFA, { fixos: TIPOS_FIXOS, dica: "Conteúdo vira post e Reunião vira compromisso, por isso não saem." });
+  const formatos = editor("Formatos de post", FORMATOS, { comDias: true, dica: "Os dias definem o prazo de produção do post (ex.: vídeo 3 dias antes da publicação)." });
+  const redes = editor("Redes", REDES);
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Menus e listas"),
+    el("p", {}, "As opções dos menus de tipo de tarefa, formato e rede. O que você tirar continua aparecendo nos itens que já usam."),
+    el("details", {}, el("summary", {}, "Editar menus"),
+      el("div", { class: "grade-listas" }, tipos.elemento, formatos.elemento, redes.elemento),
+      el("div", { class: "acoes" },
+        el("button", { type: "button", class: "link", onClick: () => { tipos.restaurar(LISTAS_PADRAO.tipos); formatos.restaurar(LISTAS_PADRAO.formatos); redes.restaurar(LISTAS_PADRAO.redes); } }, "Voltar ao padrão"),
+        el("span", { class: "espaco" }),
+        el("button", { class: "confirmar", onClick: async () => {
+          if (!formatos.ler().length || !redes.ler().length) { avisar("Deixe pelo menos um formato e uma rede.", "erro"); return; }
+          await salvarComId("config", "listas", { tipos: tipos.ler(), formatos: formatos.ler(), redes: redes.ler(), antecedencia: formatos.lerDias(), atualizadoEm: Date.now() });
+          avisar("Menus salvos.");
+        } }, "Salvar menus"))));
+}
+
 function blocoModelos() {
   const meus = dados.config.find((c) => c.id === "modelos")?.modelos || {};
   const chaves = [...FORMATOS.filter((f) => f !== "Outro"), ...TIPOS_TAREFA.filter((t) => ![TIPO_CONTEUDO, "Reunião", "Outro"].includes(t))];

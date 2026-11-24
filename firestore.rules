@@ -225,7 +225,7 @@ service cloud.firestore {
         allow read: if (doc == 'openai' && pode('conteudo')) || (doc == 'email' && admin())
           || (doc == 'comercial' && pode('financeiro') && todosClientes())
           || (!(doc in ['openai', 'email', 'comercial']) && ativo())
-          || (doc == 'meta' && cliente());
+          || (doc in ['meta', 'listas'] && cliente());
         allow write: if admin();
       }
 

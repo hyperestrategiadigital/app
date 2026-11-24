@@ -1,15 +1,16 @@
 // Peças reutilizadas entre telas: cartão e formulário de tarefa, selo de cliente.
 import { pode, eu, ehAdmin } from "../permissoes.js";
 import { abrirCriarArte } from "./criar.js";
-import { seloResposta } from "../aprovacoes.js";
+import { seloResposta, gerarLinkAprovacao } from "../aprovacoes.js";
 import { avisarMencao } from "../emails.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, normalizar, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo, desfazerExclusao, listarAtividade, registrarAtividade, excluirAtividade } from "../db.js";
-import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, FORMATO_PADRAO, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa, MODELOS_PADRAO } from "../constantes.js";
-import { promptCopy } from "../prompts.js";
+import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, FORMATO_PADRAO, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa, MODELOS_PADRAO, comAtual, prazoDoPost } from "../constantes.js";
+import { promptCopy, pilaresDe } from "../prompts.js";
+import { identidade } from "../db.js";
 import { temChave, gerarTexto } from "../openai.js";
-import { producaoDoPost, postsDaProducao } from "../producao.js";
+import { producaoDoPost, postsDaProducao, roteirosDaProducao, postsAtrasando } from "../producao.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
 import { abrirCompromisso } from "../compromissos.js";
 import { configEquipe, responsaveis, responsavelPadrao } from "../agenda.js";
@@ -79,22 +80,28 @@ export function abrirTarefa(tarefa = {}) {
   // Post criado à mão é "extra": fica solto nas tarefas. Os do planejamento entram no "Produzir semana".
   if (!editando && valores.extra === undefined) valores.extra = true;
   const producao = editando ? producaoDoPost(tarefa) : null;
+  // Post novo: prazo de produção sai da data de publicação e do formato (Ajustes → Menus e listas)
+  if (!editando && (valores.tipo === TIPO_CONTEUDO) && valores.dataPublicacao && !tarefa.prazo)
+    valores.prazo = prazoDoPost(valores.dataPublicacao, valores.formato || FORMATO_PADRAO, hojeISO());
+  const pilaresDaConta = (v) => pilaresDe(identidade(v.clienteId, v.marcaId || undefined));
   const campos = [
     { nome: "titulo", rotulo: "Tarefa / tema do post", obrigatorio: true, dica: "Ex.: Black Week — plano anual" },
     { nome: "status", rotulo: "Status", tipo: "botoes", opcoes: STATUS_TAREFA, padrao: "a_fazer", mostrarSe: (v) => !conteudo(v) },
     { nome: "statusConteudo", rotulo: "Etapa do post", tipo: "botoes", opcoes: STATUS_CONTEUDO, padrao: "ideia", mostrarSe: conteudo },
     { nome: "clienteId", rotulo: "Cliente", tipo: "select", opcoes: opcoesClientesCom(tarefa.clienteId), largura: "metade" },
-    { nome: "tipo", rotulo: "Tipo", tipo: "select", opcoes: TIPOS_TAREFA, largura: "metade" },
+    { nome: "tipo", rotulo: "Tipo", tipo: "select", opcoes: comAtual(TIPOS_TAREFA, tarefa.tipo), largura: "metade" },
     { nome: "marcaId", rotulo: "Marca", tipo: "select", largura: "metade",
       opcoesDe: (v) => [...marcasDo(v.clienteId).map((m) => [m.id, m.nome]), ["", `${porId("clientes", v.clienteId)?.nome || "Grupo"} (institucional)`]],
       mostrarSe: (v) => marcasDo(v.clienteId).length > 0 },
 
     { tipo: "secao", rotulo: "Post (aparece no calendário de conteúdo)", mostrarSe: conteudo },
-    { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: FORMATO_PADRAO, largura: "metade", mostrarSe: conteudo },
-    { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: REDES, padrao: "Instagram", largura: "metade", mostrarSe: conteudo },
+    { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: comAtual(FORMATOS, tarefa.formato), padrao: FORMATO_PADRAO, largura: "metade", mostrarSe: conteudo },
+    { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: comAtual(REDES, tarefa.rede), padrao: REDES[0] || "Instagram", largura: "metade", mostrarSe: conteudo },
     { nome: "dataPublicacao", rotulo: "Data de publicação", tipo: "date", padrao: tarefa.prazo || hojeISO(), obrigatorio: true, largura: "metade", mostrarSe: conteudo },
     { nome: "hora", rotulo: "Horário", tipo: "time", largura: "metade", mostrarSe: conteudo },
     { nome: "objetivo", rotulo: "Objetivo", dica: "Ex.: vender plano anual, gerar leads", largura: "metade", mostrarSe: conteudo },
+    { nome: "pilar", rotulo: "Pilar de conteúdo", tipo: "select", largura: "metade",
+      opcoesDe: (v) => [["", "—"], ...comAtual(pilaresDaConta(v), tarefa.pilar).map((p) => [p, p])], mostrarSe: (v) => conteudo(v) && (pilaresDaConta(v).length > 0 || !!tarefa.pilar) },
     { nome: "roteiro", rotulo: "Briefing (a ideia do post)", tipo: "textarea", linhas: 3, dica: "O que o post precisa dizer: assunto, oferta, dados, referências…", mostrarSe: conteudo },
     { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 5, dica: "Clique em \"✨ Criar copy\" ou escreva aqui", mostrarSe: conteudo },
     { nome: "extra", rotulo: "Post extra: aparece solto nas tarefas, fora do \"Produzir semana\"", tipo: "checkbox", mostrarSe: conteudo },
@@ -115,6 +122,14 @@ export function abrirTarefa(tarefa = {}) {
       onClick: async () => { if (tarefa.copy) { try { await navigator.clipboard.writeText(tarefa.copy); avisar("Legenda copiada. Cole no agendador."); } catch {} } }
     }, "📅 Agendar") : null,
     editando ? el("button", {
+      type: "button", class: "secundario mini", title: "Abre um post novo igual a este para você mudar a data",
+      onClick: () => {
+        const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, qtdComentarios, ...copia } = { ...(porId("tarefas", tarefa.id) || tarefa), ...(ultimoForm()?.lerValores?.() || {}) };
+        fecharModais();
+        abrirTarefa({ ...copia, titulo: `${copia.titulo} (cópia)`, statusConteudo: "ideia", status: "a_fazer", checklist: (copia.checklist || []).map((i) => ({ ...i, feito: false })) });
+      }
+    }, "⧉ Duplicar") : null,
+    editando ? el("button", {
       type: "button", class: "perigo-texto",
       onClick: async () => {
         if (await confirmar(`Excluir "${tarefa.titulo}"?`)) {
@@ -132,6 +147,22 @@ export function abrirTarefa(tarefa = {}) {
   });
   // Botões de conteúdo só aparecem quando o tipo é Conteúdo
   const form = ultimoForm();
+  // "Montar briefing": perguntas simples que viram o texto do briefing (para quem não é da área)
+  const rotuloBriefing = form?.querySelector("#f-roteiro")?.closest(".campo")?.querySelector(":scope > span");
+  if (rotuloBriefing) { rotuloBriefing.classList.add("rotulo-com-botao"); rotuloBriefing.append(botaoMontarBriefing(form)); }
+  // Prazo acompanha a data de publicação e o formato, enquanto você não mexer nele
+  if (form) {
+    const [cData, cFormato, cPrazo] = ["#f-dataPublicacao", "#f-formato", "#f-prazo"].map((q) => form.querySelector(q));
+    let prazoAuto = prazoDoPost(cData?.value, cFormato?.value, hojeISO());
+    const recalcular = () => {
+      if (!conteudo(form.lerValores()) || !cData?.value) return;
+      const novo = prazoDoPost(cData.value, cFormato.value, hojeISO());
+      if (!cPrazo.value || cPrazo.value === prazoAuto) cPrazo.value = novo;
+      prazoAuto = novo;
+    };
+    cData?.addEventListener("change", recalcular);
+    cFormato?.addEventListener("change", recalcular);
+  }
   // "✨ Criar copy" junto do campo da copy: briefing + identidade da marca
   const rotuloCopy = form?.querySelector("#f-copy")?.closest(".campo")?.querySelector(":scope > span");
   if (rotuloCopy) { rotuloCopy.classList.add("rotulo-com-botao"); rotuloCopy.append(botaoCriarCopy(form)); }
@@ -146,7 +177,11 @@ export function abrirTarefa(tarefa = {}) {
   // Comentários (com @menção) e histórico de mudanças
   if (form && tarefa.id) form.querySelector(".acoes").before(secaoAtividade(tarefa));
   // Rotina "Produzir semana": mostra ao vivo os posts da semana seguinte do cliente
-  if (form && tarefa.semanaInicio) form.querySelector(".form-grade").after(secaoSemana(tarefa));
+  // (logo depois de Cliente/Tipo: é o principal desse card)
+  if (form && tarefa.semanaInicio) {
+    const secTarefa = [...form.querySelectorAll(".form-grade > .form-secao")].find((h) => h.textContent === "Tarefa");
+    secTarefa ? secTarefa.before(secaoSemana(tarefa)) : form.querySelector(".form-grade").after(secaoSemana(tarefa));
+  }
   if (form && tarefa.atalho) form.querySelector(".acoes").prepend(el("a", { class: "botao-link secundario mini", href: tarefa.atalho, onClick: () => fecharModais() },
     tarefa.rotina === "planejamento" ? "☷ Abrir planejamento" : tarefa.rotina === "cobranca" ? "$ Abrir financeiro" : "▦ Abrir calendário"));
   // Reunião não é tarefa: vira compromisso (calendário de compromissos + Google Agenda)
@@ -199,6 +234,27 @@ function botaoCriarCopy(form) {
   botao.title = aqui ? "Escreve a copy com o briefing acima e a identidade da marca" : "Monta o pedido com o briefing acima e a identidade da marca e abre o Claude";
   botao.classList.add("so-conteudo");
   return botao;
+}
+
+/** "Montar briefing": 4 perguntas que viram o briefing do post (somam ao que já estiver escrito). */
+function botaoMontarBriefing(form) {
+  return el("button", { type: "button", class: "secundario mini so-conteudo", onClick: async () => {
+    const v = await formulario("Montar briefing", [
+      { nome: "assunto", rotulo: "Sobre o que é o post?", obrigatorio: true, dica: "Ex.: a aula nova de spinning às 7h" },
+      { nome: "mensagem", rotulo: "O que a pessoa precisa entender ou sentir?", tipo: "textarea", linhas: 2, dica: "Ex.: que dá para treinar antes do trabalho e sair com energia" },
+      { nome: "oferta", rotulo: "Tem oferta, preço, data ou dado importante?", dica: "Ex.: primeira aula grátis até sexta" },
+      { nome: "cta", rotulo: "O que a pessoa deve fazer depois de ver?", dica: "Ex.: chamar no WhatsApp, agendar, comentar" },
+      { nome: "referencias", rotulo: "Referências ou observações (opcional)", tipo: "textarea", linhas: 2 }
+    ], {}, { rotuloSalvar: "Usar no briefing" });
+    if (!v) return;
+    const texto = [
+      `Assunto: ${v.assunto}`, v.mensagem ? `Mensagem principal: ${v.mensagem}` : "", v.oferta ? `Oferta / dados: ${v.oferta}` : "",
+      v.cta ? `Chamada para ação: ${v.cta}` : "", v.referencias ? `Referências: ${v.referencias}` : ""
+    ].filter(Boolean).join("\n");
+    const campo = form.querySelector("#f-roteiro");
+    campo.value = campo.value.trim() ? `${campo.value.trim()}\n\n${texto}` : texto;
+    campo.dispatchEvent(new Event("input", { bubbles: true }));
+  } }, "Montar briefing");
 }
 
 /** Pessoas mencionadas com @PrimeiroNome (ou @Nome Completo) no texto. */
@@ -266,36 +322,84 @@ function mudancas(antes, depois) {
 export const registrarMudanca = (antes, depois) => { const texto = mudancas(antes, { ...antes, ...depois }); if (texto) registrarAtividade(antes.id, { texto }); };
 
 /**
- * "Produzir semana": os posts da semana como checklist. Marcar = produzido (fica no post, campo `produzido`).
- * Clicar no post abre o card dele por cima; ao fechar, a lista se atualiza.
+ * "Produzir semana": os posts da semana como checklist (marcar = produzido, campo `produzido` no post) e os
+ * roteiros dos vídeos da semana seguinte (campo `roteiroPronto`). Clicar no post abre o card dele por cima;
+ * ao fechar, a lista se atualiza. Ações: mandar para aprovação, copiar as legendas e copiar os posts para outra semana.
  */
 function secaoSemana(tarefa) {
   const fim = addDias(tarefa.semanaInicio, 6);
   const caixa = el("div", { class: "semana-producao" });
+  const linhaPost = (p, campo, rotuloCampo) => el("li", { class: p[campo] ? "feito" : "" },
+    el("input", { type: "checkbox", checked: !!p[campo], "aria-label": `${rotuloCampo}: ${p.titulo}`, onChange: async (e) => {
+      const marcado = e.target.checked;
+      await atualizar("tarefas", p.id, { [campo]: marcado });
+      registrarAtividade(p.id, { texto: marcado ? `marcou ${rotuloCampo.toLowerCase()}` : `desmarcou ${rotuloCampo.toLowerCase()}` });
+      desenhar();
+      if (marcado && campo === "produzido" && ["ideia", "producao"].includes(p.statusConteudo || "ideia"))
+        avisar("Produzido ✓", "ok", { acao: { rotulo: "Mandar para aprovação", fn: async () => { await mudarEtapa(porId("tarefas", p.id) || p, "aprovacao"); desenhar(); } } });
+    } }),
+    el("button", { type: "button", class: "item-producao", title: "Abrir o post", onClick: async () => { await abrirTarefa(porId("tarefas", p.id) || p); desenhar(); } },
+      el("span", { class: "data-mini" }, fmtData(p.dataPublicacao || p.prazo, true)),
+      el("span", { class: "etiqueta formato" }, p.formato || "Post"),
+      el("strong", {}, p.titulo),
+      p.marcaId ? el("span", { class: "etiqueta" }, porId("marcas", p.marcaId)?.nome || "") : null,
+      el("span", { class: `etiqueta st-${p.statusConteudo || "ideia"}` }, rotuloStatusConteudo(p.statusConteudo || "ideia"))));
   const desenhar = () => {
     const posts = postsDaProducao(tarefa);
+    const roteiros = roteirosDaProducao(tarefa);
+    const atrasando = tarefa.status === "concluido" ? [] : postsAtrasando(tarefa, hojeISO());
     const feitos = posts.filter((p) => p.produzido).length;
-    caixa.replaceChildren(
+    const prontosParaAprovar = posts.filter((p) => p.produzido && ["ideia", "producao"].includes(p.statusConteudo || "ideia"));
+    const fimSeguinte = addDias(tarefa.semanaInicio, 13);
+    caixa.replaceChildren(...[
       el("h3", { class: "form-secao" }, `Posts da semana · ${fmtData(tarefa.semanaInicio, true)} a ${fmtData(fim, true)}`,
         posts.length ? el("span", { class: "contador" }, `${feitos}/${posts.length} produzidos`) : null),
-      posts.length ? el("ul", { class: "checklist-producao" }, posts.map((p) => el("li", { class: p.produzido ? "feito" : "" },
-        el("input", { type: "checkbox", checked: !!p.produzido, "aria-label": `Produzido: ${p.titulo}`, onChange: async (e) => {
-          const marcado = e.target.checked;
-          await atualizar("tarefas", p.id, { produzido: marcado });
-          registrarAtividade(p.id, { texto: marcado ? "marcou como produzido" : "desmarcou o produzido" });
-          desenhar();
-        } }),
-        el("button", { type: "button", class: "item-producao", title: "Abrir o post", onClick: async () => { await abrirTarefa(porId("tarefas", p.id) || p); desenhar(); } },
-          el("span", { class: "data-mini" }, fmtData(p.dataPublicacao || p.prazo, true)),
-          el("span", { class: "etiqueta formato" }, p.formato || "Post"),
-          el("strong", {}, p.titulo),
-          p.marcaId ? el("span", { class: "etiqueta" }, porId("marcas", p.marcaId)?.nome || "") : null,
-          el("span", { class: `etiqueta st-${p.statusConteudo || "ideia"}` }, rotuloStatusConteudo(p.statusConteudo || "ideia"))))))
+      atrasando.length ? el("p", { class: "faixa-alerta" }, `⚠ ${atrasando.length} post(s) publicam em até 2 dias e ainda não foram produzidos.`) : null,
+      posts.length ? el("ul", { class: "checklist-producao" }, posts.map((p) => linhaPost(p, "produzido", "Produzido")))
         : el("p", { class: "subtitulo" }, "Nenhum post planejado para essa semana. Planeje o mês do cliente primeiro."),
-      posts.length && feitos === posts.length ? el("p", { class: "faixa-ok" }, "Tudo produzido! Pode concluir esta tarefa.") : null);
+      posts.length && feitos === posts.length ? el("p", { class: "faixa-ok" }, "Tudo produzido! Pode concluir esta tarefa.") : null,
+      roteiros.length ? [
+        el("h3", { class: "form-secao subsecao" }, `Roteiros dos vídeos da semana seguinte · ${fmtData(addDias(tarefa.semanaInicio, 7), true)} a ${fmtData(fimSeguinte, true)}`,
+          el("span", { class: "contador" }, `${roteiros.filter((p) => p.roteiroPronto).length}/${roteiros.length} prontos`)),
+        el("p", { class: "subtitulo" }, "Vídeo precisa do roteiro uma semana antes da produção."),
+        el("ul", { class: "checklist-producao" }, roteiros.map((p) => linhaPost(p, "roteiroPronto", "Roteiro pronto")))] : null,
+      posts.length ? el("div", { class: "acoes-producao" },
+        el("button", { type: "button", class: "secundario mini", disabled: !pode("conteudo"), title: "Os posts produzidos vão para \"Em aprovação\" e sai um link para o cliente", onClick: () => {
+          const lista = prontosParaAprovar.length ? prontosParaAprovar : posts.filter((p) => p.produzido && p.statusConteudo !== "publicado");
+          if (!lista.length) { avisar("Marque os posts produzidos primeiro.", "erro"); return; }
+          gerarLinkAprovacao(tarefa.clienteId, tarefa.semanaInicio, undefined, { lista, rotulo: `semana de ${fmtData(tarefa.semanaInicio, true)} a ${fmtData(fim, true)}` });
+        } }, `➜ Mandar para aprovação${prontosParaAprovar.length ? ` (${prontosParaAprovar.length})` : ""}`),
+        el("button", { type: "button", class: "secundario mini", title: "Copia as legendas da semana para colar no agendador", onClick: () => copiarLegendas(posts) }, "📋 Copiar legendas"),
+        el("button", { type: "button", class: "secundario mini", title: "Cria posts iguais em outra semana (como ideia)", onClick: () => copiarSemana(tarefa, posts) }, "⧉ Copiar para outra semana")) : null
+    ].flat().filter(Boolean));
   };
   desenhar();
   return caixa;
+}
+
+/** Legendas da semana num texto só (data, formato e tema antes de cada uma). */
+async function copiarLegendas(posts) {
+  const comCopy = posts.filter((p) => p.copy);
+  if (!comCopy.length) { avisar("Nenhum post desta semana tem copy ainda.", "erro"); return; }
+  const texto = comCopy.map((p) => `${fmtData(p.dataPublicacao || p.prazo, true)}${p.hora ? ` ${p.hora}` : ""} · ${p.formato || "Post"} · ${p.titulo}\n\n${p.copy}`).join("\n\n————————\n\n");
+  try { await navigator.clipboard.writeText(texto); avisar(`${comCopy.length} legenda(s) copiada(s)${comCopy.length < posts.length ? `; ${posts.length - comCopy.length} post(s) ainda sem copy` : ""}.`); }
+  catch { avisar("Não consegui copiar.", "erro"); }
+}
+
+/** Copia os posts da semana para outra semana, mantendo o dia da semana (entram como ideia). */
+async function copiarSemana(tarefa, posts) {
+  const v = await formulario("Copiar os posts para outra semana", [
+    { nome: "semana", rotulo: "Segunda-feira da semana de destino", tipo: "date", obrigatorio: true }
+  ], { semana: addDias(tarefa.semanaInicio, 7) }, { rotuloSalvar: `Copiar ${posts.length} post(s)` });
+  if (!v?.semana) return;
+  const delta = Math.round((new Date(`${v.semana}T12:00:00`) - new Date(`${tarefa.semanaInicio}T12:00:00`)) / 86400000);
+  for (const p of posts) {
+    const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, qtdComentarios, ...copia } = p;
+    const data = addDias(p.dataPublicacao || p.prazo, delta);
+    await criar("tarefas", { ...copia, dataPublicacao: data, prazo: prazoDoPost(data, p.formato, hojeISO()), statusConteudo: "ideia", status: "a_fazer",
+      checklist: (p.checklist || []).map((i) => ({ ...i, feito: false })) });
+  }
+  avisar(`${posts.length} post(s) copiados para a semana de ${fmtData(v.semana, true)}, como ideia.`);
 }
 
 function secaoCriativos(tarefa) {
@@ -342,9 +446,11 @@ export async function salvarTarefa(original, v) {
   if (v.tipo !== TIPO_CONTEUDO) {
     for (const k of ["formato", "rede", "dataPublicacao", "hora", "statusConteudo", "objetivo", "roteiro", "copy", "extra"]) delete v[k];
   } else {
-    if (!v.prazo) v.prazo = v.dataPublicacao;
+    if (!v.prazo) v.prazo = prazoDoPost(v.dataPublicacao, v.formato, hojeISO()) || v.dataPublicacao;
     v.statusConteudo ||= "ideia";
     v.status = statusDaEtapa(v.statusConteudo);
+    // Desde quando está esperando o cliente (lembrete automático por e-mail)
+    if (v.statusConteudo === "aprovacao" && original.statusConteudo !== "aprovacao") v.aprovacaoDesde = Date.now();
   }
   if (v.status === "concluido" && original.status !== "concluido") v.concluidoEm = hojeISO();
   if (v.status !== "concluido") v.concluidoEm = null;
@@ -359,7 +465,8 @@ export async function mudarEtapa(t, etapa) {
   if (!etapa || etapa === (t.statusConteudo || "ideia")) return;
   const antes = { statusConteudo: t.statusConteudo || "ideia", status: t.status || "a_fazer", concluidoEm: t.concluidoEm || null };
   const status = statusDaEtapa(etapa);
-  await atualizar("tarefas", t.id, { statusConteudo: etapa, status, concluidoEm: status === "concluido" ? (t.concluidoEm || hojeISO()) : null });
+  await atualizar("tarefas", t.id, { statusConteudo: etapa, status, concluidoEm: status === "concluido" ? (t.concluidoEm || hojeISO()) : null,
+    ...(etapa === "aprovacao" ? { aprovacaoDesde: Date.now() } : {}) });
   registrarAtividade(t.id, { texto: `mudou a etapa para ${rotuloStatusConteudo(etapa)}` });
   avisar(`Etapa: ${rotuloStatusConteudo(etapa)}.`, "ok", { desfazer: () => atualizar("tarefas", t.id, antes) });
 }
@@ -413,6 +520,8 @@ export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
         t.status === "andamento" ? el("span", { class: "etiqueta andamento" }, "Em andamento") : null,
         total ? el("span", { class: "progresso-mini" }, `☑ ${feitos}/${total}`) : null,
         t.semanaInicio ? progressoProducao(t) : null,
+        t.semanaInicio && t.status !== "concluido" && postsAtrasando(t, hojeISO()).length
+          ? el("span", { class: "etiqueta atrasado", title: "Posts que publicam em até 2 dias e não foram produzidos" }, `⚠ ${postsAtrasando(t, hojeISO()).length} perto da data`) : null,
         t.qtdComentarios ? el("span", { class: "progresso-mini", title: "Comentários" }, `💬 ${t.qtdComentarios}`) : null,
         ehConteudo(t) ? seloResposta(t) : null,
         ehConteudo(t) && t.qtdArtes ? el("span", { class: "progresso-mini", title: "Criativos anexados" }, `🖼 ${t.qtdArtes}`) : null,

@@ -2,6 +2,7 @@
  * Automações do app da Hyper, rodando no Google Apps Script DA CONTA DA HYPER (e só nela):
  *  - e-mails: convites, acesso liberado, pedidos de acesso, menções em comentários;
  *  - resumo diário às 8h para cada pessoa da equipe;
+ *  - lembrete às 8h para o cliente (usuário do tipo cliente) quando há post esperando a aprovação dele há 2 dias ou mais;
  *  - backup semanal compacto (.json.gz, sem imagens) numa pasta do Drive da Hyper, guardando só os 8 mais recentes;
  *  - Google Agenda: assim que um compromisso é salvo no app (e a cada 5 minutos, por garantia) cria, ATUALIZA o mesmo
  *    evento ou tira, numa agenda da conta da Hyper ("Hyper · Compromissos"), com convite e aviso de mudança para o
@@ -114,6 +115,7 @@ function apagarSegredo() { P.deleteProperty('SEGREDO'); }
 /* ---------------- Resumo diário ---------------- */
 
 function resumoDiario(somentePara) {
+  if (!somentePara) { try { lembrarAprovacoes(); } catch (e) { console.warn('Lembrete de aprovação: ' + e.message); } }
   const hoje = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd');
   const membros = lerColecao('membros').filter((m) => m.status === 'ativo' && m.papel !== 'cliente' && m.email && m.resumoDiario !== false);
   const tarefas = lerColecao('tarefas').filter((t) => t.status !== 'concluido');
@@ -143,6 +145,38 @@ function resumoDiario(somentePara) {
       htmlBody: modelo('Resumo do dia', corpo, link ? link + '#/hoje' : '', 'Abrir o Hoje') + '<p style="font-size:11px;color:#606060;text-align:center">Para não receber mais, desmarque em Minha conta no app.</p>' });
     enviados++;
   });
+  return enviados;
+}
+
+/* ---------------- Lembrete de aprovação para o cliente ---------------- */
+
+const DIAS_LEMBRETE_APROVACAO = 2;
+/**
+ * Para cada usuário do tipo cliente: se há posts dele em "Em aprovação" há DIAS_LEMBRETE_APROVACAO dias ou mais,
+ * manda um e-mail com o link do app. Cada post é lembrado no máximo a cada DIAS_LEMBRETE_APROVACAO dias.
+ */
+function lembrarAprovacoes() {
+  const agora = Date.now();
+  const limite = agora - DIAS_LEMBRETE_APROVACAO * 86400000;
+  const esperando = lerColecao('tarefas').filter((t) => t.tipo === 'Conteúdo' && t.statusConteudo === 'aprovacao'
+    && (t.aprovacaoDesde || t.atualizadoEm || agora) <= limite && (!t.lembreteAprovacaoEm || t.lembreteAprovacaoEm <= limite));
+  if (!esperando.length) return 0;
+  const clientes = lerColecao('membros').filter((m) => m.status === 'ativo' && m.papel === 'cliente' && m.email);
+  const link = P.getProperty('LINK_APP') || '';
+  const lembrados = {};
+  let enviados = 0;
+  clientes.forEach((m) => {
+    const marcas = m.marcas || [];
+    const dele = esperando.filter((t) => marcas.length ? marcas.indexOf(t.marcaId || '') >= 0 : (m.clientes || []).indexOf(t.clienteId) >= 0);
+    if (!dele.length) return;
+    const lista = dele.slice(0, 15).map((t) => `<li>${esc(t.titulo || 'Post')}${t.dataPublicacao ? ` <span style="color:#606060">· publica ${t.dataPublicacao.slice(8)}/${t.dataPublicacao.slice(5, 7)}</span>` : ''}</li>`).join('');
+    const corpo = `<p>Oi, ${esc(String(m.nome || '').split(' ')[0])}! Tem ${dele.length} post(s) esperando a sua aprovação no Hyper Studio:</p><ul style="padding-left:18px">${lista}</ul><p>É só abrir, ver cada um e clicar em Aprovar ou Pedir ajuste.</p>`;
+    MailApp.sendEmail({ to: m.email, name: NOME, subject: `${dele.length} post(s) esperando a sua aprovação`,
+      htmlBody: modelo('Posts para aprovar', corpo, link ? link + '#/inicio' : '', 'Ver e aprovar') });
+    dele.forEach((t) => (lembrados[t.id] = true));
+    enviados++;
+  });
+  Object.keys(lembrados).forEach((id) => gravarDocumento('tarefas/' + id, { lembreteAprovacaoEm: agora }));
   return enviados;
 }
 

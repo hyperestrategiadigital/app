@@ -65,16 +65,18 @@ let aoAvisarErro = null;
 /** O app registra aqui quem guarda os erros mostrados à pessoa (registro de erros). */
 export const quandoErro = (fn) => (aoAvisarErro = fn);
 
-export function avisar(msg, tipo = "ok", { desfazer } = {}) {
+/** Aviso rápido no rodapé. `desfazer`: botão Desfazer; `acao`: { rotulo, fn } para um próximo passo (ex.: mandar para aprovação). */
+export function avisar(msg, tipo = "ok", { desfazer, acao } = {}) {
   if (tipo === "erro") aoAvisarErro?.(msg);
   document.querySelectorAll(".aviso").forEach((a) => a.remove());
   let fechar;
   const botao = desfazer ? el("button", { class: "link-claro desfazer", onClick: async () => { fechar(); try { await desfazer(); avisar("Desfeito."); } catch (e) { avisar("Não deu para desfazer: " + e.message, "erro"); } } }, "Desfazer") : null;
-  const t = el("div", { class: `aviso aviso-${tipo}`, role: "status" }, msg, botao);
+  const botaoAcao = acao ? el("button", { class: "link-claro desfazer", onClick: async () => { fechar(); try { await acao.fn(); } catch (e) { avisar(e.message, "erro"); } } }, acao.rotulo) : null;
+  const t = el("div", { class: `aviso aviso-${tipo}`, role: "status" }, msg, botaoAcao, botao);
   fechar = () => { t.classList.remove("visivel"); setTimeout(() => t.remove(), 300); };
   document.body.append(t);
   requestAnimationFrame(() => t.classList.add("visivel"));
-  setTimeout(fechar, desfazer ? 7000 : 3500);
+  setTimeout(fechar, desfazer || acao ? 8000 : 3500);
 }
 
 /** Fecha todos os modais abertos. */

@@ -4,7 +4,7 @@ import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal
 import { dados, porId, criar, atualizar, excluir, clientesAtivos, marcasDo } from "../db.js";
 import { cabecalho, abas, modeloChecklist } from "./componentes.js";
 import { responsavelPadrao } from "../agenda.js";
-import { FORMATOS, formatoAtual, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
+import { FORMATOS, formatoAtual, prazoDoPost, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
 import { postsDoMes, dataPost, exportarPDF, nomeMes, temPrefixo } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
 import { gerarLinkAprovacao } from "../aprovacoes.js";
@@ -116,7 +116,7 @@ export function render({ params, estado, renderizar }) {
       for (const l of validas) {
         const v = {};
         for (const c of CAMPOS) v[c] = typeof l[c] === "string" ? l[c].trim() : l[c];
-        if (!v.prazo) v.prazo = addDias(v.dataPublicacao, -2) < hojeISO() ? hojeISO() : addDias(v.dataPublicacao, -2);
+        if (!v.prazo) v.prazo = prazoDoPost(v.dataPublicacao, v.formato, hojeISO()); // antecedência do formato (Ajustes → Menus e listas)
         const status = statusDaEtapa(v.statusConteudo);
         if (l.id) {
           const atual = porId("tarefas", l.id);
