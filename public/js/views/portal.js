@@ -8,7 +8,7 @@ import { eu, marcasRestritas } from "../permissoes.js";
 import { TIPO_CONTEUDO, FORMATOS, REDES, CAMPOS_REDES, rotuloEtapaCliente, FORMATO_PADRAO } from "../constantes.js";
 import { dataPost, nomeMes } from "../exportacao.js";
 import { listarArtesTarefa } from "../arquivos.js";
-import { promptCopy } from "../prompts.js";
+import { abrirAssistenteIA } from "./assistenteIA.js";
 import { cabecalho, corCliente } from "./componentes.js";
 import { abaResultados } from "./resultados.js";
 import { GRUPO } from "./marca.js";
@@ -124,13 +124,12 @@ export function sugerirPost() {
     { nome: "notas", rotulo: "Observações para a Hyper", tipo: "textarea", linhas: 3 }
   ].filter(Boolean), { conta: contas[0].chave }, {
     rotuloSalvar: "Enviar sugestão",
-    extras: [el("button", { type: "button", class: "secundario mini", onClick: async () => {
+    extras: [el("button", { type: "button", class: "destaque mini", onClick: () => {
       const v = ultimoForm()?.lerValores?.() || {};
       const k = contaDe(v.conta);
-      try { await navigator.clipboard.writeText(promptCopy({ ...v, clienteId: k.clienteId, marcaId: k.marcaId })); avisar("Pedido copiado! Cole no Claude para ele escrever a legenda no tom da marca."); }
-      catch { avisar("Não consegui copiar o pedido.", "erro"); }
-      window.open("https://claude.ai/new", "_blank", "noopener");
-    } }, "✨ Legenda com o Claude")],
+      abrirAssistenteIA({ ctx: { clienteId: k.clienteId, marcaId: k.marcaId, post: { ...v, roteiro: v.notas } }, tipos: ["copy"],
+        aoUsar: (resp) => { const campo = ultimoForm()?.querySelector("#f-copy"); if (campo && resp.LEGENDA) campo.value = resp.LEGENDA; } });
+    } }, "✨ Legenda com IA")],
     aoSalvar: async (v) => {
       await criarSugestao(contaDe(v.conta), v);
       avisar("Sugestão enviada para a Hyper.");

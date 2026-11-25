@@ -999,3 +999,23 @@ details.grupo-dia:not([open]) > summary h3 { margin-bottom: 4px; }
 .resumo-pilares { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; font-size: 13px; }
 .resumo-pilares .etiqueta.vazio { background: rgba(179, 38, 30, 0.08); color: var(--cor-alerta); }
 .form-grade > .semana-producao { grid-column: 1 / -1; }
+
+/* Criar com IA (assistente), medidor da marca e kit */
+.assistente-ia h3 { margin: 18px 0 6px; }
+.assistente-ia .botoes-escolha { flex-wrap: wrap; }
+.linha-ia { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0; }
+.botoes-escolha.mini button { padding: 6px 12px; font-size: 13px; }
+.pedido-ia { white-space: pre-wrap; max-height: 280px; overflow: auto; font-size: 12px; background: var(--cor-fundo); border-radius: var(--raio-pequeno); padding: 12px; }
+.passo-ia textarea { width: 100%; }
+.campos-extra-ia .campo { margin-top: 10px; }
+.medidor-marca { display: grid; gap: 6px; padding: 10px 14px; border-radius: var(--raio-pequeno); background: var(--cor-fundo); margin-bottom: 12px; }
+.medidor-topo { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 13px; }
+.medidor-barra { height: 8px; border-radius: 99px; background: var(--hyper-gelo); overflow: hidden; }
+.medidor-barra span { display: block; height: 100%; border-radius: 99px; background: var(--cor-alerta); }
+.medidor-marca.medio .medidor-barra span { background: var(--hyper-amarelo); }
+.medidor-marca.bom .medidor-barra span { background: var(--cor-confirmar); }
+.bloco-ia-marca { margin-bottom: 18px; }
+.aprendizados ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.aprendizados li { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.kit-ia ol { padding-left: 18px; line-height: 1.6; }
+#manual-hyper { width: 100%; font-family: inherit; line-height: 1.5; margin-top: 10px; }

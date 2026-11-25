@@ -9,6 +9,7 @@ import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js
 import { ehAdmin } from "../permissoes.js";
 import { configMeta } from "../meta.js";
 import { configAgenda, agendaConectada, testarAgenda } from "../agenda.js";
+import { MANUAL_PADRAO } from "../manual.js";
 import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO, REDES, TIPOS_FIXOS, ANTECEDENCIA, LISTAS_PADRAO, antecedenciaDe } from "../constantes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
 
@@ -24,6 +25,7 @@ export function render() {
 
     blocoEmail(),
     blocoMeta(),
+    blocoManual(),
     ehAdmin() ? blocoListas() : null,
     blocoModelos(),
     blocoErros(),
@@ -265,6 +267,24 @@ function blocoErros() {
 }
 
 /** Modelos de checklist por formato de post e por tipo de tarefa (um passo por linha). */
+/** Manual de escrita da Hyper: entra em todos os pedidos de texto para a IA (ia.js). Só administrador edita. */
+function blocoManual() {
+  const salvo = dados.config.find((c) => c.id === "manual")?.texto || "";
+  const area = el("textarea", { rows: 18, id: "manual-hyper", readOnly: !ehAdmin() }, salvo || MANUAL_PADRAO);
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Manual de escrita da Hyper"),
+    el("p", {}, "O jeito Hyper de escrever. Vai junto em todos os pedidos de texto para a IA (copy, roteiro, carrossel, stories, ideias, planejamento), para qualquer marca. As diretrizes de cada marca valem mais do que ele."),
+    el("details", {}, el("summary", {}, ehAdmin() ? "Ver e editar o manual" : "Ver o manual"),
+      area,
+      ehAdmin() ? el("div", { class: "acoes" },
+        el("button", { type: "button", class: "link", onClick: () => { area.value = MANUAL_PADRAO; } }, "Voltar ao texto padrão"),
+        el("span", { class: "espaco" }),
+        el("button", { class: "confirmar", onClick: async () => {
+          await salvarComId("config", "manual", { texto: area.value.trim() === MANUAL_PADRAO.trim() ? "" : area.value.trim(), atualizadoEm: Date.now() });
+          avisar("Manual salvo. Os próximos pedidos já usam esta versão.");
+        } }, "Salvar manual")) : null));
+}
+
 /**
  * Menus e listas: tipos de tarefa, formatos de post (com os dias de antecedência da produção) e redes.
  * Fica em config/listas; o que sair da lista continua aparecendo nos itens que já usam.

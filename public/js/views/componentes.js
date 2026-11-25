@@ -7,9 +7,10 @@ import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, normalizar, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo, desfazerExclusao, listarAtividade, registrarAtividade, excluirAtividade } from "../db.js";
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, FORMATO_PADRAO, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa, MODELOS_PADRAO, comAtual, prazoDoPost } from "../constantes.js";
-import { promptCopy, pilaresDe } from "../prompts.js";
+import { pilaresDe } from "../prompts.js";
 import { identidade } from "../db.js";
-import { temChave, gerarTexto } from "../openai.js";
+import { abrirAssistenteIA, tipoDoFormato } from "./assistenteIA.js";
+import { camposDaResposta } from "../ia.js";
 import { producaoDoPost, postsDaProducao, roteirosDaProducao, postsAtrasando } from "../producao.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
 import { abrirCompromisso } from "../compromissos.js";
@@ -103,7 +104,8 @@ export function abrirTarefa(tarefa = {}) {
     { nome: "pilar", rotulo: "Pilar de conteúdo", tipo: "select", largura: "metade",
       opcoesDe: (v) => [["", "—"], ...comAtual(pilaresDaConta(v), tarefa.pilar).map((p) => [p, p])], mostrarSe: (v) => conteudo(v) && (pilaresDaConta(v).length > 0 || !!tarefa.pilar) },
     { nome: "roteiro", rotulo: "Briefing (a ideia do post)", tipo: "textarea", linhas: 3, dica: "O que o post precisa dizer: assunto, oferta, dados, referências…", mostrarSe: conteudo },
-    { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 5, dica: "Clique em \"✨ Criar copy\" ou escreva aqui", mostrarSe: conteudo },
+    { nome: "textoArte", rotulo: "Roteiro / texto da arte", tipo: "textarea", linhas: 4, dica: "Roteiro do vídeo, lâminas do carrossel, telas dos stories ou o texto da arte", mostrarSe: conteudo },
+    { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 5, dica: "Clique em \"✨ Criar com IA\" ou escreva aqui", mostrarSe: conteudo },
     { nome: "extra", rotulo: "Post extra: aparece solto nas tarefas, fora do \"Produzir semana\"", tipo: "checkbox", mostrarSe: conteudo },
 
     { tipo: "secao", rotulo: "Tarefa" },
@@ -165,7 +167,7 @@ export function abrirTarefa(tarefa = {}) {
   }
   // "✨ Criar copy" junto do campo da copy: briefing + identidade da marca
   const rotuloCopy = form?.querySelector("#f-copy")?.closest(".campo")?.querySelector(":scope > span");
-  if (rotuloCopy) { rotuloCopy.classList.add("rotulo-com-botao"); rotuloCopy.append(botaoCriarCopy(form)); }
+  if (rotuloCopy) { rotuloCopy.classList.add("rotulo-com-botao"); rotuloCopy.append(botaoCriarComIA(form, tarefa)); }
   // Post que está dentro de um "Produzir semana": aviso com atalho
   if (form && producao) form.querySelector(".form-grade").before(el("p", { class: "faixa-info" },
     `Este post faz parte de "${producao.titulo}". `,
@@ -203,37 +205,26 @@ export function abrirTarefa(tarefa = {}) {
 }
 
 /**
- * Botão "✨ Criar copy": junta o briefing do post com a identidade da marca (tom de voz, persona, diretrizes).
- * Com a chave da OpenAI (equipe com Conteúdo) escreve direto no campo; sem ela, copia o pedido para o Claude.
+ * "✨ Criar com IA": abre o assistente (views/assistenteIA.js) com o pedido completo para a IA da pessoa e,
+ * ao colar a resposta, preenche a copy e o roteiro / texto da arte.
  */
-function botaoCriarCopy(form) {
-  const campoCopy = form.querySelector("#f-copy");
-  const aqui = pode("conteudo") && temChave();
-  const botao = el("button", { type: "button", class: "destaque mini", onClick: async () => {
-    const v = form.lerValores();
-    if (!v.roteiro?.trim()) { avisar("Preencha o briefing primeiro: é dele que sai a copy.", "erro"); form.querySelector("#f-roteiro")?.focus(); return; }
-    if (!aqui) {
-      try { await navigator.clipboard.writeText(promptCopy(v)); avisar("Pedido copiado! Cole no Claude e traga a copy para cá."); }
-      catch { avisar("Não consegui copiar o pedido.", "erro"); }
-      window.open("https://claude.ai/new", "_blank", "noopener");
-      return;
-    }
-    if (campoCopy.value.trim() && !(await confirmar("Trocar a copy que já está escrita por uma nova?"))) return;
-    const rotulo = botao.textContent;
-    botao.disabled = true; botao.textContent = "Escrevendo…";
-    try {
-      campoCopy.value = await gerarTexto({
-        sistema: "Você é copywriter da Hyper Estratégia Digital. Responda só com a legenda final pronta para publicar, em português do Brasil, sem títulos nem explicações.",
-        pedido: promptCopy(v, { soLegenda: true })
-      });
-      campoCopy.dispatchEvent(new Event("input", { bubbles: true }));
-      avisar("Copy criada. Revise e salve.");
-    } catch (e) { avisar(e.message, "erro"); }
-    botao.disabled = false; botao.textContent = rotulo;
-  } }, "✨ Criar copy");
-  botao.title = aqui ? "Escreve a copy com o briefing acima e a identidade da marca" : "Monta o pedido com o briefing acima e a identidade da marca e abre o Claude";
-  botao.classList.add("so-conteudo");
-  return botao;
+function botaoCriarComIA(form, tarefa) {
+  return el("button", { type: "button", class: "destaque mini so-conteudo", title: "Monta o pedido com o jeito Hyper de escrever, a marca e este post", onClick: () => {
+    const v = { ...form.lerValores(), id: tarefa.id };
+    if (!v.clienteId) { avisar("Escolha o cliente primeiro.", "erro"); return; }
+    const principal = tipoDoFormato(v.formato);
+    const tipos = [...new Set([principal, "copy", "adaptar", "anuncio", "imagem"])];
+    abrirAssistenteIA({
+      ctx: { clienteId: v.clienteId, marcaId: v.marcaId || "", post: v }, tipos,
+      aoUsar: (resp) => {
+        const { copy, textoArte } = camposDaResposta(resp);
+        const preencher = (sel, valor) => { const c = form.querySelector(sel); if (c && valor) { c.value = valor; c.dispatchEvent(new Event("input", { bubbles: true })); } };
+        preencher("#f-copy", copy);
+        preencher("#f-textoArte", textoArte);
+        avisar(copy || textoArte ? "Resposta colocada no post. Revise e salve." : "Não encontrei os blocos na resposta: confira se colou tudo.", copy || textoArte ? "ok" : "erro");
+      }
+    });
+  } }, "✨ Criar com IA");
 }
 
 /** "Montar briefing": 4 perguntas que viram o briefing do post (somam ao que já estiver escrito). */
@@ -449,7 +440,7 @@ export async function salvarTarefa(original, v) {
     if (!v.checklist?.length || atual === doInicio) v.checklist = modeloChecklist(v);
   }
   if (v.tipo !== TIPO_CONTEUDO) {
-    for (const k of ["formato", "rede", "dataPublicacao", "hora", "statusConteudo", "objetivo", "roteiro", "copy", "extra"]) delete v[k];
+    for (const k of ["formato", "rede", "dataPublicacao", "hora", "statusConteudo", "objetivo", "roteiro", "copy", "extra", "textoArte", "pilar"]) delete v[k];
   } else {
     if (!v.prazo) v.prazo = prazoDoPost(v.dataPublicacao, v.formato, hojeISO()) || v.dataPublicacao;
     v.statusConteudo ||= "ideia";

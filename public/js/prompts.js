@@ -3,53 +3,18 @@
 import { identidade } from "./db.js";
 import { fmtData } from "./ui.js";
 
-/** Pilares de conteúdo da marca (um por linha no campo). */
-export const pilaresDe = (c) => String(c?.pilares || "").split("\n").map((l) => l.replace(/^[-•*\d.)\s]+/, "").trim()).filter(Boolean);
+import { montarPedido, lerResposta, pilaresDe } from "./ia.js";
+export { pilaresDe };
 const ehVertical = (f) => /story|reels|tiktok|vídeo|video/i.test(f || "");
 
-/** Pedido de copy. `soLegenda`: só a legenda final (para escrever direto no campo do post). */
+/**
+ * Pedido de copy (motor em ia.js: manual da Hyper + marca + exemplos aprovados + o post).
+ * `soLegenda` é para escrever direto no campo: quem chama lê o bloco [LEGENDA] da resposta com `legendaDaResposta`.
+ */
 export function promptCopy(post, { soLegenda = false } = {}) {
-  const c = identidade(post.clienteId, post.marcaId);
-  const deMarca = c.marcaId && c.clienteNome;
-  const linhas = [
-    `Você é copywriter da Hyper Estratégia Digital, agência de estratégia digital (conteúdo, social media e tráfego pago). Escreva a copy de um conteúdo para ${deMarca ? `a marca ${c.nome}, do cliente ${c.clienteNome}` : `o cliente ${c.nome || "(sem cliente)"}`}.`,
-    deMarca ? `Use a identidade e a linguagem da marca ${c.nome}, que é diferente das outras marcas do grupo.` : null,
-    "",
-    deMarca ? "## Sobre a marca" : "## Sobre o cliente",
-    c.descricao ? `- O que é: ${c.descricao}` : null,
-    c.tomDeVoz ? `- Tom de voz: ${c.tomDeVoz}` : "- Tom de voz: não informado (use um tom próximo e profissional)",
-    c.publico ? `- Público-alvo: ${c.publico}` : null,
-    c.persona ? `- Persona: ${c.persona}` : null,
-    c.pilares ? `- Pilares de conteúdo: ${pilaresDe(c).join(", ")}` : null,
-    c.instagram ? `- Instagram: ${c.instagram}` : null,
-    c.observacoes ? `- Observações: ${c.observacoes}` : null,
-    c.diretrizes ? `\n## Diretrizes de conteúdo (siga à risca)\n${c.diretrizes}` : null,
-    "",
-    "## Sobre a peça",
-    `- Tema: ${post.titulo || "(sem tema)"}`,
-    `- Formato: ${post.formato || "-"} · Rede: ${post.rede || "-"}`,
-    post.dataPublicacao ? `- Publicação: ${fmtData(post.dataPublicacao)}${post.hora ? ` às ${post.hora}` : ""}` : null,
-    post.objetivo ? `- Objetivo: ${post.objetivo}` : null,
-    post.pilar ? `- Pilar de conteúdo: ${post.pilar}` : null,
-    post.roteiro ? `- Briefing / roteiro:\n${post.roteiro}` : null,
-    "",
-    soLegenda ? "## O que entregar\nSó a legenda final, pronta para publicar, com gancho forte na primeira linha, chamada para ação e, se for Instagram, 5 a 10 hashtags no fim. Sem títulos, sem opções, sem explicações." : null,
-    soLegenda ? "" : null,
-    soLegenda ? "Escreva em português do Brasil." : null,
-    "## O que entregar",
-    post.formato === "Carrossel" ? "- Texto de cada lâmina (capa forte + 5 a 8 lâminas + lâmina final com CTA)" : null,
-    ehVertical(post.formato) ? "- Gancho dos 3 primeiros segundos e roteiro curto" : null,
-    post.formato === "WhatsApp" ? "- Mensagem curta para lista de transmissão, com CTA claro" : null,
-    "- Texto curto para aplicar na arte (título de até 8 palavras + linha de apoio)",
-    "- Legenda pronta para publicar, com chamada para ação",
-    /Instagram|TikTok/.test(post.rede || "") ? "- 5 a 10 hashtags relevantes" : null,
-    "- 3 opções de primeira linha (gancho) para eu escolher",
-    "",
-    "Escreva em português do Brasil."
-  ];
-  if (soLegenda) { const i = linhas.indexOf("## O que entregar"); return linhas.slice(0, i).filter((l) => l !== null).join("\n"); }
-  return linhas.filter((l) => l !== null).join("\n");
+  return montarPedido("copy", { clienteId: post.clienteId, marcaId: post.marcaId || "", post });
 }
+export const legendaDaResposta = (texto) => lerResposta(texto).LEGENDA || String(texto || "").trim();
 
 /** Prompt de imagem: só a imagem, SEM texto escrito (o texto é aplicado depois no editor ou no Canva). */
 export function promptImagem({ cliente = {}, descricao, formato, espacoTexto = "base", extra = "" }) {

@@ -138,7 +138,7 @@ test("post com marca, status único, planejar no calendário e criar dentro do p
   expect(post[1]).toMatchObject({ marcaId: "mx", statusConteudo: "aprovacao", status: "andamento" });
 
   const prompt = await page.evaluate(async (id) => { const p = await import("/js/prompts.js"); const db = await import("/js/db.js"); return p.promptCopy(db.porId("tarefas", id)); }, post[0]);
-  expect(prompt).toContain("marca Marca X, do cliente Grupo Exemplo");
+  expect(prompt).toContain("Nome: Marca X (do grupo Grupo Exemplo)");
 
   await page.getByRole("button", { name: /Ações do mês/ }).click();
   await page.getByRole("menuitem", { name: /Planejar mês/ }).click();
@@ -809,7 +809,7 @@ test("Produzir semana: posts planejados viram checklist dentro da tarefa; extras
   expect(erros).toEqual([]);
 });
 
-test("post novo: formatos novos, nasce como extra e Criar copy pede o briefing", async ({ page }) => {
+test("post novo: formatos novos, nasce como extra e Criar com IA preenche a copy e o texto da arte", async ({ page }) => {
   await abrir(page);
   await page.goto("/#/tarefas");
   await page.getByRole("button", { name: /\+ Novo/ }).click();
@@ -819,9 +819,83 @@ test("post novo: formatos novos, nasce como extra e Criar copy pede o briefing",
   const tipos = await page.locator("#f-tipo option").allTextContents();
   expect(tipos[tipos.length - 1]).toBe("Outro");
   await expect(page.locator("#f-extra")).toBeChecked();
-  await page.getByRole("button", { name: "✨ Criar copy" }).click();
-  await expect(page.locator(".aviso").last()).toContainText("Preencha o briefing");
+  await page.selectOption("#f-clienteId", "loja");
+  await page.fill("#f-titulo", "Post com IA");
+  await page.getByRole("button", { name: "✨ Criar com IA" }).click();
+  const janela = page.locator(".modal").last();
+  await expect(janela).toContainText("Ficha da marca para a IA");
+  await expect(janela).toContainText("Sem briefing");
+  await janela.locator("summary", { hasText: "Ver o pedido" }).click();
+  await expect(janela.locator(".pedido-ia")).toContainText("Manual de escrita da Hyper");
+  await expect(janela.locator(".pedido-ia")).toContainText("[LEGENDA]");
+  await janela.locator("#ia-resposta").fill("**[LEGENDA]**\nChegou a coleção nova!\n\n## [TEXTO DA ARTE]\nColeção de verão");
+  await janela.getByRole("button", { name: "Usar resposta" }).click();
+  await expect(page.locator("#f-copy")).toHaveValue("Chegou a coleção nova!");
+  await expect(page.locator("#f-textoArte")).toHaveValue(/Coleção de verão/);
 });
+
+test("motor de pedidos: manual, marca, exemplos aprovados, data comemorativa e leitura da resposta", async ({ page }) => {
+  await abrir(page, { extra: {
+    clientes: { loja: { nome: "Loja Exemplo", ativo: true, paleta: ["#C98A00"], tomDeVoz: "Leve e direto", publico: "Mulheres 25-40", evitar: "gírias" } },
+    tarefas: { ap: { titulo: "Post aprovado antigo", tipo: "Conteúdo", clienteId: "loja", formato: "Estático", statusConteudo: "publicado", status: "concluido", concluidoEm: dia(-5), dataPublicacao: dia(-5), prazo: dia(-6), copy: "Esta é uma legenda aprovada da loja, com o jeito dela de falar e uma chamada para ação.", checklist: [] } }
+  } });
+  const r = await page.evaluate(async () => {
+    const ia = await import("/js/ia.js");
+    const pedido = ia.montarPedido("copy", { clienteId: "loja", marcaId: "", post: { titulo: "Natal na loja", formato: "Carrossel", rede: "Instagram", dataPublicacao: "2026-12-23", roteiro: "Presentes até R$ 100" } });
+    const lida = ia.lerResposta("Aqui vai:\n[LEGENDA]\nTexto final\n[LÂMINAS]\nLâmina 1: capa");
+    const plano = ia.planejamentoDaResposta('```json\n{"tipo":"planejamento-hyper","posts":[{"data":"2026-12-02","titulo":"A"}]}\n```');
+    const nada = ia.lerResposta("Só um texto sem marcador");
+    return { pedido, lida, plano, nada, kit: ia.kitParaIA("loja", ""), medidor: ia.completudeMarca("loja", "") };
+  });
+  expect(r.pedido).toContain("Manual de escrita da Hyper");
+  expect(r.pedido).toContain("Tom de voz: Leve e direto");
+  expect(r.pedido).toContain("O que evitar (nunca use): gírias");
+  expect(r.pedido).toContain("Esta é uma legenda aprovada da loja");
+  expect(r.pedido).toContain("Natal (25/12)");
+  expect(r.pedido).toContain("Carrossel de 5 a 8 lâminas");
+  expect(r.pedido).toContain("Presentes até R$ 100");
+  expect(r.lida).toEqual({ LEGENDA: "Texto final", LAMINAS: "Lâmina 1: capa" });
+  expect(r.nada).toEqual({ LEGENDA: "Só um texto sem marcador" });
+  expect(r.plano.posts[0].titulo).toBe("A");
+  expect(r.kit).toContain("IA de conteúdo da marca Loja Exemplo");
+  expect(r.medidor.pct).toBeGreaterThan(0);
+  expect(r.medidor.faltando).toContain("Persona");
+});
+
+test("marca: medidor, kit para a IA, aprendizados dos ajustes e manual editável em Ajustes", async ({ page }) => {
+  await abrir(page, { extra: { tarefas: {
+    aj: { titulo: "Post com ajuste", tipo: "Conteúdo", clienteId: "loja", formato: "Estático", statusConteudo: "producao", status: "andamento", dataPublicacao: dia(3), prazo: dia(2),
+      aprovacaoCliente: { decisao: "ajuste", comentario: "Não usar a palavra barato", em: Date.now() }, checklist: [] } } } });
+  await page.goto("/#/clientes/loja");
+  await page.getByRole("tab", { name: "Marca" }).click();
+  await expect(page.locator(".medidor-marca")).toContainText("Ficha da marca para a IA");
+  await page.getByRole("button", { name: /Kit da marca para a IA/ }).click();
+  await expect(page.locator(".modal").last()).toContainText("Projetos");
+  await page.keyboard.press("Escape");
+  await page.locator(".aprendizados summary").click();
+  await page.locator(".aprendizados").getByRole("button", { name: "+ O que evitar" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.evitar || "")).toContain("Não usar a palavra barato");
+
+  await page.goto("/#/config");
+  await page.getByText("Ver e editar o manual").click();
+  await page.fill("#manual-hyper", "# Manual de teste\nSempre falar de você.");
+  await page.getByRole("button", { name: "Salvar manual" }).click();
+  await expect.poll(() => page.evaluate(async () => (await import("/js/ia.js")).montarPedido("copy", { clienteId: "loja", post: { titulo: "x" } }))).toContain("Sempre falar de você.");
+});
+
+test("Studio: planejamento do mês colado da IA abre a importação", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/studio/loja/ideias");
+  await page.getByRole("button", { name: /Ideias e planejamento com IA/ }).click();
+  const janela = page.locator(".modal").last();
+  await janela.getByRole("radio", { name: "Planejamento do mês" }).click();
+  await janela.locator("summary", { hasText: "Ver o pedido" }).click();
+  await expect(janela.locator(".pedido-ia")).toContainText("planejamento-hyper");
+  await janela.locator("#ia-resposta").fill('[PLANEJAMENTO]\n```json\n{"tipo":"planejamento-hyper","cliente":"x","posts":[{"data":"' + dia(20) + '","titulo":"Post do plano","formato":"Vídeo","rede":"Instagram","pilar":"Educativo"}]}\n```');
+  await janela.getByRole("button", { name: "Usar resposta" }).click();
+  await expect(page.locator(".modal").last()).toContainText("1 posts");
+});
+
 
 test("Hoje: cada dia dos próximos 7 dias abre e fecha", async ({ page }) => {
   await abrir(page, { extra: { tarefas: {

@@ -8,7 +8,10 @@ import { dados, porId, marcasDo, identidade } from "../db.js";
 import { ehCliente, pode } from "../permissoes.js";
 import { TIPO_CONTEUDO, FORMATOS, REDES, PROPORCAO_FORMATO } from "../constantes.js";
 import { dataPost, nomeMes } from "../exportacao.js";
-import { promptCopy, promptCanva, promptFotos, promptIdeias, promptImagem } from "../prompts.js";
+import { promptCanva, promptFotos, promptImagem, pilaresDe } from "../prompts.js";
+import { camposDaResposta, planejamentoDaResposta, levarParaIA } from "../ia.js";
+import { abrirAssistenteIA, tipoDoFormato, medidorMarca } from "./assistenteIA.js";
+import { previaPlanejamento } from "./importarPlanejamento.js";
 import { temChave, gerarTexto, gerarImagem, tamanhoAPI } from "../openai.js";
 import { cabecalho, corCliente, abrirTarefa } from "./componentes.js";
 import { contasDoPortal, criarSugestao } from "./portal.js";
@@ -31,9 +34,8 @@ const MODOS = [
 ];
 
 /** Copia o pedido e abre o Claude numa conversa nova. */
-async function levarAoClaude(texto, aviso = "Pedido copiado! Cole no Claude.") {
-  try { await navigator.clipboard.writeText(texto); avisar(aviso); } catch { avisar("Não consegui copiar o pedido.", "erro"); }
-  window.open("https://claude.ai/new", "_blank", "noopener");
+async function levarAoClaude(texto, aviso = "Pedido copiado! Cole na sua IA.") {
+  if (await levarParaIA(texto)) avisar(aviso); else avisar("Não consegui copiar o pedido.", "erro");
 }
 
 /** Usa a IA do app (OpenAI) só quem é da equipe com Conteúdo e com a chave cadastrada. */
@@ -115,7 +117,9 @@ function telaFoto(conta, id, estado, renderizar) {
         campo(e, "formato", "Onde vai usar", { opcoes: FORMATOS }),
         campo(e, "local", "Local / ambiente", { dica: "Ex.: recepção, estúdio, área externa" })),
       el("div", { class: "acoes" },
-        el("button", { class: "destaque", onClick: () => levarAoClaude(promptFotos(id, e), "Roteiro copiado! Cole no Claude para ele montar as fotos.") }, "📋 Roteiro com o Claude"),
+        el("button", { class: "destaque", onClick: () => levarAoClaude(promptFotos(id, e), "Roteiro copiado! Cole na sua IA para ela montar as fotos.") }, "📋 Roteiro de fotos com IA"),
+        el("button", { class: "secundario", onClick: () => abrirAssistenteIA({ titulo: "Imagem com IA", tipos: ["imagem"],
+          ctx: { clienteId: conta.clienteId, marcaId: conta.marcaId, post: { titulo: e.assunto || "", formato: e.formato }, extra: { descricao: [e.assunto, e.local ? `em ${e.local}` : ""].filter(Boolean).join(", ") } } }) }, "🖼 Pedido de imagem (ChatGPT)"),
         iaNoApp() ? el("button", { class: "secundario", onClick: (ev) => comEspera(ev.currentTarget, async () => {
           e.roteiro = await gerarTexto({ sistema: "Você é diretor de fotografia da Hyper Estratégia Digital. Responda em português do Brasil, em tópicos curtos.", pedido: promptFotos(id, e) });
           renderizar();
@@ -136,7 +140,7 @@ function telaFoto(conta, id, estado, renderizar) {
 
 function postDoEstado(conta, e) {
   return { tipo: TIPO_CONTEUDO, clienteId: conta.clienteId, marcaId: conta.marcaId, titulo: e.titulo || "", formato: e.formato || "", rede: e.rede || "",
-    objetivo: e.objetivo || "", roteiro: e.briefing || "", dataPublicacao: e.dataPublicacao || "", copy: e.copy || "" };
+    objetivo: e.objetivo || "", roteiro: e.briefing || "", dataPublicacao: e.dataPublicacao || "", copy: e.copy || "", textoArte: e.textoArte || "", pilar: e.pilar || "" };
 }
 
 function telaConteudo(conta, id, estado, renderizar) {
@@ -151,26 +155,28 @@ function telaConteudo(conta, id, estado, renderizar) {
         campo(e, "rede", "Rede", { opcoes: REDES }),
         campo(e, "dataPublicacao", "Data (opcional)", { tipo: "date" }),
         campo(e, "objetivo", "Objetivo", { dica: "Ex.: gerar matrículas, engajar, informar" })),
-      campo(e, "briefing", "Briefing / roteiro (opcional)", { tipo: "textarea", linhas: 3, dica: "O que não pode faltar, dados, oferta…" }),
+      el("div", { class: "grade-campos" }, pilaresDe(id).length ? campo(e, "pilar", "Pilar", { opcoes: ["", ...pilaresDe(id)] }) : null),
+      campo(e, "briefing", "Briefing (a ideia do post)", { tipo: "textarea", linhas: 3, dica: "Assunto, o que a pessoa precisa entender, oferta ou dado, o que ela deve fazer depois" }),
       el("div", { class: "acoes" },
-        el("button", { class: "destaque", onClick: () => { if (!e.titulo) return avisar("Escreva o tema.", "erro"); levarAoClaude(promptCopy(post()), "Pedido copiado! Cole no Claude: ele escreve no tom de voz da marca."); } }, "✨ Legenda com o Claude"),
-        iaNoApp() ? el("button", { class: "secundario", onClick: (ev) => comEspera(ev.currentTarget, async () => {
-          if (!e.titulo) throw new Error("Escreva o tema.");
-          e.copy = await gerarTexto({ sistema: "Você é copywriter da Hyper Estratégia Digital. Responda só com a legenda pronta para publicar, em português do Brasil.", pedido: promptCopy(post()) });
-          renderizar();
-        }) }, "Escrever aqui") : null,
+        el("button", { class: "destaque", onClick: () => {
+          if (!e.titulo) return avisar("Escreva o tema.", "erro");
+          abrirAssistenteIA({ ctx: { clienteId: conta.clienteId, marcaId: conta.marcaId, post: post() },
+            tipos: [...new Set([tipoDoFormato(e.formato), "copy", "anuncio", "adaptar", "comentarios", "imagem"])],
+            aoUsar: (resp) => { const { copy, textoArte } = camposDaResposta(resp); if (copy) e.copy = copy; if (textoArte) e.textoArte = textoArte; renderizar(); avisar("Resposta colocada abaixo. Revise."); } });
+        } }, "✨ Criar com IA"),
         el("button", { class: "secundario", onClick: () => { if (!e.titulo) return avisar("Escreva o tema.", "erro");
           levarAoClaude(promptCanva({ post: post(), cliente: id, formato: e.formato, tamanho: PROPORCAO_FORMATO[e.formato], texto: {} }), "Pedido de arte copiado! Cole no Claude com o Canva conectado (anexe a foto, se tiver)."); } }, "🎨 Arte no Canva"))),
     el("section", { class: "bloco" },
-      el("h2", {}, "Legenda"),
-      campo(e, "copy", "Cole aqui a legenda do Claude ou escreva a sua", { tipo: "textarea", linhas: 8 }),
+      el("h2", {}, "O texto"),
+      campo(e, "textoArte", "Roteiro / texto da arte", { tipo: "textarea", linhas: 5, dica: "Roteiro do vídeo, lâminas do carrossel, telas dos stories ou o texto da arte" }),
+      campo(e, "copy", "Legenda", { tipo: "textarea", linhas: 8, dica: "Use \"✨ Criar com IA\" ou escreva a sua" }),
       el("div", { class: "acoes" },
         ehCliente()
           ? el("button", { class: "confirmar", onClick: async (ev) => {
             if (!e.titulo) return avisar("Escreva o tema.", "erro");
             ev.currentTarget.disabled = true;
             try {
-              await criarSugestao(conta, { ...e, notas: [e.objetivo ? `Objetivo: ${e.objetivo}` : "", e.briefing].filter(Boolean).join("\n") });
+              await criarSugestao(conta, { ...e, notas: [e.objetivo ? `Objetivo: ${e.objetivo}` : "", e.pilar ? `Pilar: ${e.pilar}` : "", e.briefing, e.textoArte ? `Roteiro / texto da arte:\n${e.textoArte}` : ""].filter(Boolean).join("\n\n") });
               estado.conteudo = { formato: e.formato, rede: e.rede };
               avisar("Enviado para a Hyper como sugestão de post."); renderizar();
             } catch (erro) { avisar(erro.message, "erro"); ev.currentTarget.disabled = false; }
@@ -194,19 +200,29 @@ export function lerIdeias(texto = "") {
   return texto.split("\n").map((l) => l.replace(/^\s*(\d+[.)-]|[-*•])\s*/, "").trim()).filter((l) => l && !/^formato\s*\|/i.test(l) && !/^[-|\s]+$/.test(l))
     .map((l) => {
       const p = l.split("|").map((x) => x.trim().replace(/\*\*/g, ""));
-      if (p.length >= 2) return { formato: formatoDoTexto(p[0]), tema: p[1], gancho: p[2] || "", porque: p[3] || "" };
-      return { formato: "", tema: l.replace(/\*\*/g, ""), gancho: "", porque: "" };
+      if (p.length >= 2) return { formato: formatoDoTexto(p[0]), tema: p[1], gancho: p[2] || "", porque: p[3] || "", pilar: p[4] || "" };
+      return { formato: "", tema: l.replace(/\*\*/g, ""), gancho: "", porque: "", pilar: "" };
     }).filter((i) => i.tema);
 }
 
 function telaIdeias(conta, id, estado, renderizar) {
+  // Planejamento do mês colado da IA: a equipe importa direto; o cliente manda cada post como sugestão
+  const usarPlanejamento = async (bruto) => {
+    const plano = planejamentoDaResposta(bruto);
+    if (!plano?.posts?.length) { avisar("Não encontrei o planejamento na resposta: cole o JSON inteiro.", "erro"); return; }
+    if (!ehCliente()) { plano.cliente = porId("clientes", conta.clienteId)?.nome || plano.cliente; return previaPlanejamento(plano); }
+    for (const p of plano.posts) await criarSugestao(conta, { titulo: p.titulo, dataPublicacao: p.data, formato: p.formato, rede: p.rede, copy: p.copy || "", notas: [p.pilar ? `Pilar: ${p.pilar}` : "", p.roteiro].filter(Boolean).join("\n") });
+    avisar(`${plano.posts.length} sugestão(ões) enviada(s) para a Hyper.`);
+  };
   const e = (estado.ideias ??= { quantidade: "10", mes: hojeISO().slice(0, 7) });
   const jaPlanejados = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && t.clienteId === conta.clienteId && (t.marcaId || "") === conta.marcaId && dataPost(t).startsWith(e.mes)).map((t) => t.titulo);
-  const pedido = () => promptIdeias(id, { quantidade: Number(e.quantidade) || 10, foco: e.foco, mes: nomeMes(e.mes), jaPlanejados });
+  const extra = () => ({ quantidade: Number(e.quantidade) || 10, foco: e.foco, mes: e.mes, mesNome: nomeMes(e.mes), jaPlanejados, formatos: [...FORMATOS],
+    clienteNome: porId("clientes", conta.clienteId)?.nome || "", marcaNome: conta.marcaId ? conta.nome : "" });
   const ideias = lerIdeias(e.texto);
   const usar = async (i, botao) => {
-    const v = { titulo: i.tema, formato: i.formato, rede: "Instagram", copy: "", notas: [i.gancho ? `Gancho: ${i.gancho}` : "", i.porque ? `Por quê: ${i.porque}` : ""].filter(Boolean).join("\n") };
-    if (!ehCliente()) return abrirTarefa({ tipo: TIPO_CONTEUDO, clienteId: conta.clienteId, marcaId: conta.marcaId, titulo: v.titulo, formato: v.formato, rede: v.rede, notas: v.notas, prazo: hojeISO(), statusConteudo: "ideia" });
+    const v = { titulo: i.tema, formato: i.formato, rede: "Instagram", copy: "", notas: [i.gancho ? `Gancho: ${i.gancho}` : "", i.porque ? `Por quê: ${i.porque}` : "", i.pilar ? `Pilar: ${i.pilar}` : ""].filter(Boolean).join("\n") };
+    if (!ehCliente()) return abrirTarefa({ tipo: TIPO_CONTEUDO, clienteId: conta.clienteId, marcaId: conta.marcaId, titulo: v.titulo, formato: v.formato, rede: v.rede,
+      roteiro: i.gancho ? `Gancho: ${i.gancho}${i.porque ? `\nPor que funciona: ${i.porque}` : ""}` : "", pilar: pilaresDe(id).includes(i.pilar) ? i.pilar : "", prazo: hojeISO(), statusConteudo: "ideia" });
     botao.disabled = true;
     try { await criarSugestao(conta, v); botao.textContent = "Enviada ✓"; avisar("Ideia enviada para a Hyper."); }
     catch (erro) { avisar(erro.message, "erro"); botao.disabled = false; }
@@ -220,11 +236,12 @@ function telaIdeias(conta, id, estado, renderizar) {
         campo(e, "quantidade", "Quantas ideias", { opcoes: ["5", "10", "15"] })),
       jaPlanejados.length ? el("p", { class: "subtitulo" }, `${jaPlanejados.length} post(s) já planejados neste mês vão junto, para não repetir.`) : null,
       el("div", { class: "acoes" },
-        el("button", { class: "destaque", onClick: () => levarAoClaude(pedido(), "Pedido copiado! Cole no Claude e traga as ideias de volta aqui embaixo.") }, "💡 Ideias com o Claude"),
-        iaNoApp() ? el("button", { class: "secundario", onClick: (ev) => comEspera(ev.currentTarget, async () => {
-          e.texto = await gerarTexto({ sistema: "Você é estrategista de conteúdo da Hyper Estratégia Digital. Responda só com as linhas pedidas, sem introdução.", pedido: pedido() });
-          renderizar();
-        }) }, "Gerar aqui") : null)),
+        el("button", { class: "destaque", onClick: () => abrirAssistenteIA({ titulo: "Ideias com IA", ctx: { clienteId: conta.clienteId, marcaId: conta.marcaId, extra: extra() },
+          tipos: ["ideias", "planejamento"],
+          aoUsar: (resp, bruto, tipo) => {
+            if (tipo === "planejamento") return usarPlanejamento(bruto);
+            e.texto = resp.IDEIAS || bruto; renderizar();
+          } }) }, "💡 Ideias e planejamento com IA"))),
     el("section", { class: "bloco" },
       el("h2", {}, "Suas ideias"),
       campo(e, "texto", "Cole aqui as ideias do Claude (uma por linha) ou escreva as suas", { tipo: "textarea", linhas: 6 }),
@@ -271,5 +288,6 @@ export function render({ params = [], estado, renderizar }) {
     voltar ? el("a", { href: voltar, class: "voltar" }, escolhido ? `← Studio · ${conta.nome}` : "← Trocar marca") : null,
     cabecalho(escolhido ? escolhido[2] : `Studio · ${conta.nome}`, escolhido ? conta.nome : "O que você quer criar?", selo),
     kitDaMarca(id, { completo: modo === "conteudo" }),
+    medidorMarca(conta.clienteId, conta.marcaId),
     corpo);
 }
