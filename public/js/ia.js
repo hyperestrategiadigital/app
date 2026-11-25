@@ -130,21 +130,21 @@ function camadaExemplos(clienteId, marcaId, formato, excluir) {
 }
 
 const REGRAS_FORMATO = {
-  "Estático": "Post de imagem única. A arte tem um título curto (até 8 palavras) e, se precisar, um subtítulo; a legenda aprofunda.",
-  "Carrossel": "Carrossel de 5 a 8 lâminas. Lâmina 1 é a capa (manchete que faz arrastar), uma ideia por lâmina com até 25 palavras, penúltima resume, última com chamada para ação.",
-  "Vídeo": "Vídeo vertical de 15 a 45 segundos. Gancho falado e visual nos 3 primeiros segundos, cortes a cada 2 ou 3 segundos, texto na tela para quem assiste sem som, fechamento com chamada para ação.",
-  "Story": "Sequência de 3 a 6 telas verticais, pouco texto por tela, pelo menos uma interação (enquete, caixa de pergunta, quiz ou contagem) e ação clara na última tela.",
+  "Estático": "Post de imagem única. A arte costuma ter um título curto e, se precisar, um subtítulo; a legenda complementa a arte sem repeti-la mecanicamente.",
+  "Carrossel": "Carrossel (em geral de 5 a 10 lâminas). A capa apresenta uma ideia relevante; cada lâmina tem uma função na narrativa, com pouco texto e boa hierarquia; a última pode trazer conclusão, síntese, oferta ou chamada para ação (não precisa ser uma lâmina só de CTA).",
+  "Vídeo": "Vídeo vertical. Escreva para ser falado: o início estabelece interesse ou contexto, o desenvolvimento tem progressão compreensível e o encerramento cumpre a proposta. Indique cena, texto na tela e duração quando ajudar a produção; o ritmo depende do conceito e da marca.",
+  "Story": "Sequência curta de telas verticais, com pouco texto por tela. Use recursos interativos (enquete, caixa de pergunta, quiz, contagem) só quando ajudarem o objetivo.",
   "Artigo": "Artigo com título forte, introdução que entrega a promessa, intertítulos, parágrafos curtos e conclusão com chamada para ação.",
   "Blog": "Post de blog com título otimizado para busca, introdução direta, intertítulos com as palavras-chave, parágrafos curtos e chamada para ação.",
   "E-mail marketing": "E-mail com assunto (até 50 caracteres), pré-cabeçalho, abertura pessoal, um único assunto e um botão de chamada para ação.",
   "WhatsApp": "Mensagem de WhatsApp curta, pessoal, com no máximo 3 parágrafos curtos e uma pergunta ou ação no final."
 };
 const REGRAS_REDE = {
-  "Instagram": "Instagram: a legenda corta depois de ~125 caracteres (a primeira linha precisa segurar sozinha); até 2.200 caracteres; hashtags no fim.",
+  "Instagram": "Instagram: a legenda aparece cortada depois de ~125 caracteres, então a abertura importa; limite de 2.200 caracteres. Hashtags conforme as diretrizes da marca (não há quantidade fixa).",
   "Facebook": "Facebook: textos podem ser um pouco mais longos e conversados; link clicável é permitido.",
   "TikTok": "TikTok: linguagem mais solta, legenda curta com palavras que as pessoas buscam.",
   "YouTube": "YouTube: título com a palavra-chave no começo e descrição com resumo e chamada para ação.",
-  "LinkedIn": "LinkedIn: tom profissional e humano, primeira linha forte (corta depois de ~200 caracteres), parágrafos de uma linha, poucas hashtags.",
+  "LinkedIn": "LinkedIn: relevância, contexto e autoridade, sem tom burocrático nem fórmulas motivacionais; o texto aparece cortado depois de ~200 caracteres.",
   "WhatsApp": "WhatsApp: curto e pessoal, como uma pessoa da marca escrevendo.",
   "E-mail": "E-mail: assunto curto e específico, um assunto só.",
   "Site": "Site: texto escaneável, com intertítulos e palavras-chave."
@@ -161,11 +161,11 @@ function camadaConteudo(ctx) {
     p.formato ? `- Formato: ${p.formato}` : null,
     p.rede ? `- Rede: ${p.rede}` : null,
     p.dataPublicacao ? `- Publicação: ${dataLonga(p.dataPublicacao)}${p.hora ? ` às ${p.hora}` : ""}` : null,
-    datas.length ? `- Datas comemorativas perto: ${datas.map((d) => `${d.nome} (${d.data.slice(8)}/${d.data.slice(5, 7)})`).join(", ")}. Use só se fizer sentido para o tema.` : null,
+    datas.length ? `- Datas comemorativas perto: ${datas.map((d) => `${d.nome} (${d.data.slice(8)}/${d.data.slice(5, 7)})`).join(", ")}. Use só se tiver relação real com a marca e o tema (veja o manual).` : null,
     p.pilar ? `- Pilar: ${p.pilar}` : null,
     p.objetivo ? `- Objetivo: ${p.objetivo}` : null,
     p.roteiro ? `- Briefing:\n${p.roteiro}` : "- Briefing: não informado. Use o tema e a marca, e marque com [CONFIRMAR] o que precisar de informação.",
-    vizinhos.length ? `- Outros posts da mesma semana (não repita o assunto nem o gancho): ${vizinhos.map((t) => t.titulo).join("; ")}` : null
+    vizinhos.length ? `- Outros posts perto desta data (dê continuidade sem repetir argumentos, frases ou estruturas): ${vizinhos.map((t) => t.titulo).join("; ")}` : null
   ].filter((l) => l !== null).join("\n");
 }
 
@@ -177,14 +177,14 @@ function camadaRegras(post = {}) {
 
 /** Marcadores de cada tipo de pedido: a pessoa cola a resposta e o app distribui pelos campos. */
 const SAIDAS = {
-  copy: ["[GANCHOS]\n3 opções de primeira linha, uma por linha.", "[LEGENDA]\nA legenda completa, pronta para publicar, usando o melhor gancho.", "[TEXTO DA ARTE]\nTítulo curto e, se precisar, subtítulo para a arte."],
+  copy: ["[ABERTURAS]\n3 opções de abertura, uma por linha, com abordagens diferentes.", "[LEGENDA]\nA legenda completa, pronta para publicar, com a melhor abertura.", "[TEXTO DA ARTE]\nTítulo curto e, se precisar, subtítulo para a arte."],
   roteiro: ["[ROTEIRO]\nCena por cena: tempo (ex.: 0–3s), o que aparece, a fala e o texto na tela.", "[CAPA]\nTexto curto da capa do vídeo.", "[LEGENDA]\nA legenda do vídeo, pronta para publicar."],
   carrossel: ["[LÂMINAS]\nLâmina 1 (capa): …\nLâmina 2: …\n(uma linha por lâmina)", "[LEGENDA]\nA legenda do carrossel, pronta para publicar."],
   stories: ["[SEQUÊNCIA]\nTela 1: texto + o que aparece + interação (se houver)\nTela 2: …", "[LEGENDA]\nSe for repostar no feed, a legenda; senão escreva \"—\"."],
   adaptar: ["[LEGENDA]\nO texto adaptado para a nova rede, pronto para publicar.", "[TEXTO DA ARTE]\nSe a arte precisar mudar, o novo texto; senão \"—\"."],
-  anuncio: ["[VARIAÇÕES]\n3 versões do texto principal, cada uma com um gancho diferente (dor, número, contraste).", "[TÍTULO]\n3 opções de título (até 40 caracteres).", "[TEXTO DA ARTE]\nTítulo curto para a arte."],
+  anuncio: ["[VARIAÇÕES]\n3 versões do texto principal, testando abordagens diferentes (dor, desejo, benefício, conceito), não só a primeira frase.", "[TÍTULO]\n3 opções de título (até 40 caracteres).", "[TEXTO DA ARTE]\nTítulo curto para a arte."],
   comentarios: ["[RESPOSTAS]\nUma resposta para cada comentário, na mesma ordem, no formato: Comentário 1: resposta"],
-  ideias: ["[IDEIAS]\nUma ideia por linha, no formato: Formato | Tema | Gancho (primeira frase) | Por que funciona | Pilar"],
+  ideias: ["[IDEIAS]\nUma ideia por linha, no formato: Formato | Pauta | Abertura (primeira frase) | Por que funciona | Pilar"],
   planejamento: ["[PLANEJAMENTO]\nSó o JSON, num bloco de código, sem comentários."]
 };
 
@@ -196,8 +196,8 @@ const TAREFAS = {
   adaptar: (x) => `Adapte o conteúdo abaixo para ${x.redeNova || "outra rede"}, respeitando a linguagem e os limites dela.\n\nConteúdo original:\n${x.original || "(cole aqui)"}`,
   anuncio: "Escreva o texto de um anúncio (Meta Ads) para este conteúdo, pensando em público frio, com variações para teste.",
   comentarios: (x) => `Responda os comentários abaixo em nome da marca, no tom dela, de forma humana, curta e útil. Se for reclamação, acolha e leve para o privado sem prometer o que não pode cumprir.\n\nComentários:\n${x.comentarios || "(cole os comentários aqui, um por linha)"}`,
-  ideias: (x) => `Sugira ${x.quantidade || 10} ideias de posts${x.mes ? ` para ${x.mes}` : ""}${x.foco ? `, com foco em: ${x.foco}` : ""}. Varie formatos (${(x.formatos || []).join(", ") || "Estático, Carrossel, Vídeo, Story"}) e distribua entre os pilares da marca.${(x.jaPlanejados || []).length ? `\nJá planejados (não repita): ${x.jaPlanejados.slice(0, 40).join("; ")}` : ""}`,
-  planejamento: (x) => `Monte o planejamento de ${x.mesNome || "um mês"} com ${x.quantidade || 12} posts, distribuídos na semana (${x.dias || "segunda a sexta"}), equilibrando os pilares e o funil (alcance, consideração e conversão).${x.foco ? ` Foco do mês: ${x.foco}.` : ""}${(x.jaPlanejados || []).length ? `\nJá existem (não repita): ${x.jaPlanejados.slice(0, 40).join("; ")}` : ""}
+  ideias: (x) => `Sugira ${x.quantidade || 10} pautas de posts (um recorte editorial, não só o assunto)${x.mes ? ` para ${x.mes}` : ""}${x.foco ? `, com foco em: ${x.foco}` : ""}. Varie formatos (${(x.formatos || []).join(", ") || "Estático, Carrossel, Vídeo, Story"}) e distribua entre os pilares da marca.${(x.jaPlanejados || []).length ? `\nJá planejados (não repita): ${x.jaPlanejados.slice(0, 40).join("; ")}` : ""}`,
+  planejamento: (x) => `Monte o planejamento de ${x.mesNome || "um mês"} com ${x.quantidade || 12} posts, distribuídos na semana (${x.dias || "segunda a sexta"}), equilibrando os pilares e o funil (reconhecimento, consideração, conversão e relacionamento) e construindo continuidade entre as publicações.${x.foco ? ` Foco do mês: ${x.foco}.` : ""}${(x.jaPlanejados || []).length ? `\nJá existem (não repita): ${x.jaPlanejados.slice(0, 40).join("; ")}` : ""}
 
 Responda com este JSON (o Hyper Studio importa direto):
 {"tipo":"planejamento-hyper","cliente":"${x.clienteNome || ""}","posts":[{"data":"AAAA-MM-DD","hora":"HH:MM","marca":"${x.marcaNome || ""}","formato":"${(x.formatos || ["Estático"])[0]}","rede":"Instagram","titulo":"tema do post","pilar":"um dos pilares","objetivo":"alcance | consideração | conversão","roteiro":"briefing em 2 ou 3 frases","copy":""}]}
@@ -205,8 +205,9 @@ Formatos permitidos: ${(x.formatos || []).join(", ")}. Datas só de ${x.mes || "
 };
 
 const CHECKLIST = {
-  base: ["A primeira linha segura sozinha?", "Está no tom de voz da marca e respeita o que ela pede para evitar?", "Tem uma única chamada para ação, coerente com o objetivo?",
-    "Nenhum dado, preço ou data foi inventado? O que falta está marcado com [CONFIRMAR]?", "Cabe no formato e na rede?"]
+  base: ["Passe pelo checklist do manual (seção \"Checklist antes da entrega\").", "A abertura é adequada à proposta e o desenvolvimento entrega o que ela promete?",
+    "Está no tom de voz da marca e respeita o que ela pede para evitar?", "Se houver chamada para ação, ela é coerente com o objetivo?",
+    "Nenhum dado, preço ou data foi inventado? O que falta está marcado com [CONFIRMAR: …]?", "Soa como gente (sem as construções típicas de IA listadas no manual)?", "Cabe no formato e na rede?"]
 };
 
 /**

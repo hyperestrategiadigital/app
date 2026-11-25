@@ -852,7 +852,8 @@ test("motor de pedidos: manual, marca, exemplos aprovados, data comemorativa e l
   expect(r.pedido).toContain("O que evitar (nunca use): gírias");
   expect(r.pedido).toContain("Esta é uma legenda aprovada da loja");
   expect(r.pedido).toContain("Natal (25/12)");
-  expect(r.pedido).toContain("Carrossel de 5 a 8 lâminas");
+  expect(r.pedido).toContain("Carrossel (em geral de 5 a 10 lâminas)");
+  expect(r.pedido).toContain("As três camadas da escrita"); // manual da Hyper (versão do Matheus)
   expect(r.pedido).toContain("Presentes até R$ 100");
   expect(r.lida).toEqual({ LEGENDA: "Texto final", LAMINAS: "Lâmina 1: capa" });
   expect(r.nada).toEqual({ LEGENDA: "Só um texto sem marcador" });
