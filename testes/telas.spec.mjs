@@ -885,6 +885,8 @@ test("Ajustes: menus configuráveis aparecem no card; prazo automático, pilar, 
   await formatos.locator("li", { hasText: "Vídeo" }).locator("input[type=number]").fill("4");
   await page.getByRole("button", { name: "Salvar menus" }).click();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/config"]?.listas?.tipos)).toContain("Jurídico");
+  // Espera o app aplicar a configuração nova (chega pelo ouvinte do banco)
+  await expect.poll(() => page.evaluate(async () => (await import("/js/constantes.js")).ANTECEDENCIA["Vídeo"])).toBe(4);
 
   await page.goto("/#/tarefas");
   await page.getByRole("button", { name: /\+ Novo/ }).click();
