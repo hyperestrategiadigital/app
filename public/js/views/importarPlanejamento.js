@@ -1,5 +1,5 @@
 // Importar um planejamento de posts (.json preparado pelo Claude a partir de prints ou planilhas do cliente).
-// Formato: { tipo: "planejamento-hyper", cliente, marcas: [{ nome, cor }], posts: [{ data, marca, formato, rede, titulo, prazo, responsavel }] }
+// Formato: { tipo: "planejamento-hyper", cliente, marcas: [{ nome, cor }], posts: [{ data, hora, marca, formato, rede, titulo, pilar, objetivo, roteiro, copy, notas, prazo, responsavel }] }
 // - "marca" vazia = marca principal do cliente; marcas que não existirem são criadas.
 // - Cada post tem id fixo (plan-…): importar de novo o mesmo arquivo não duplica e não mexe no que já existe.
 import { el, avisar, abrirModal, normalizar, fmtData, hojeISO } from "../ui.js";
@@ -93,7 +93,7 @@ export function previaPlanejamento(plano) {
           titulo: p.titulo, tipo: TIPO_CONTEUDO, clienteId, marcaId: idsMarca[p.marca || ""] || "",
           formato, rede: p.rede || "Instagram", dataPublicacao: p.data, hora: p.hora || "", prazo: p.prazo || prazoDoPost(p.data, formato, hojeISO()),
           statusConteudo: "ideia", status: statusDaEtapa("ideia"), concluidoEm: null,
-          objetivo: p.objetivo || "", roteiro: p.roteiro || "", copy: "", linkCanva: "", linkDrive: "", notas: p.notas || "",
+          objetivo: p.objetivo || "", roteiro: p.roteiro || "", copy: p.copy || "", pilar: p.pilar || "", linkCanva: "", linkDrive: "", notas: p.notas || "",
           responsavel: p.responsavel || responsavelPadrao(), checklist: modeloChecklist({ tipo: TIPO_CONTEUDO, formato }),
           origem: "importacao-planejamento", criadoEm: Date.now()
         });

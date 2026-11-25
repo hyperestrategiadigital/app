@@ -292,6 +292,8 @@ test("cliente: vê só os posts, a marca e o cadastro dele; nada da equipe", asy
   for (const c of ["contratos/c1", "financeiro/f1", "orcamentos/o1", "contasAds/a1", "manutencoes/x1", "recorrencias/r1", "compromissos/k1", "tarefasArquivo/t0", "config/equipe", "config/openai", "config/clientes", "lixeira/l1"])
     await assertFails(ler("cli", `${E}/${c}`));
   await assertSucceeds(ler("cli", `${E}/config/meta`));
+  await assertSucceeds(ler("cli", `${E}/config/listas`));
+  await assertSucceeds(ler("cli", `${E}/config/manual`));
   await assertFails(gravar("cli", `${E}/clientes/c1`, { nome: "Mudei" }));
   await assertFails(gravar("cli", `${E}/marcas/m1`, { tomDeVoz: "Mudei" }));
 });

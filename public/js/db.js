@@ -255,7 +255,7 @@ function ouvirTudo(aoErro) {
     }, (erro) => { aoErro?.(traduzirErro(erro)); if (primeira) { primeira = false; pronto(); } }));
   }));
   // Documentos de configuração (lidos um a um, porque cada um tem uma regra)
-  const docs = ehCliente() ? ["meta", "listas"] : ["equipe", "agendaHyper", "clientes", "meta", "modelos", "listas", ...(pode("conteudo") ? ["openai"] : []), ...(pode("financeiro") && !clientesRestritos() ? ["comercial"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
+  const docs = ehCliente() ? ["meta", "listas", "manual"] : ["equipe", "agendaHyper", "clientes", "meta", "modelos", "listas", "manual", ...(pode("conteudo") ? ["openai"] : []), ...(pode("financeiro") && !clientesRestritos() ? ["comercial"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
     let primeira = true;
     cancelamentos.push(onSnapshot(docConfig(id), (snap) => {
       dados.config = [...dados.config.filter((c) => c.id !== id), ...(snap.exists() ? [{ id, ...snap.data() }] : [])];
@@ -537,7 +537,7 @@ export const opcoesClientes = (incluirVazio = true) => [
 export const contrato = (clienteId) => porId("contratos", clienteId) || {};
 
 /** Campos de identidade (aba Marca), que existem no cliente e em cada marca dele. */
-export const CAMPOS_IDENTIDADE = ["logo", "paleta", "cor", "fontes", "descricao", "tomDeVoz", "persona", "publico", "pilares", "diretrizes", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva"];
+export const CAMPOS_IDENTIDADE = ["logo", "paleta", "cor", "fontes", "descricao", "tomDeVoz", "persona", "publico", "pilares", "palavrasChave", "evitar", "diretrizes", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva"];
 /** Marcas ativas do cliente; a marca principal (ex.: a que leva o nome do grupo) vem primeiro. */
 export const marcasDo = (clienteId) => (dados.marcas || []).filter((m) => m.clienteId === clienteId && m.ativo !== false)
   .sort((a, b) => (b.principal ? 1 : 0) - (a.principal ? 1 : 0) || (a.ordem ?? 99) - (b.ordem ?? 99) || (a.nome || "").localeCompare(b.nome || "", "pt-BR"));

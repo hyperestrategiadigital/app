@@ -8,6 +8,8 @@ import { gerarTexto, temChave } from "../openai.js";
 import { ehAdmin, pode } from "../permissoes.js";
 import { caminhoArtes, comprimirImagem } from "../arquivos.js";
 import { CAMPOS_REDES } from "../constantes.js";
+import { kitParaIA, ajustesPedidos } from "../ia.js";
+import { medidorMarca } from "./assistenteIA.js";
 
 // Texto digitado e ainda não salvo sobrevive às atualizações de tela
 const rascunhos = new Map();
@@ -305,6 +307,40 @@ export function marcaEscolhida(c, estado = {}) {
   return { marca, grupo };
 }
 
+/** Kit da marca para a IA: instruções para colar num Projeto do Claude ou num GPT personalizado. */
+function abrirKitIA(clienteId, marcaId) {
+  const texto = kitParaIA(clienteId, marcaId);
+  const copiar = async () => { try { await navigator.clipboard.writeText(texto); avisar("Kit copiado."); } catch { avisar("Não consegui copiar.", "erro"); } };
+  abrirModal("Kit da marca para a IA", el("div", { class: "kit-ia" },
+    el("p", {}, "Cole este texto uma vez na sua IA e ela passa a conhecer a marca. Depois, os pedidos do Hyper Studio saem ainda melhores."),
+    el("ol", {},
+      el("li", {}, el("strong", {}, "Claude: "), "Projetos → Novo projeto (nome da marca) → \"Instruções do projeto\" → cole o texto. Faça os pedidos dentro desse projeto."),
+      el("li", {}, el("strong", {}, "ChatGPT: "), "Explorar GPTs → Criar → Configurar → \"Instruções\" → cole o texto e salve. Use esse GPT para os pedidos da marca.")),
+    el("div", { class: "acoes" },
+      el("button", { class: "destaque", onClick: copiar }, "Copiar o kit"),
+      el("a", { class: "botao-link secundario", href: "https://claude.ai/projects", target: "_blank", rel: "noopener" }, "Abrir Projetos do Claude ↗"),
+      el("a", { class: "botao-link secundario", href: "https://chatgpt.com/gpts/editor", target: "_blank", rel: "noopener" }, "Criar GPT ↗")),
+    el("p", { class: "nota" }, "Quando você mudar a identidade da marca, copie o kit de novo e atualize lá."),
+    el("details", {}, el("summary", {}, "Ver o kit"), el("pre", { class: "pedido-ia" }, texto))), { largo: true });
+}
+
+/** Ajustes pedidos pelos clientes (link de aprovação ou portal) viram sugestões para "O que evitar". */
+function blocoAprendizados(c, marca, alvo) {
+  const ajustes = ajustesPedidos(c.id, marca?.id || "").slice(0, 6);
+  if (!ajustes.length) return null;
+  return el("details", { class: "aprendizados" },
+    el("summary", {}, `O que os clientes pediram para ajustar (${ajustes.length})`),
+    el("p", { class: "subtitulo" }, "Se for um padrão, adicione ao \"O que evitar\": a IA passa a levar em conta."),
+    el("ul", {}, ajustes.map((a) => el("li", {},
+      el("span", {}, el("strong", {}, a.post.titulo), `: "${a.texto}"`),
+      el("button", { class: "link", onClick: async (e) => {
+        const atual = (alvo.obj.evitar || "").trim();
+        await gravar(alvo, { evitar: atual ? `${atual}\n- ${a.texto}` : `- ${a.texto}` });
+        e.currentTarget.disabled = true; e.currentTarget.textContent = "Adicionado ✓";
+        avisar("Adicionado ao \"O que evitar\".");
+      } }, "+ O que evitar")))));
+}
+
 export function abaMarca(c, estado = {}, renderizar = () => {}) {
   // Cliente com marcas = grupo (guarda-chuva): a identidade se configura em cada marca.
   // A identidade do próprio grupo é só para os posts institucionais dele (ex.: avisos, datas comemorativas).
@@ -337,6 +373,12 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
             location.hash = `#/clientes/${novo}`;
           } catch (erro) { console.error(erro); avisar("Parou no meio: " + erro.message + " Clique de novo para terminar.", "erro"); botao.disabled = false; }
         } }, "Separar em cliente próprio…") : null)) : null,
+    // Para a IA: quanto a ficha está completa, o kit para o Projeto/GPT e o que os clientes já pediram para ajustar
+    el("div", { class: "bloco-ia-marca" },
+      medidorMarca(c.id, marca?.id || ""),
+      el("div", { class: "acoes" },
+        el("button", { class: "secundario mini", onClick: () => abrirKitIA(c.id, marca?.id || "") }, "🤖 Kit da marca para a IA")),
+      blocoAprendizados(c, marca, alvo)),
     campoLogo(alvo),
     campoLink(alvo, "linkDrive", "Pasta da marca no Drive",
       "Logos, fontes, manual e criativos de referência ficam nesta pasta. O link vai junto no pedido de arte do Canva.",
@@ -348,6 +390,8 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
     campoTexto(alvo, "tomDeVoz", "Tom de voz", "Como a marca fala: próxima, técnica, bem-humorada... palavras que usa e que evita.", 4, { sugestao: true }),
     campoTexto(alvo, "persona", "Persona", "Quem é o cliente ideal: nome fictício, idade, rotina, dores, desejos, objeções.", 5, { sugestao: true }),
     campoTexto(alvo, "publico", "Público-alvo", "Ex.: mulheres 25-45, região de Sorocaba, classe B.", 3, { sugestao: true }),
+    campoTexto(alvo, "palavrasChave", "Palavras e expressões da marca", "Termos que a marca usa e quer ver nos textos. Ex.: \"comunidade\", \"treino inteligente\", o nome dos planos.", 2),
+    campoTexto(alvo, "evitar", "O que evitar", "Palavras, assuntos e jeitos de falar que a marca não usa. Ex.: gírias, \"barato\", promessas de resultado, comparar com concorrente.", 3),
     campoTexto(alvo, "pilares", "Pilares de conteúdo", "Um por linha. Ex.: Educativo, Bastidores, Prova social, Oferta. Cada post escolhe um pilar, e o calendário mostra se o mês está equilibrado.", 4),
     campoTexto(alvo, "diretrizes", "Diretrizes de conteúdo",
       "Pilares e linha editorial, estrutura das legendas, CTAs, rodapé padrão, hashtags, emojis, séries fixas e o que nunca fazer. É o que a IA segue em cada post.", 8, { sugestao: true }),
