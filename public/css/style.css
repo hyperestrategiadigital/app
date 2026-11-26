@@ -95,7 +95,7 @@ button.negar:hover, button.secundario.negar:hover { background: var(--cor-alerta
 button.perigo-texto, button.link, button.link-claro { background: none; padding: 6px 4px; color: var(--cor-alerta); }
 button.link { color: var(--cor-primaria); }
 button.link-claro { color: var(--hyper-gelo); font-weight: 500; }
-button.link:hover, button.perigo-texto:hover { background: none; text-decoration: underline; }
+button.link:hover, button.perigo-texto:hover, button.link-claro:hover, .aviso .desfazer:hover { background: none; text-decoration: underline; }
 button.mini, select.mini { padding: 6px 10px; font-size: 12px; }
 button.icone {
   background: none; color: var(--cor-texto-suave); padding: 4px 8px; font-size: 18px; line-height: 1;
@@ -691,6 +691,7 @@ img.avatar { object-fit: cover; padding: 0; }
     display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; background: none; border: 0;
     color: var(--cor-texto-suave); font: inherit; font-size: 11px; text-decoration: none; border-radius: var(--raio-pequeno);
   }
+  .nav-movel a:hover, .nav-movel button:hover { background: var(--cor-fundo); }
   .nav-movel span[aria-hidden] { font-size: 20px; line-height: 1; height: 32px; display: grid; place-items: center; }
   .nav-movel a.ativo { color: var(--hyper-roxo); font-weight: 700; }
   .nav-movel .nav-novo span[aria-hidden] { background: var(--cor-destaque); color: var(--hyper-preto); border-radius: 50%; width: 32px; height: 32px; display: grid; place-items: center; }
@@ -917,7 +918,12 @@ details.grupo-dia:not([open]) > summary h3 { margin-bottom: 4px; }
 .checklist-producao li.feito strong { text-decoration: line-through; color: var(--cor-texto-suave); }
 .checklist-producao input[type="checkbox"] { width: 20px; height: 20px; flex: none; accent-color: var(--cor-confirmar); }
 .item-producao { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: none; border: 0; padding: 4px 0; color: var(--cor-texto); text-align: left; cursor: pointer; font-weight: 400; }
+/* Hover: a linha fica lilás clara e o título roxo sublinhado (o texto continua legível) */
+.item-producao:hover { background: none; }
 .item-producao:hover strong { color: var(--hyper-roxo); text-decoration: underline; }
+.checklist-producao li:hover { background: var(--cor-primaria-clara); border-color: var(--cor-primaria); }
+.checklist-producao li.feito:hover { background: var(--cor-fundo); }
+.checklist-producao li:hover .etiqueta { background: var(--cor-superficie); }
 .semana-producao .form-secao { display: flex; align-items: center; gap: 10px; }
 .progresso-mini.completo { color: var(--cor-confirmar); font-weight: 700; }
 .faixa-info, .faixa-ok { margin: 0 0 14px; padding: 10px 14px; border-radius: var(--raio-pequeno); font-size: 14px; }
