@@ -319,29 +319,6 @@ test("resultados sem a Meta ligada mostram o caminho", async ({ page }) => {
   await expect(page.locator("#conteudo")).toContainText("ainda não foram ligados");
 });
 
-test("importar planejamento: cria marcas e posts sem duplicar", async ({ page }) => {
-  await abrir(page);
-  const plano = { tipo: "planejamento-hyper", cliente: "Grupo Exemplo", marcas: [{ nome: "Marca Azul", cor: "#2D6CDF" }], posts: [
-    { data: "2030-03-04", marca: "Marca Azul", formato: "Carrossel", rede: "Instagram", titulo: "Tema A", prazo: "2030-03-01" },
-    { data: "2030-03-05", marca: "", formato: "Artigo", rede: "LinkedIn", titulo: "Tema B (Autor)", prazo: "2030-03-01" },
-    { data: "2030-03-06", marca: "", formato: "E-mail marketing", rede: "E-mail", titulo: "Newsletter", prazo: "2030-03-01" }] };
-  const arquivo = { name: "plano.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(plano)) };
-  for (let vez = 0; vez < 2; vez++) {
-    await page.goto("/#/config");
-    await page.setInputFiles("#importar-arquivo", arquivo);
-    await expect(page.locator(".modal #imp-cliente")).toHaveValue("grupo");
-    await page.locator(".modal").getByRole("button", { name: "Importar planejamento" }).click();
-    await expect(page).toHaveURL(/#\/calendario\/grupo\/2030-03/);
-  }
-  const s = await page.evaluate(() => window.__store);
-  const posts = Object.values(s["espacos/hyper/tarefas"]).filter((t) => t.origem === "importacao-planejamento");
-  expect(posts).toHaveLength(3);
-  const marca = Object.values(s["espacos/hyper/marcas"]).find((m) => m.nome === "Marca Azul");
-  expect(posts.find((t) => t.titulo === "Tema A")).toMatchObject({ marcaId: expect.any(String), formato: "Carrossel", statusConteudo: "ideia", prazo: "2030-03-01" });
-  expect(posts.find((t) => t.titulo === "Tema A").checklist.length).toBeGreaterThan(0);
-  expect(marca.paleta).toEqual(["#2D6CDF"]);
-});
-
 test("juntar cliente solto numa marca de mesmo nome não duplica a marca", async ({ page }) => {
   await abrir(page);
   await page.evaluate(async () => { const db = await import("/js/db.js"); await db.salvarComId("marcas", "m-loja-ja", { clienteId: "grupo", nome: "Loja Exemplo", ativo: true, paleta: [] }); });
@@ -463,25 +440,6 @@ test("orçamento: monta com os serviços do catálogo e calcula o total com desc
   expect(o.itens[0].nome).toContain("tráfego");
 });
 
-test("importar financeiro: contratos, despesas fixas e mês fechado no zero a zero", async ({ page }) => {
-  await abrir(page);
-  await page.goto("/#/config");
-  const fin = { tipo: "financeiro-hyper", reserva: 30,
-    contratos: [{ cliente: "loja exemplo", mensalidade: 500, diaVencimento: 5, vencimentoUtil: true, pagamento: "pre" }],
-    despesasFixas: [{ id: "canva", descricao: "Canva", valor: 34.9, dia: 10, categoria: "Ferramentas" }], quitarAte: MES };
-  await page.setInputFiles("#importar-arquivo", { name: "fin.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(fin)) });
-  await expect(page.locator(".linha-importar select")).toHaveValue("loja");
-  await page.locator(".modal").getByRole("button", { name: "Importar" }).click();
-  await expect.poll(() => page.evaluate((m) => window.__store["espacos/hyper/financeiro"]?.[`fixa-canva-${m}`]?.status, MES)).toBe("pago");
-  const s = await page.evaluate(() => window.__store);
-  expect(s["espacos/hyper/contratos"].loja).toMatchObject({ mensalidade: 500, vencimentoUtil: true, pagamento: "pre" });
-  expect(s["espacos/hyper/financeiro"][`mens-loja-${MES}`].status).toBe("pago");
-  expect(s["espacos/hyper/financeiro"][`mens-grupo-${MES}`].status).toBe("pago");
-  await page.goto("/#/financeiro/contratos");
-  await expect(page.locator(".resumo")).toContainText("Reserva (30%)");
-});
-
-
 test("contrato puxa o preço da tabela dos serviços e aplica o desconto", async ({ page }) => {
   await abrir(page);
   await page.evaluate(async () => {
@@ -525,32 +483,6 @@ test("proposta: condições de pagamento e escopo no formato da Hyper", async ({
 });
 
 
-test("importar arquivo do Claude: definições de marca e arquivo desconhecido", async ({ page }) => {
-  await abrir(page);
-  await page.goto("/#/config");
-  await expect(page.locator("#conteudo h2", { hasText: "Importar" })).toHaveCount(1);
-  const marcas = [{ cliente: "Loja Exemplo", tomDeVoz: "Próximo e animado", persona: "Ana, 30 anos" }];
-  await page.setInputFiles("#importar-arquivo", { name: "marcas.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(marcas)) });
-  await expect(page.locator(".modal")).toContainText("Loja Exemplo");
-  await page.locator(".modal").getByRole("button", { name: "Importar definições" }).click();
-  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.persona)).toBe("Ana, 30 anos");
-  // Colando a resposta da IA (bloco de código), com palavras e o que evitar
-  await page.locator("summary", { hasText: "Ou colar o texto" }).click();
-  await page.fill("#importar-texto", 'Aqui está:\n```json\n' + JSON.stringify({ tipo: "marcas-hyper", marcas: [{ cliente: "Loja Exemplo", palavrasChave: "look do dia", evitar: "gírias",
-    datas: [{ quando: "20/01", nome: "Aniversário da loja" }, { quando: "12", nome: "Mês das cestas" }],
-    escopo: [{ servico: "social media", frequencia: "semanal", quantidade: 2, quem: "hyper", obs: "1 estático + 1 vídeo" }, { servico: "Meta Ads", frequencia: "Mensal", quem: "Terceiro" }] }] }) + '\n```');
-  await page.getByRole("button", { name: "Importar texto colado" }).click();
-  await expect(page.locator(".modal")).toContainText("palavras e expressões, o que evitar");
-  await page.locator(".modal").getByRole("button", { name: "Importar definições" }).click();
-  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.evitar)).toBe("gírias");
-  const loja = await page.evaluate(() => window.__store["espacos/hyper/clientes"].loja);
-  expect(loja.datas).toEqual([{ nome: "Aniversário da loja", quando: "01-20" }, { nome: "Mês das cestas", quando: "12" }]);
-  expect(loja.escopo[0]).toMatchObject({ servico: "Social media", frequencia: "Semanal", quantidade: "2", quem: "Hyper", obs: "1 estático + 1 vídeo" });
-  expect(loja.servicos).toEqual(["Social media"]);
-  await page.setInputFiles("#importar-arquivo", { name: "x.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ tipo: "outro" })) });
-  await expect(page.locator("body")).toContainText("Não reconheci esse arquivo");
-});
-
 test("confirmar é verde e cancelar é vermelho", async ({ page }) => {
   await abrir(page);
   await page.evaluate(async () => { (await import("/js/ui.js")).confirmar("Tudo certo?"); });
@@ -571,44 +503,6 @@ test("celular: barra de baixo com 5 atalhos e o + no meio", async ({ page }) => 
   expect(Math.abs(caixa.x + caixa.width / 2 - 195)).toBeLessThan(6);
   await page.goto("/#/financeiro");
   for (const n of await page.locator(".numero strong").all()) expect(await n.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
-});
-
-test("importar marcas: acha o cliente por nome parecido e manda para a marca com o nome do grupo", async ({ page }) => {
-  await abrir(page);
-  await page.evaluate(async () => {
-    const db = await import("/js/db.js");
-    await db.salvarComId("marcas", "m-grupo", { nome: "Grupo Exemplo", clienteId: "grupo", ativo: true, paleta: [], principal: true });
-    await db.salvarComId("marcas", "m-ride", { nome: "Ride Exemplo", clienteId: "grupo", ativo: true, paleta: [] });
-  });
-  await page.goto("/#/config");
-  const lista = [
-    { cliente: "Grupo", marca: "Grupo Exemplo", tomDeVoz: "Próximo", diretrizes: "Pilares: A, B" },
-    { cliente: "Grupo", marca: "Ride", persona: "Mariana, 33" },
-    { cliente: "Grupo", descricao: "O grupo em si" },
-    { cliente: "Grupo", publico: "Ciclistas de Sorocaba" } // sem "marca": vem no geral, mas dá para escolher a marca
-  ];
-  await page.setInputFiles("#importar-arquivo", { name: "m.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(lista)) });
-  await expect(page.locator(".modal select[aria-label='Cliente para Grupo']")).toHaveValue("grupo");
-  await expect(page.locator(".modal .lista-importar-marcas")).toContainText("Grupo Exemplo › Grupo Exemplo");
-  const ultimo = page.locator(".modal .lista-importar-marcas li").nth(3);
-  await expect(ultimo.locator("select")).toHaveValue("__geral");
-  await expect(ultimo.locator("select option")).toHaveText(["Geral do grupo (institucional)", "Grupo Exemplo", "Ride Exemplo"]);
-  await ultimo.locator("select").selectOption({ label: "Ride Exemplo" });
-  await expect(page.locator(".modal .lista-importar-marcas li").nth(3)).toContainText("Grupo Exemplo › Ride Exemplo");
-  await page.locator(".modal").getByRole("button", { name: "Importar definições" }).click();
-  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/marcas"]["m-grupo"].diretrizes)).toBe("Pilares: A, B");
-  const s = await page.evaluate(() => window.__store);
-  expect(s["espacos/hyper/marcas"]["m-ride"].persona).toBe("Mariana, 33");
-  expect(s["espacos/hyper/marcas"]["m-ride"].publico).toBe("Ciclistas de Sorocaba");
-  expect(s["espacos/hyper/clientes"].grupo.publico || "").not.toBe("Ciclistas de Sorocaba");
-  // Post institucional do grupo: o que o grupo não tem vem da combinação das marcas
-  const pedido = await page.evaluate(async () => (await import("/js/ia.js")).montarPedido("copy", { clienteId: "grupo", marcaId: "", post: { titulo: "Natal do grupo" } }));
-  expect(pedido).toContain("### Marcas do grupo");
-  expect(pedido).toContain("- Ride Exemplo");
-  expect(pedido).toContain("Público-alvo: Ciclistas de Sorocaba");
-  expect(s["espacos/hyper/clientes"].grupo.descricao).toBe("O grupo em si");
-  expect(s["espacos/hyper/clientes"].grupo.tomDeVoz).not.toBe("Próximo");
-  expect(Object.keys(s["espacos/hyper/clientes"])).toHaveLength(2);
 });
 
 test("status da tarefa em botões", async ({ page }) => {
@@ -1129,3 +1023,29 @@ test("aprovação de tema: ideia aprovada pelo link vai para a produção", asyn
 });
 
 
+
+test("importar briefing dentro da marca: escolhe o bloco certo, converte datas e grava o escopo no cliente", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/config");
+  await expect(page.locator("#conteudo")).not.toContainText("Importar arquivo");
+  await page.goto("/#/clientes/loja");
+  await page.getByRole("tab", { name: "Marca" }).click();
+  await page.getByRole("button", { name: "Importar briefing (JSON)" }).click();
+  const json = { tipo: "marcas-hyper", marcas: [
+    { cliente: "Outro Cliente", descricao: "Não é este" },
+    { cliente: "Loja Exemplo", descricao: "Loja de roupas femininas", tomDeVoz: "Próximo", pilares: "Moda\nOfertas",
+      datas: [{ quando: "20/01", nome: "Aniversário da loja" }], paleta: ["#C98A00"],
+      escopo: [{ servico: "social media", frequencia: "semanal", quantidade: 3, quem: "hyper" }] }] };
+  await page.fill("#briefing-json", "Pronto:\n```json\n" + JSON.stringify(json) + "\n```");
+  const janela = page.locator(".modal").last();
+  await expect(janela.locator("#briefing-bloco")).toHaveValue("1"); // achou o bloco pelo nome
+  await expect(janela).toContainText("Vai para Loja Exemplo");
+  await expect(janela).toContainText("20/01 Aniversário da loja");
+  await janela.getByRole("button", { name: "Importar para esta marca" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.descricao)).toBe("Loja de roupas femininas");
+  const loja = await page.evaluate(() => window.__store["espacos/hyper/clientes"].loja);
+  expect(loja.datas).toEqual([{ nome: "Aniversário da loja", quando: "01-20" }]);
+  expect(loja.cor).toBe("#C98A00");
+  expect(loja.escopo).toEqual([{ servico: "Social media", frequencia: "Semanal", quantidade: "3", quem: "Hyper", obs: "" }]);
+  expect(loja.servicos).toEqual(["Social media"]);
+});
