@@ -190,22 +190,22 @@ export function blocoResposta(t, aoResolver = () => {}) {
       : el("button", { class: "secundario mini", onClick: (e) => decidir(e.currentTarget, false) }, "Ok, visto")));
 }
 
-/** Janela "Respostas dos clientes" (aberta pelo aviso do Hoje), agrupada por cliente. */
-export function abrirRespostasClientes(abrirPost) {
+/** Lista das respostas pendentes agrupadas por cliente (usada na janela de Pendências do Hoje). */
+export function listaRespostas(abrirPost, aoMudar = () => {}) {
   const corpo = el("div", { class: "respostas-clientes" });
   const montar = () => {
     const lista = respostasPendentes().sort((a, b) => (a.dataPublicacao || "").localeCompare(b.dataPublicacao || ""));
-    if (!lista.length) { corpo.replaceChildren(el("p", {}, "Tudo visto. Nenhuma resposta pendente.")); return; }
+    if (!lista.length) { corpo.replaceChildren(el("p", { class: "subtitulo" }, "Nenhuma resposta de cliente para ver.")); return; }
     const porCliente = {};
     for (const t of lista) (porCliente[t.clienteId] ??= []).push(t);
     corpo.replaceChildren(...Object.entries(porCliente).map(([cid, posts]) => el("section", { class: "grupo-respostas" },
-      el("h3", {}, porId("clientes", cid)?.nome || "Cliente"),
+      el("h4", {}, porId("clientes", cid)?.nome || "Cliente"),
       ...posts.map((t) => el("article", { class: "item-resposta" },
         el("div", { class: "com-acao" },
           el("strong", {}, `${t.dataPublicacao ? fmtData(t.dataPublicacao, true) + " · " : ""}${t.titulo}`),
           abrirPost ? el("button", { class: "link", onClick: () => abrirPost(t) }, "Abrir o post") : null),
-        blocoResposta(t, () => setTimeout(montar, 300)))))));
+        blocoResposta(t, () => setTimeout(() => { montar(); aoMudar(); }, 300)))))));
   };
   montar();
-  abrirModal("Respostas dos clientes", corpo, { largo: true });
+  return corpo;
 }

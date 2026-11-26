@@ -356,13 +356,13 @@ test("aprovação por link: o cliente edita a legenda ou pede revisão; a equipe
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.statusConteudo), { timeout: 10000 }).toBe("aprovado");
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pr.ajusteCliente)).toBe("Trocar a foto por uma da fachada");
   expect(await page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.copy)).toBe("Legenda da equipe");
-  // Aviso no Hoje e número no menu
+  // Quadro "Pendências" no Hoje e número no menu
   await page.goto("/#/hoje");
   await expect(page.locator("#menu > a", { hasText: "Hoje" }).locator(".menu-contador")).toHaveText("2");
-  const faixa = page.locator(".faixa-respostas");
-  await expect(faixa).toContainText("2 resposta(s) de cliente para ver");
-  await expect(faixa).toContainText("1 legenda(s) sugerida(s)");
-  await faixa.click();
+  const quadro = page.locator(".numero-pendencias");
+  await expect(quadro.locator("strong")).toHaveText("2");
+  await expect(quadro).toContainText("2 resposta(s) de cliente");
+  await quadro.click();
   const janela = page.locator(".modal").last();
   await expect(janela.locator(".item-resposta")).toHaveCount(2);
   const editado = janela.locator(".item-resposta", { hasText: "Post para editar" });
@@ -1297,4 +1297,23 @@ test("excluir um post pelo Produzir semana tira do card e do calendário, mesmo 
   await page.locator(".modal").last().getByRole("button", { name: "Confirmar" }).click();
   await expect(page.locator(".chip-conteudo", { hasText: "Post que caiu" })).toHaveCount(0);
   await expect(page.locator(".chip-conteudo", { hasText: "Post que fica" }).first()).toBeVisible();
+});
+
+test("Hoje: quadros Atrasadas, Hoje (para hoje | concluídas), Próximos 7 dias e Pendências com pedido de acesso", async ({ page }) => {
+  await abrir(page, { membros: {
+    hyper: { nome: "Hyper", email: "hyper@x.com", papel: "admin", permissoes: [], status: "ativo" },
+    novo: { nome: "Pessoa Nova", email: "nova@x.com", papel: "basico", permissoes: [], status: "pendente" } } });
+  await page.goto("/#/hoje");
+  const numeros = page.locator(".resumo > .numero");
+  await expect(numeros).toHaveCount(4);
+  await expect(page.locator(".numero-duplo")).toContainText("Para hoje");
+  await expect(page.locator(".numero-duplo")).toContainText("Concluídas hoje");
+  await expect(page.locator(".numero-pendencias strong")).toHaveText("1");
+  await expect(page.locator("#menu > a", { hasText: "Hoje" }).locator(".menu-contador")).toHaveText("1");
+  await page.locator(".numero-pendencias").click();
+  const janela = page.locator(".modal").last();
+  await expect(janela).toContainText("Pedidos de acesso (1)");
+  await expect(janela).toContainText("Pessoa Nova");
+  await janela.getByRole("link", { name: /Liberar em Usuários/ }).click();
+  await expect(page).toHaveURL(/#\/usuarios/);
 });

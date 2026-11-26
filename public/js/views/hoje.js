@@ -9,9 +9,9 @@ import { dataPost } from "../exportacao.js";
 import { dentroDaProducao } from "../producao.js";
 import { pode, tarefaVisivel, eu, ehAdmin } from "../permissoes.js";
 import { compromissosEntre } from "../agenda.js";
-import { abrirCompromisso, cartaoCompromisso, avisoPendentes } from "../compromissos.js";
+import { abrirCompromisso, cartaoCompromisso } from "../compromissos.js";
 import { menuSuspenso, novoPost } from "./calendario.js";
-import { respostasPendentes, abrirRespostasClientes } from "../aprovacoes.js";
+import { contarPendencias, resumoPendencias, abrirPendencias } from "../pendencias.js";
 
 const lerPreferencia = () => { try { return localStorage.getItem("hyper-hoje-visao"); } catch { return null; } };
 const guardar = (chave, valor) => { try { localStorage.setItem(chave, valor); } catch {} };
@@ -119,22 +119,20 @@ export function render({ estado = {}, renderizar = () => {} } = {}) {
     primeirosPassos(renderizar),
     dicas(renderizar),
 
+    // Atrasadas · Hoje (para hoje | concluídas) · Próximos 7 dias · Pendências (abre o que espera por você)
     el("div", { class: "resumo" },
       cartaoNumero("Atrasadas", atrasadas.length, atrasadas.length ? "alerta" : ""),
-      cartaoNumero("Para hoje", deHoje.length + compromissos.filter((x) => x.data === hoje).length),
+      el("div", { class: "numero numero-duplo" },
+        el("div", {}, el("strong", {}, deHoje.length + compromissos.filter((x) => x.data === hoje).length), el("span", {}, "Para hoje")),
+        el("div", { class: "ok" }, el("strong", {}, concluidasHoje), el("span", {}, "Concluídas hoje"))),
       cartaoNumero("Próximos 7 dias", semana.length),
-      cartaoNumero("Concluídas hoje", concluidasHoje, "ok")),
+      (() => {
+        const n = contarPendencias();
+        return el("button", { type: "button", class: `numero numero-pendencias ${n ? "com-pendencias" : ""}`, title: resumoPendencias() || "Nenhuma pendência",
+          onClick: () => abrirPendencias(abrirTarefa, renderizar) },
+          el("strong", {}, n), el("span", {}, "Pendências"), n ? el("small", {}, resumoPendencias()) : el("small", {}, "tudo em dia"));
+      })()),
 
-    avisoPendentes(),
-    (() => { // Respostas dos clientes pelo link de aprovação: a equipe vê e decide (aprovações, pedidos e legendas sugeridas)
-      const lista = pode("conteudo") ? respostasPendentes() : [];
-      if (!lista.length) return null;
-      const revisoes = lista.filter((t) => t.respostaCliente.status !== "aprovado").length;
-      const legendas = lista.filter((t) => t.respostaCliente.copyNova).length;
-      const clientes = [...new Set(lista.map((t) => nomeCliente(t.clienteId)))].join(", ");
-      return el("a", { class: "faixa-alerta faixa-respostas", href: "#/hoje", onClick: (e) => { e.preventDefault(); abrirRespostasClientes(abrirTarefa); } },
-        `✉ ${lista.length} resposta(s) de cliente para ver (${clientes}): ${[lista.length - revisoes ? `${lista.length - revisoes} aprovação(ões)` : "", revisoes ? `${revisoes} revisão(ões)` : "", legendas ? `${legendas} legenda(s) sugerida(s)` : ""].filter(Boolean).join(", ")}. Ver →`);
-    })(),
     vencidas.length ? el("a", { class: "faixa-alerta", href: "#/financeiro" },
       `💰 ${vencidas.length} recebimento(s) vencido(s): ${fmtMoeda(vencidas.reduce((s, f) => s + (f.valor || 0), 0))}. Ver financeiro →`) : null,
 
