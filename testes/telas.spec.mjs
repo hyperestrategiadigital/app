@@ -63,7 +63,7 @@ test("todas as telas abrem sem erro e o menu agrupa a administração", async ({
     await expect(page.locator("#conteudo h1").first()).toBeVisible();
   }
   await expect(page.locator(".menu-grupo summary")).toHaveText(/Administração/);
-  await expect(page.locator("#menu > a")).toHaveCount(5); // Tarefas e Calendário são um item só
+  await expect(page.locator("#menu > a")).toHaveCount(6); // Tarefas e Calendário são um item só; Relatórios no menu principal
   await expect(page.locator("#menu")).not.toContainText("Studio");
   for (const rota of ["lixeira"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
   expect(erros).toEqual([]);
@@ -87,10 +87,15 @@ test("busca rápida com Ctrl+K", async ({ page }) => {
   await expect(page).toHaveURL(/#\/clientes\/loja/);
 });
 
-test("ficha do cliente: editar só cadastro e contrato; marcas com identidade própria", async ({ page }) => {
+test("ficha do cliente: cadastro na aba Marca, contrato na janela; marcas com identidade própria", async ({ page }) => {
   await abrir(page);
   await page.goto("/#/clientes/grupo");
-  await page.getByRole("button", { name: "Editar" }).click();
+  await expect(page.locator(".ficha-topo").getByRole("button", { name: /^Editar/ })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Marca" }).click();
+  await page.fill("#cadastro-segmento", "Varejo de teste");
+  await page.locator(".cadastro-cliente").getByRole("button", { name: "Salvar" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].grupo.segmento)).toBe("Varejo de teste");
+  await page.getByRole("button", { name: "Contrato, status e excluir…" }).click();
   const campos = await page.locator(".modal .campo > span").allTextContents();
   expect(campos).toContain("Mensalidade (R$)");
   expect(campos).not.toContain("Tom de voz da marca");
@@ -312,11 +317,10 @@ test("aprovação do cliente por link: o cliente aprova e o post muda de etapa",
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].p2.statusConteudo), { timeout: 10000 }).toBe("aprovado");
 });
 
-test("resultados sem a Meta ligada mostram o caminho", async ({ page }) => {
+test("resultados sem a Meta ligada mostram o caminho (em Relatórios, com o cliente)", async ({ page }) => {
   await abrir(page);
-  await page.goto("/#/clientes/grupo");
-  await page.getByRole("tab", { name: "Resultados" }).click();
-  await expect(page.locator("#conteudo")).toContainText("ainda não foram ligados");
+  await page.goto("/#/relatorios/grupo");
+  await expect(page.locator(".resultados-cliente")).toContainText("ainda não foram ligados");
 });
 
 test("juntar cliente solto numa marca de mesmo nome não duplica a marca", async ({ page }) => {
@@ -558,7 +562,7 @@ test("grupo: escolhe a marca antes e a ficha fica igual à de um cliente comum",
   await expect(page).toHaveURL(/#\/clientes\/grupo\/marca\/ma/);
   await expect(page.locator("#conteudo h1")).toHaveText("Marca A");
   const abas = await page.locator(".ficha .abas [role=tab]").allTextContents();
-  expect(abas).toEqual(["Marca", "Campanhas", "Contas", "Resultados", "Tráfego pago"]); // contrato, escopo e financeiro ficam no geral do grupo
+  expect(abas).toEqual(["Marca", "Campanhas", "Contas"]); // escopo no geral do grupo; tráfego, resultados e financeiro nos menus próprios
   await page.getByRole("tab", { name: "Contas" }).click();
   await expect(page.locator(".cartao-conta")).toHaveCount(1);
   await page.getByRole("button", { name: "Editar redes" }).click();
@@ -572,11 +576,17 @@ test("grupo: escolhe a marca antes e a ficha fica igual à de um cliente comum",
   // Tarefas da marca: abre Tarefas filtrado pelo cliente e pela marca
   await page.getByRole("link", { name: /Tarefas \(/ }).click();
   await expect(page).toHaveURL(/#\/tarefas\/grupo\/ma/);
-  await expect(page.locator(".filtros-tarefas select[aria-label=Marca]")).toHaveValue("ma");
+  await expect(page.locator(".botao-filtros")).toHaveText("Filtros (2) ▾");
+  await page.locator(".botao-filtros").click();
+  await expect(page.locator(".painel-filtros select[aria-label=Marca]")).toHaveValue("ma");
 
-  // Geral do grupo: tem tráfego e financeiro
+  // Geral do grupo: escopo; tráfego, relatórios e financeiro abrem nas telas próprias
   await page.goto("/#/clientes/grupo/marca/grupo");
-  await expect(page.locator(".ficha .abas").getByRole("tab", { name: "Financeiro" })).toHaveCount(1);
+  await expect(page.locator(".ficha .abas").getByRole("tab", { name: "Escopo" })).toHaveCount(1);
+  await expect(page.locator(".ficha .abas").getByRole("tab", { name: "Financeiro" })).toHaveCount(0);
+  await page.locator(".atalhos-cliente").getByRole("link", { name: "↗ Tráfego pago" }).click();
+  await expect(page).toHaveURL(/#\/trafego\/grupo/);
+  await expect(page.locator("select[aria-label=Cliente]")).toHaveValue("grupo");
 
   // Cliente comum: abre direto, mesmas abas de redes, sem Tarefas/Conteúdo
   await page.goto("/#/clientes/loja");
@@ -690,9 +700,14 @@ test("Produzir semana: posts planejados viram checklist dentro da tarefa; extras
   await expect(page.locator(".cartao-tarefa", { hasText: "Post planejado A" })).toHaveCount(0);
   await expect(page.locator(".cartao-tarefa", { hasText: "Post extra X" })).toHaveCount(1);
   // Na aba Posts aparecem todos
-  await page.locator(".filtros-tarefas").getByRole("tab", { name: "Posts" }).click();
+  await expect(page.locator(".filtros-tarefas select")).toHaveCount(0); // barra limpa: busca + Filtros
+  await page.locator(".botao-filtros").click();
+  await page.locator(".painel-filtros").getByRole("tab", { name: "Posts" }).click();
   await expect(page.locator(".cartao-tarefa", { hasText: "Post planejado A" })).toHaveCount(1);
-  await page.locator(".filtros-tarefas").getByRole("tab", { name: "Tudo" }).click();
+  await page.locator(".painel-filtros select[aria-label=Formato]").selectOption("Vídeo");
+  await expect(page.locator(".cartao-tarefa", { hasText: "Post planejado A" })).toHaveCount(0);
+  await page.locator(".painel-filtros").getByRole("button", { name: "Limpar filtros" }).click();
+  await expect(page.locator(".botao-filtros")).toHaveText("Filtros ▾");
 
   await page.locator(".cartao-tarefa", { hasText: "Produzir semana" }).click();
   await expect(page.locator(".checklist-producao li")).toHaveCount(2);
@@ -787,6 +802,7 @@ test("marca: medidor, aprendizados dos ajustes, sem botões de IA, e manual edit
 
   await page.goto("/#/config");
   await expect(page.locator("#conteudo")).not.toContainText("OpenAI");
+  await page.locator("summary", { hasText: "Manual de escrita da Hyper" }).click();
   await page.getByText("Ver e editar o manual").click();
   await page.fill("#manual-hyper", "# Manual de teste\nSempre falar de você.");
   await page.getByRole("button", { name: "Salvar manual" }).click();
@@ -846,6 +862,7 @@ test("Produzir semana: roteiros dos vídeos da semana seguinte, alerta, aprovaç
 test("Ajustes: menus configuráveis aparecem no card; prazo automático, pilar, briefing e duplicar", async ({ page }) => {
   await abrir(page, { extra: { clientes: { loja: { nome: "Loja Exemplo", ativo: true, paleta: [], cor: "#C98A00", tomDeVoz: "Leve e direto", pilares: "Educativo\nOferta" } } } });
   await page.goto("/#/config");
+  await page.locator("summary", { hasText: "Menus e listas" }).click();
   await page.getByText("Editar menus").click();
   const tipos = page.locator(".editor-lista", { hasText: "Tipos de tarefa" });
   await expect(tipos.locator("li", { hasText: "Conteúdo" }).getByRole("button", { name: /Tirar/ })).toHaveCount(0); // fixo
@@ -970,7 +987,7 @@ test("campanha: agrupa peças na ficha, aparece no post e entra no pedido de cop
   expect(erros).toEqual([]);
 });
 
-test("escopo do cliente, datas comemorativas da Hyper e espaço dos criativos", async ({ page }) => {
+test("escopo do cliente e datas comemorativas da Hyper", async ({ page }) => {
   await abrir(page);
   await page.goto("/#/clientes/loja");
   await page.getByRole("tab", { name: "Escopo" }).click();
@@ -1000,8 +1017,46 @@ test("escopo do cliente, datas comemorativas da Hyper e espaço dos criativos", 
   await expect(page.locator(".plano-dia .data-cal.marca", { hasText: "Dia do Queijo" })).toHaveCount(1);
   await page.goto("/#/config");
   await expect(page.locator("#conteudo h2", { hasText: "Datas comemorativas" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Ver o espaço dos criativos" }).click();
-  await expect(page.locator("#conteudo")).toContainText("do plano gratuito");
+  await expect(page.locator("#conteudo h2", { hasText: "Espaço dos criativos" })).toHaveCount(0);
+});
+
+test("ajustes: quadros recolhem, backup por último e o aberto é lembrado", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/config");
+  const quadros = page.locator("#conteudo details.recolhivel");
+  await expect(quadros.last().locator("summary")).toHaveText("Backup");
+  await expect(page.getByRole("button", { name: "Baixar backup (.json)" })).toBeHidden();
+  await quadros.last().locator("summary").click();
+  await expect(page.getByRole("button", { name: "Baixar backup (.json)" })).toBeVisible();
+  await page.goto("/#/hoje");
+  await page.goto("/#/config");
+  await expect(page.getByRole("button", { name: "Baixar backup (.json)" })).toBeVisible();
+});
+
+test("hoje: + Novo oferece post, tarefa e compromisso", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/hoje");
+  await page.getByRole("button", { name: "+ Novo" }).click();
+  await expect(page.getByRole("menuitem")).toHaveText(["▣ Post", "✓ Tarefa", "◷ Compromisso"]);
+  await page.getByRole("menuitem", { name: "✓ Tarefa" }).click();
+  await expect(page.locator(".modal h2")).toHaveText("Nova tarefa");
+});
+
+test("planejamento: importar JSON coloca os posts do mês no rascunho", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/calendario/loja/2027-03/planejar");
+  await page.getByRole("button", { name: "Importar planejamento (JSON)" }).click();
+  await page.fill("#plano-json", JSON.stringify({ tipo: "planejamento-hyper", posts: [
+    { data: "2027-03-02", formato: "Carrossel", rede: "Instagram", titulo: "5 dicas de outono", pilar: "Educação", objetivo: "Topo", copy: "Legenda pronta" },
+    { data: "2027-03-09", formato: "Reels", titulo: "Bastidores" },
+    { data: "2027-04-01", formato: "Estático", titulo: "De outro mês" }] }));
+  await expect(page.locator(".previa-briefing")).toContainText("2 post(s) de");
+  await expect(page.locator(".previa-briefing")).toContainText("1 post(s) de outro mês");
+  await page.getByRole("button", { name: "Colocar no planejamento" }).click();
+  await page.getByRole("button", { name: /Salvar planejamento/ }).click();
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"] || {}).filter((t) => t.clienteId === "loja" && (t.dataPublicacao || "").startsWith("2027-03")).length)).toBe(2);
+  const post = await page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "5 dicas de outono"));
+  expect(post).toMatchObject({ formato: "Carrossel", pilar: "Educação", copy: "Legenda pronta", tipo: "Conteúdo", statusConteudo: "ideia" });
 });
 
 test("aprovação de tema: ideia aprovada pelo link vai para a produção", async ({ page, context }) => {

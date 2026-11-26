@@ -1,6 +1,6 @@
 // Tráfego pago: contas de anúncio por cliente, verba e diário de manutenções.
 import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, diasAte, linkExterno, vazio, fecharModais } from "../ui.js";
-import { dados, criar, atualizar, excluir, opcoesClientes, clientesAtivos, marcasDo } from "../db.js";
+import { dados, criar, atualizar, excluir, opcoesClientes, clientesAtivos, marcasDo, porId } from "../db.js";
 import { cabecalho, seloCliente, corCliente } from "./componentes.js";
 import { PLATAFORMAS } from "../constantes.js";
 
@@ -68,27 +68,36 @@ export function abrirManutencao(m = {}) {
   });
 }
 
-export function render() {
+export function render({ params, estado, renderizar } = {}) {
+  estado ??= {};
+  // #/trafego/<cliente> (vem da ficha do cliente): já abre filtrado nele
+  if (params?.[0] && estado.paramsTp !== params[0]) { estado.paramsTp = params[0]; estado.cliente = params[0]; }
+  const doFiltro = (x) => !estado.cliente || x.clienteId === estado.cliente;
   const contas = dados.contasAds.filter((c) => c.ativo !== false);
   const verbaTotal = contas.reduce((s, c) => s + (c.verbaMensal || 0), 0);
   const clientesTP = clientesAtivos().filter((c) => (c.servicos || []).some((s) => s.includes("Ads")) || contas.some((x) => x.clienteId === c.id));
+  // Com um cliente escolhido, o cartão dele aparece mesmo sem conta (para cadastrar a primeira)
+  const cartoes = estado.cliente ? [porId("clientes", estado.cliente)].filter(Boolean) : clientesTP;
   const ultima = (id) => dados.manutencoes.filter((m) => m.clienteId === id).sort((a, b) => b.data.localeCompare(a.data))[0];
-  const manutencoes = [...dados.manutencoes].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 40);
+  const manutencoes = dados.manutencoes.filter(doFiltro).sort((a, b) => b.data.localeCompare(a.data)).slice(0, estado.cliente ? 100 : 40);
 
   return el("div", { class: "tela" },
     cabecalho("Tráfego pago", `${contas.length} contas ativas · ${fmtMoeda(verbaTotal)}/mês em verba`,
       el("button", { class: "secundario", onClick: () => abrirConta() }, "+ Conta de anúncio"),
       el("button", { class: "destaque", onClick: () => abrirManutencao({ data: hojeISO() }) }, "+ Registrar manutenção")),
 
+    el("div", { class: "filtros" },
+      el("select", { "aria-label": "Cliente", onChange: (e) => { estado.cliente = e.target.value; renderizar?.(); } },
+        opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (estado.cliente || "") }, v ? r : "Todos os clientes")))),
     el("h2", {}, "Clientes com tráfego"),
-    clientesTP.length ? el("div", { class: "grade-clientes" }, clientesTP.map((c) => {
+    cartoes.length ? el("div", { class: "grade-clientes" }, cartoes.map((c) => {
       const u = ultima(c.id);
       const dias = u ? -diasAte(u.data) : null;
       const suas = contas.filter((x) => x.clienteId === c.id);
       return el("div", { class: "cartao-cliente", style: { "--selo": corCliente(c) } },
         el("h3", {}, el("a", { href: `#/clientes/${c.id}` }, c.nome)),
         suas.length ? suas.map((x) => el("div", { class: "linha-conta" },
-          el("button", { class: "link", onClick: () => abrirConta(x) }, x.plataforma),
+          el("button", { class: "link", onClick: () => abrirConta(x) }, x.plataforma, x.marcaId ? ` · ${porId("marcas", x.marcaId)?.nome || ""}` : ""),
           el("span", {}, x.verbaMensal ? `${fmtMoeda(x.verbaMensal)}/mês` : ""),
           linkExterno(linkGerenciador(x), "abrir ↗")))
           : el("button", { class: "link", onClick: () => abrirConta({ clienteId: c.id }) }, "+ cadastrar conta"),

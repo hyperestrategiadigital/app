@@ -2,9 +2,7 @@
 import { el, confirmar, avisar, hojeISO, vazio, baixar } from "../ui.js";
 import { dados, atualizar } from "../db.js";
 import { cabecalho } from "./componentes.js";
-import { salvarComId, carregarArquivo, listarErros, excluirErro, bancoInfo, listarSub, excluirSub, todasTarefas, notificar } from "../db.js";
-import { caminhoArtes, excluirArte } from "../arquivos.js";
-import { dataPost } from "../exportacao.js";
+import { salvarComId, carregarArquivo, listarErros, excluirErro, bancoInfo } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
 import { configMeta } from "../meta.js";
 import { configAgenda, agendaConectada, testarAgenda } from "../agenda.js";
@@ -17,11 +15,29 @@ async function baixarBackup() {
   baixar(new Blob([JSON.stringify({ exportadoEm: new Date().toISOString(), ...dados }, null, 2)], { type: "application/json" }), `hyper-backup-${hojeISO()}.json`);
 }
 
+/**
+ * Cada quadro dos Ajustes recolhe (fechado por padrão). O que fica aberto é lembrado neste navegador.
+ */
+const CHAVE_ABERTOS = "hyper-ajustes-abertos";
+const abertos = () => { try { return JSON.parse(localStorage.getItem(CHAVE_ABERTOS) || "[]"); } catch { return []; } };
+function recolhivel(secao) {
+  if (!secao) return null;
+  const [titulo, ...resto] = secao.children;
+  const nome = titulo.textContent;
+  const caixa = el("details", { class: "bloco recolhivel", open: abertos().includes(nome) || null },
+    el("summary", {}, el("h2", {}, nome)), ...resto);
+  caixa.addEventListener("toggle", () => {
+    const lista = abertos().filter((n) => n !== nome);
+    try { localStorage.setItem(CHAVE_ABERTOS, JSON.stringify(caixa.open ? [...lista, nome] : lista)); } catch { /* sem armazenamento */ }
+  });
+  return caixa;
+}
+
 export function render() {
   return el("div", { class: "tela" },
     cabecalho("Ajustes", "E-mails automáticos, manual de escrita, menus e backup. Sua Google Agenda fica em Minha conta (clique no seu nome)."),
 
-    blocoEmail(),
+    ...[blocoEmail(),
     blocoMeta(),
     blocoManual(),
     ehAdmin() ? blocoListas() : null,
@@ -32,56 +48,7 @@ export function render() {
       el("h2", {}, "Backup"),
       el("p", {}, `${dados.tarefas.length} tarefas · ${dados.clientes.length} clientes · ${dados.compromissos.length} compromissos · ${dados.financeiro.length} lançamentos`),
       el("button", { class: "secundario", onClick: baixarBackup }, "Baixar backup (.json)"),
-      el("p", { class: "nota" }, `Banco do Firestore em uso: ${bancoInfo.id || "(default)"}.`)) : null,
-
-    ehAdmin() ? blocoCriativos() : null);
-}
-
-/**
- * Espaço dos criativos: as imagens ficam dentro do Firestore (plano gratuito, 1 GB no total). Mostra quanto ocupam
- * e apaga as de posts publicados há mais de 6 meses e as que ficaram sem post.
- */
-// Resultado da última contagem (fica fora da tela: a tela é redesenhada quando os dados mudam)
-const criativos = { texto: "", apagar: [], ocupado: false };
-function blocoCriativos() {
-  const mb = (n) => `${(n / 1048576).toFixed(1)} MB`;
-  const analisar = async () => {
-    criativos.ocupado = true; criativos.texto = "Contando…"; notificar();
-    await carregarArquivo().catch(() => {});
-    const limite = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
-    const posts = new Map(todasTarefas().map((t) => [t.id, t]));
-    let total = 0, bytes = 0;
-    const apagar = [];
-    for (const c of dados.clientes) {
-      const artes = await listarSub(caminhoArtes(c.id)).catch(() => []);
-      for (const a of artes) {
-        total++; bytes += (a.dados || "").length;
-        const p = posts.get(a.tarefaId);
-        if (!p || (p.statusConteudo === "publicado" && dataPost(p) < limite)) apagar.push({ clienteId: c.id, id: a.id, tarefaId: p ? a.tarefaId : "", tam: (a.dados || "").length });
-      }
-    }
-    Object.assign(criativos, { ocupado: false, apagar,
-      texto: `${total} criativo(s), cerca de ${mb(bytes)} de 1.024 MB do plano gratuito. ${apagar.length} são de posts publicados há mais de 6 meses ou sem post (${mb(apagar.reduce((s, a) => s + a.tam, 0))}).` });
-    notificar();
-  };
-  const apagarAntigos = async () => {
-    const lista = criativos.apagar;
-    if (!(await confirmar(`Apagar de vez ${lista.length} criativo(s)? Os posts continuam; só a imagem anexada sai. Os originais seguem no Canva e no Drive.`))) return;
-    criativos.ocupado = true;
-    for (const [i, a] of lista.entries()) {
-      criativos.texto = `Apagando ${i + 1} de ${lista.length}…`; notificar();
-      await (a.tarefaId && dados.tarefas.some((t) => t.id === a.tarefaId) ? excluirArte(a.clienteId, a.tarefaId, a.id) : excluirSub(caminhoArtes(a.clienteId), a.id)).catch(() => {});
-    }
-    avisar(`${lista.length} criativo(s) apagados.`);
-    analisar();
-  };
-  return el("section", { class: "bloco" },
-    el("h2", {}, "Espaço dos criativos"),
-    el("p", {}, "Os criativos anexados aos posts ficam no banco. Links de aprovação vencidos há mais de 7 dias já são apagados sozinhos, com as imagens deles."),
-    el("div", { class: "acoes" },
-      el("button", { class: "secundario", disabled: criativos.ocupado, onClick: analisar }, "Ver o espaço dos criativos"),
-      criativos.apagar.length && !criativos.ocupado ? el("button", { class: "perigo-texto", onClick: apagarAntigos }, `Apagar ${criativos.apagar.length} criativo(s) antigos`) : null),
-    criativos.texto ? el("p", { class: "subtitulo" }, criativos.texto) : null);
+      el("p", { class: "nota" }, `Banco do Firestore em uso: ${bancoInfo.id || "(default)"}.`)) : null].map(recolhivel));
 }
 
 /** E-mails e automações pelo Google Apps Script da conta da Hyper (docs/email). */

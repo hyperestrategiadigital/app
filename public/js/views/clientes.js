@@ -1,15 +1,13 @@
 // Clientes: lista com indicadores e ficha completa de cada cliente.
 import { textoVencimento } from "../comercial.js";
-import { el, formulario, confirmar, avisar, fmtMoeda, fmtData, linkExterno, vazio, hojeISO, fecharModais } from "../ui.js";
+import { el, formulario, confirmar, avisar, fmtMoeda, linkExterno, vazio, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, porId, contrato, salvarComId, marcasDo } from "../db.js";
 import { pode, ehAdmin, tarefaVisivel } from "../permissoes.js";
 import { atrasada, cabecalho, abas, corCliente } from "./componentes.js";
-import { abrirConta, abrirManutencao } from "./trafego.js";
 import { abaMarca, abrirMarca, juntarClientes, GRUPO } from "./marca.js";
-import { abaResultados } from "./resultados.js";
 import { abaCampanhas } from "./campanhas.js";
 import { abaEscopo } from "./escopo.js";
-import { abaContas, linkGoogleAds, linkGerenciadorMeta } from "./contas.js";
+import { abaContas } from "./contas.js";
 
 const podeEditar = () => ehAdmin() || pode("conteudo") || pode("trafego");
 const CORES = ["#4E2CA3", "#592C85", "#16626A", "#606060", "#C98A00", "#2D6CDF", "#B4415A", "#2E8B57"];
@@ -141,21 +139,15 @@ function ficha(id, estado, renderizar, resto = []) {
   const geral = !escolhida; // cliente comum ou o geral do grupo: tem contrato, tráfego e financeiro
   // A ficha é a configuração do cliente. Tarefas e posts ficam na tela Tarefas (filtrada pelo cliente/marca).
   const abasPermitidas = [
-    ...(pode("conteudo") ? [["marca", "Marca"]] : []),
+    ...(pode("conteudo") || pode("trafego") ? [["marca", "Marca"]] : []), // tráfego vê só o cadastro
     ...(pode("conteudo") || pode("trafego") ? [["campanhas", "Campanhas"]] : []),
     ...(geral ? [["escopo", "Escopo"]] : []),
     ...(pode("conteudo") || pode("trafego") ? [["contas", "Contas"]] : []),
-    ...(pode("conteudo") || pode("trafego") ? [["resultados", "Resultados"]] : []),
-    ...(pode("trafego") ? [["trafego", "Tráfego pago"]] : []),
-    ...(geral && pode("financeiro") ? [["financeiro", "Financeiro"]] : [])];
+  ];
   if (!abasPermitidas.some(([v]) => v === estado.aba)) estado.aba = abasPermitidas[0]?.[0] || "";
   const ts = dados.tarefas.filter((t) => t.clienteId === id && tarefaVisivel(t) && (!escolhida || t.marcaId === escolhida.id));
   const abertas = ts.filter((t) => t.status !== "concluido");
   const atrasadas = abertas.filter(atrasada).length;
-  // Na ficha de uma marca, só as contas de anúncio dela; no geral do grupo, todas (com a marca indicada)
-  const contas = dados.contasAds.filter((x) => x.clienteId === id && (!escolhida || x.marcaId === escolhida.id));
-  const mans = dados.manutencoes.filter((x) => x.clienteId === id).sort((a, b) => b.data.localeCompare(a.data));
-  const fins = dados.financeiro.filter((x) => x.clienteId === id).sort((a, b) => (b.vencimento || "").localeCompare(a.vencimento || ""));
 
   const info = (rotulo, valor) => valor ? el("div", { class: "info" }, el("span", {}, rotulo), el("strong", {}, valor)) : null;
   const zap = c.whatsapp ? linkExterno(`https://wa.me/55${c.whatsapp.replace(/\D/g, "").replace(/^55/, "")}`, c.whatsapp) : null;
@@ -166,25 +158,6 @@ function ficha(id, estado, renderizar, resto = []) {
     contas: () => abaContas(c, estado),
     campanhas: () => abaCampanhas(c, escolhida),
     escopo: () => abaEscopo(c),
-    resultados: () => abaResultados(c, estado, renderizar),
-    trafego: () => [
-      el("div", { class: "com-acao" }, el("h2", {}, "Contas de anúncio"),
-        el("button", { onClick: () => abrirConta({ clienteId: id, marcaId: escolhida?.id || "" }) }, "+ Conta")),
-      contas.length ? contas.map((x) => el("div", { class: "linha-tabela", onClick: () => abrirConta(x) },
-        el("strong", {}, x.plataforma), !escolhida && x.marcaId ? el("span", { class: "etiqueta" }, porId("marcas", x.marcaId)?.nome || "") : null, el("span", {}, x.idConta || ""), el("span", {}, x.verbaMensal ? `${fmtMoeda(x.verbaMensal)}/mês` : ""), el("span", {}, x.objetivo || ""),
-        el("a", { href: x.plataforma === "Google Ads" ? linkGoogleAds() : linkGerenciadorMeta(x), target: "_blank", rel: "noopener", class: "link", onClick: (e) => e.stopPropagation() }, "gerenciador ↗")))
-        : vazio("Nenhuma conta cadastrada."),
-      escolhida ? el("p", { class: "nota" }, `As manutenções ficam no geral do grupo ${c.nome}.`) : el("div", { class: "com-acao" }, el("h2", {}, "Manutenções"),
-        el("button", { onClick: () => abrirManutencao({ clienteId: id, data: hojeISO() }) }, "+ Registro")),
-      escolhida ? null : mans.length ? mans.slice(0, 30).map((m) => el("div", { class: "linha-tabela", onClick: () => abrirManutencao(m) },
-        el("span", { class: "data-mini" }, fmtData(m.data, true)), el("strong", {}, m.plataforma), el("span", { class: "resumo-texto" }, m.acoes || "")))
-        : vazio("Nenhuma manutenção registrada.")],
-    financeiro: () => [
-      el("h2", {}, "Lançamentos"),
-      fins.length ? fins.slice(0, 40).map((x) => el("div", { class: "linha-tabela" },
-        el("span", { class: "data-mini" }, fmtData(x.vencimento, true)), el("strong", {}, x.descricao), el("span", {}, fmtMoeda(x.valor)),
-        el("span", { class: `etiqueta ${x.status === "pago" ? "ok" : x.vencimento < hojeISO() ? "alerta" : ""}` }, x.status === "pago" ? "Pago" : "Pendente")))
-        : vazio("Nenhum lançamento. Gere as mensalidades na tela Financeiro.")]
   };
 
   const quem = escolhida || c;
@@ -198,8 +171,7 @@ function ficha(id, estado, renderizar, resto = []) {
           el("h1", {}, quem.nome, c.ativo === false ? el("span", { class: "etiqueta" }, "Inativo") : null),
           el("div", { class: "cartao-meta" }, (c.servicos || []).map((s) => el("span", { class: "etiqueta" }, s))))),
       el("div", { class: "tela-acoes" },
-        el("a", { class: "botao-link secundario", href: `#/tarefas/${id}${escolhida ? `/${escolhida.id}` : ""}` }, `✓ Tarefas (${abertas.length} abertas${atrasadas ? `, ${atrasadas} atrasadas` : ""}) →`),
-        podeEditar() ? el("button", { class: "secundario", onClick: () => abrirCliente(c) }, grupo ? "Editar grupo" : "Editar") : null)),
+        el("a", { class: "botao-link secundario", href: `#/tarefas/${id}${escolhida ? `/${escolhida.id}` : ""}` }, `✓ Tarefas (${abertas.length} abertas${atrasadas ? `, ${atrasadas} atrasadas` : ""}) →`))),
     el("div", { class: "ficha" },
       el("aside", { class: "bloco lateral" },
         info("Contato", c.contato), c.whatsapp ? el("div", { class: "info" }, el("span", {}, "WhatsApp"), zap) : null,
@@ -207,7 +179,11 @@ function ficha(id, estado, renderizar, resto = []) {
         el("div", { class: "links-cliente" }, linkExterno(c.linkDrive, "📁 Drive"), linkExterno(c.linkCanva, "🎨 Canva")),
         info("Mensalidade", geral && contrato(c.id).mensalidade ? `${fmtMoeda(contrato(c.id).mensalidade)} · ${textoVencimento(contrato(c.id)).replace(" de cada mês", "")}` : null),
         info("Segmento", c.segmento), info("Observações", c.observacoes),
-        !c.contato && geral ? el("p", { class: "subtitulo" }, "Complete o contato em Editar. Cores, fontes e tom de voz ficam na aba Marca.") : null),
+        el("div", { class: "atalhos-cliente" },
+          pode("trafego") ? el("a", { class: "link", href: `#/trafego/${id}` }, "↗ Tráfego pago") : null,
+          el("a", { class: "link", href: `#/relatorios/${id}` }, "▤ Relatórios e resultados"),
+          pode("financeiro") ? el("a", { class: "link", href: "#/financeiro" }, "$ Financeiro") : null),
+        !c.contato && geral ? el("p", { class: "subtitulo" }, "Complete o contato na aba Marca (Cadastro e contato), junto com cores, fontes e tom de voz.") : null),
       el("section", { class: "bloco" },
         abasPermitidas.length ? [abas(abasPermitidas, estado.aba, (a) => { estado.aba = a; renderizar(); }), conteudoAba[estado.aba]()]
           : el("p", { class: "subtitulo" }, "As tarefas deste cliente ficam na tela Tarefas."))));

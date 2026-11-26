@@ -5,6 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 
 import { conectar, desconectar, aoMudar, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes, registrarErro, limparAntigos, porId, notificar } from "./db.js";
+import { limparCriativosPublicados } from "./arquivos.js";
 import { aplicarListas } from "./constantes.js";
 import { acompanharRespostas } from "./aprovacoes.js";
 import { avisarAdmins, sincronizarAdmins } from "./emails.js";
@@ -39,8 +40,9 @@ const ROTAS = {
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
   trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego, area: "trafego" },
   financeiro: { titulo: "Financeiro", icone: "$", view: financeiro, area: "financeiro" },
+  // Relatórios: resumo do período e resultados do Instagram/Facebook por cliente (os valores só para o financeiro)
+  relatorios: { titulo: "Relatórios", icone: "▤", view: relatorios },
   rotinas: { titulo: "Rotinas", icone: "↻", view: rotinas, area: "admin", grupo: "admin" },
-  relatorios: { titulo: "Relatórios", icone: "▤", view: relatorios, area: "admin", grupo: "admin" },
   usuarios: { titulo: "Usuários e equipe", icone: "☺", view: usuarios, area: "admin", grupo: "admin" },
   lixeira: { titulo: "Lixeira", icone: "⌫", view: lixeira, area: "admin", grupo: "admin" },
   config: { titulo: "Ajustes", icone: "⚙", view: config, area: "admin", grupo: "admin" },
@@ -258,7 +260,7 @@ async function entrar(usuario) {
   // Rotinas automáticas e ajustes de dados antigos: só o administrador roda
   if (ehAdmin()) {
     gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
-    atualizarListas().then(migrarTipos).then(migrarFormatos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).catch((e) => console.error("Ajustes de dados:", e));
+    atualizarListas().then(migrarTipos).then(migrarFormatos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).then(() => limparCriativosPublicados()).catch((e) => console.error("Ajustes de dados:", e));
   }
 }
 

@@ -831,8 +831,12 @@ a.marca:focus-visible, .logo-movel:focus-visible { outline: 2px solid var(--hype
 .barra-visoes .navegador-mes { margin-left: auto; }
 .barra-visoes .navegador-mes[hidden] { display: none; }
 .barra-visoes .navegador-mes strong { min-width: 150px; text-align: center; }
-.botao-filtros { display: none; }
-.filtros-tarefas { min-height: 44px; }
+.filtros-tarefas { min-height: 44px; align-items: center; }
+.botao-filtros.com-filtro { border-color: var(--cor-primaria); color: var(--cor-primaria); }
+.painel-filtros { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-end; background: var(--cor-superficie); border-radius: var(--raio); box-shadow: var(--sombra); padding: 14px 18px; margin: 0 0 14px; }
+.grupo-filtro { display: flex; flex-direction: column; gap: 6px; }
+.grupo-filtro > div, .grupo-filtro select { margin: 0; }
+.rotulo-filtro { font-size: 12px; font-weight: 600; color: var(--cor-texto-suave); }
 .filtros-tarefas input[type="search"] { width: 220px; }
 .titulo-com-filtro { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
 .titulo-com-filtro h2 { margin: 0; }
@@ -856,10 +860,8 @@ a.marca:focus-visible, .logo-movel:focus-visible { outline: 2px solid var(--hype
   .tela-tarefas .tela-acoes .menu-suspenso > button { width: 100%; }
   .barra-visoes { gap: 8px; }
   .barra-visoes .navegador-mes { margin-left: 0; order: 3; width: 100%; justify-content: center; }
-  .botao-filtros { display: inline-flex; margin-left: auto; }
-  .filtros-tarefas { display: none; }
-  .filtros-tarefas.aberto { display: flex; }
-  .filtros-tarefas input[type="search"] { width: 100%; }
+  .filtros-tarefas input[type="search"] { flex: 1; width: auto; }
+  .painel-filtros { flex-direction: column; align-items: stretch; }
 }
 
 /* Aba Contas: um cartão por conta (cliente ou cada marca do grupo) */
@@ -991,3 +993,19 @@ details.grupo-dia:not([open]) > summary h3 { margin-bottom: 4px; }
 .data-cal.feriado { background: var(--cor-alerta-clara); color: var(--cor-alerta); font-weight: 600; }
 .data-cal.marca { background: var(--cor-destaque-clara); font-weight: 600; }
 .datas-do-mes .data-cal { display: inline-block; font-size: 12px; margin: 0; }
+
+/* Ajustes: quadros que recolhem */
+details.bloco.recolhivel { padding: 0; }
+details.bloco.recolhivel > summary { list-style: none; cursor: pointer; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+details.bloco.recolhivel > summary::-webkit-details-marker { display: none; }
+details.bloco.recolhivel > summary h2 { margin: 0; }
+details.bloco.recolhivel > summary::after { content: "▾"; color: var(--cor-texto-suave); transition: transform .15s; }
+details.bloco.recolhivel[open] > summary::after { transform: rotate(180deg); }
+details.bloco.recolhivel > :not(summary) { margin-left: 24px; margin-right: 24px; }
+details.bloco.recolhivel[open] { padding-bottom: 20px; }
+
+/* Cadastro e contato dentro da aba Marca */
+.grade-cadastro { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 14px; margin-bottom: 10px; }
+.grade-cadastro .campo { grid-column: auto; }
+.cadastro-cliente { padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--cor-borda); }
+.atalhos-cliente { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }

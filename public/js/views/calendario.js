@@ -7,7 +7,7 @@ import { dados, marcasDo, porId, opcoesClientes, nomeCliente, atualizar, registr
 import { pilaresDe } from "../ia.js";
 import { datasEntre } from "../datas.js";
 import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca, mudarEtapa, proximaEtapa, visoesTarefas, seletorResponsavel, atrasada } from "./componentes.js";
-import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
+import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO, FORMATOS, comAtual } from "../constantes.js";
 import { dataPost, exportarPDF, nomeMes } from "../exportacao.js";
 import { abrirCompromisso, rotuloCompromisso, avisoPendentes } from "../compromissos.js";
 import { compromissosEntre } from "../agenda.js";
@@ -94,7 +94,7 @@ function chip(t) {
 }
 
 /** Menu suspenso simples: um botão que abre uma lista de ações. */
-function menuSuspenso(rotulo, itens, classe = "secundario") {
+export function menuSuspenso(rotulo, itens, classe = "secundario") {
   const lista = el("div", { class: "menu-suspenso-lista", role: "menu", hidden: true });
   const fechar = () => { lista.hidden = true; document.removeEventListener("click", foraClique, true); };
   const foraClique = (e) => { if (!caixa.contains(e.target)) fechar(); };
@@ -109,6 +109,8 @@ function menuSuspenso(rotulo, itens, classe = "secundario") {
 }
 
 /** Busca por texto nas tarefas/posts (título, checklist, observações). */
+/** Filtro "Formato do post": com um formato escolhido, só os posts desse formato aparecem. */
+export const bateFormato = (t, formato) => !formato || (t.tipo === TIPO_CONTEUDO && t.formato === formato);
 export const bateBusca = (t, busca) => !busca || normalizar(`${t.titulo || ""} ${(t.checklist || []).map((i) => i.texto).join(" ")} ${t.notas || ""}`).includes(busca);
 
 /**
@@ -151,25 +153,34 @@ export function topoTarefas(estado, renderizar, { calendario = false } = {}) {
     el("button", { class: "icone", "aria-label": "Próximo mês", onClick: () => mudarMes(1) }, "›"),
     el("button", { class: "secundario mini", onClick: () => { estado.mes = hojeISO().slice(0, 7); renderizar(); } }, "Hoje"));
 
-  const nFiltros = [estado.busca, estado.cliente, estado.responsavel, estado.camada !== "tudo" ? 1 : ""].filter(Boolean).length;
-  const filtros = el("div", { class: `filtros filtros-tarefas ${estado.filtrosAbertos ? "aberto" : ""}` },
+  // Barra limpa: Buscar + "Filtros" (painel com cliente, marca, responsável, o que mostrar e formato do post)
+  const nFiltros = [estado.cliente, estado.marca != null ? 1 : "", estado.responsavel, estado.camada !== "tudo" ? 1 : "", estado.formato].filter(Boolean).length;
+  const grupo = (rotulo, ...controles) => el("div", { class: "grupo-filtro" }, el("span", { class: "rotulo-filtro" }, rotulo), ...controles);
+  const painel = estado.filtrosAbertos ? el("div", { class: "painel-filtros", role: "region", "aria-label": "Filtros" },
+    grupo("Mostrar", abas([["tudo", "Tudo"], ...(pode("conteudo") ? [["conteudo", "Posts"]] : []), ["tarefas", "Tarefas"], ["compromissos", "Compromissos"]], estado.camada,
+      (m) => { estado.camada = m; if (!["tudo", "conteudo"].includes(m)) estado.formato = ""; renderizar(); })),
+    grupo("Cliente", el("select", { "aria-label": "Cliente", onChange: (e) => { estado.cliente = e.target.value; estado.marca = null; renderizar(); } },
+      opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (estado.cliente || "") }, v ? r : "Todos os clientes"))),
+      marcas.length ? el("select", { "aria-label": "Marca", onChange: (e) => { estado.marca = e.target.value === "*" ? null : e.target.value; renderizar(); } },
+        [["*", "Todas as marcas"], ...marcas.map((m) => [m.id, m.nome]), ["", "Institucional do grupo"]]
+          .map(([v, r]) => el("option", { value: v, selected: v === (estado.marca ?? "*") }, r))) : null),
+    grupo("Responsável", seletorResponsavel(estado, renderizar)),
+    pode("conteudo") && ["tudo", "conteudo"].includes(estado.camada) ? grupo("Formato do post",
+      el("select", { "aria-label": "Formato", onChange: (e) => { estado.formato = e.target.value; renderizar(); } },
+        [["", "Todos os formatos"], ...comAtual(FORMATOS, estado.formato).map((x) => [x, x])].map(([v, r]) => el("option", { value: v, selected: v === (estado.formato || "") }, r)))) : null,
+    nFiltros ? el("button", { class: "link", onClick: () => { Object.assign(estado, { cliente: "", marca: null, responsavel: "", camada: "tudo", formato: "" }); renderizar(); } }, "Limpar filtros") : null) : null;
+  const filtros = el("div", { class: "filtros filtros-tarefas" },
     el("input", { id: "busca-tarefas", type: "search", placeholder: "Buscar…", value: estado.busca || "",
       onInput: (e) => { estado.busca = e.target.value; clearTimeout(estado.tBusca); estado.tBusca = setTimeout(() => { renderizar(); document.getElementById("busca-tarefas")?.focus(); }, 300); } }),
-    el("select", { "aria-label": "Cliente", onChange: (e) => { estado.cliente = e.target.value; estado.marca = null; renderizar(); } },
-      opcoesClientes().map(([v, r]) => el("option", { value: v, selected: v === (estado.cliente || "") }, v ? r : "Todos os clientes"))),
-    marcas.length ? el("select", { "aria-label": "Marca", onChange: (e) => { estado.marca = e.target.value === "*" ? null : e.target.value; renderizar(); } },
-      [["*", "Todas as marcas"], ...marcas.map((m) => [m.id, m.nome]), ["", "Institucional do grupo"]]
-        .map(([v, r]) => el("option", { value: v, selected: v === (estado.marca ?? "*") }, r))) : null,
-    seletorResponsavel(estado, renderizar),
-    abas([["tudo", "Tudo"], ...(pode("conteudo") ? [["conteudo", "Posts"]] : []), ["tarefas", "Tarefas"], ["compromissos", "Compromissos"]], estado.camada,
-      (m) => { estado.camada = m; renderizar(); }));
+    el("button", { class: `secundario mini botao-filtros ${nFiltros ? "com-filtro" : ""}`, "aria-expanded": String(!!estado.filtrosAbertos),
+      onClick: () => { estado.filtrosAbertos = !estado.filtrosAbertos; renderizar(); } }, `Filtros${nFiltros ? ` (${nFiltros})` : ""} ▾`),
+    estado.cliente ? el("span", { class: "etiqueta" }, porId("clientes", estado.cliente)?.nome || "") : null,
+    estado.responsavel ? el("span", { class: "etiqueta" }, estado.responsavel) : null);
 
   return [
     cabecalho("Tarefas", atrasadas ? `${atrasadas} atrasada(s)` : "Tudo em dia", acoesMes, novo),
-    el("div", { class: "barra-visoes" }, visoesTarefas(estado, renderizar), navegador,
-      el("button", { class: "secundario mini botao-filtros", onClick: () => { estado.filtrosAbertos = !estado.filtrosAbertos; renderizar(); } },
-        `Filtros${nFiltros ? ` (${nFiltros})` : ""}`)),
-    filtros
+    el("div", { class: "barra-visoes" }, visoesTarefas(estado, renderizar), navegador),
+    filtros, painel
   ];
 }
 
@@ -193,15 +204,15 @@ export function render({ params, estado, renderizar }) {
   // No celular a grade do mês fica apertada: vira lista do mês
   estado.modo = window.matchMedia("(max-width: 760px)").matches ? "lista" : "mes";
   const verPosts = pode("conteudo") && ["tudo", "conteudo"].includes(estado.camada);
-  const verTarefas = ["tudo", "tarefas"].includes(estado.camada);
-  const verCompromissos = ["tudo", "compromissos"].includes(estado.camada);
+  const verTarefas = ["tudo", "tarefas"].includes(estado.camada) && !estado.formato;
+  const verCompromissos = ["tudo", "compromissos"].includes(estado.camada) && !estado.formato;
   const busca = normalizar(estado.busca);
   const doResponsavel = (t) => !estado.responsavel || (t.responsavel || "") === estado.responsavel;
   const daMarca = (t) => estado.marca == null || (t.marcaId || "") === estado.marca;
   const [ano, mes] = estado.mes.split("-").map(Number);
   const posts = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && dataPost(t));
   const filtrados = posts.filter((t) =>
-    (!estado.cliente || t.clienteId === estado.cliente) && doResponsavel(t) && daMarca(t) && bateBusca(t, busca));
+    (!estado.cliente || t.clienteId === estado.cliente) && doResponsavel(t) && daMarca(t) && bateFormato(t, estado.formato) && bateBusca(t, busca));
 
   const doMes = filtrados.filter((t) => dataPost(t).startsWith(estado.mes));
   const tarefasCal = verTarefas ? dados.tarefas.filter((t) => t.tipo !== TIPO_CONTEUDO && t.prazo && tarefaVisivel(t) &&

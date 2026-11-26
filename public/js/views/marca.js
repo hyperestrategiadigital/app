@@ -11,6 +11,7 @@ import { ajustesPedidos } from "../ia.js";
 import { quandoDoTexto, quandoParaTela } from "../datas.js";
 import { abrirImportarBriefing } from "./importarBriefing.js";
 import { medidorMarca } from "./assistenteIA.js";
+import { abrirCliente } from "./clientes.js";
 
 // Texto digitado e ainda não salvo sobrevive às atualizações de tela
 const rascunhos = new Map();
@@ -320,6 +321,34 @@ function blocoAprendizados(c, marca, alvo) {
     })));
 }
 
+/**
+ * Cadastro e contato do cliente (antes no "Editar" da ficha): no cliente comum e no geral do grupo.
+ * Contrato, status e excluir abrem a janela do cliente (o contrato só para quem tem o financeiro).
+ */
+const CAMPOS_CADASTRO = [["nome", "Nome do cliente"], ["segmento", "Segmento", "Ex.: clínica, academia, escola"], ["contato", "Pessoa de contato"],
+  ["whatsapp", "WhatsApp", "(11) 99999-9999"], ["email", "E-mail"]];
+function blocoCadastro(c, podeEditar) {
+  const chave = `cadastro|${c.id}`;
+  const valores = rascunhos.get(chave) || Object.fromEntries([...CAMPOS_CADASTRO.map(([k]) => [k, c[k] || ""]), ["observacoes", c.observacoes || ""]]);
+  const botao = el("button", { class: "mini", hidden: !rascunhos.has(chave), onClick: async () => {
+    if (!valores.nome.trim()) return avisar("O nome do cliente não pode ficar vazio.", "erro");
+    rascunhos.delete(chave);
+    await atualizar("clientes", c.id, Object.fromEntries(Object.entries(valores).map(([k, v]) => [k, v.trim()])));
+    avisar("Cadastro salvo.");
+  } }, "Salvar");
+  const mudou = (k, v) => { valores[k] = v; rascunhos.set(chave, valores); botao.hidden = false; };
+  const entrada = (k, rotulo, dica = "") => el("label", { class: "campo" }, el("span", {}, rotulo),
+    el("input", { id: `cadastro-${k}`, type: k === "email" ? "email" : "text", value: valores[k], placeholder: dica, disabled: !podeEditar, onInput: (e) => mudou(k, e.target.value) }));
+  const obs = el("textarea", { id: "cadastro-observacoes", rows: 2, disabled: !podeEditar, placeholder: "Quem tiver acesso de cliente também lê estas observações.", onInput: (e) => mudou("observacoes", e.target.value) });
+  obs.value = valores.observacoes;
+  return el("div", { class: "campo-marca cadastro-cliente" },
+    el("div", { class: "com-acao" }, el("h3", {}, "Cadastro e contato"),
+      el("div", { class: "tela-acoes" }, botao,
+        podeEditar ? el("button", { class: "secundario mini", onClick: () => abrirCliente(c) }, pode("financeiro") ? "Contrato, status e excluir…" : "Status e excluir…") : null)),
+    el("div", { class: "grade-cadastro" }, CAMPOS_CADASTRO.map(([k, r, d]) => entrada(k, r, d))),
+    el("label", { class: "campo" }, el("span", {}, "Observações"), obs));
+}
+
 export function abaMarca(c, estado = {}, renderizar = () => {}) {
   // Cliente com marcas = grupo (guarda-chuva): a identidade se configura em cada marca.
   // A identidade do próprio grupo é só para os posts institucionais dele (ex.: avisos, datas comemorativas).
@@ -332,7 +361,10 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
   const alvo = alvoDe(c, marca);
   const contar = (mid) => dados.tarefas.filter((t) => t.clienteId === c.id && (t.marcaId || "") === mid).length;
 
+  const podeEditar = ehAdmin() || pode("conteudo") || pode("trafego");
+  if (!podeGerir) return el("div", { class: "aba-marca" }, !marca ? blocoCadastro(c, podeEditar) : el("p", { class: "nota" }, `Cadastro, contato e contrato ficam no geral do grupo ${c.nome}.`));
   return el("div", { class: "aba-marca" },
+    !marca ? blocoCadastro(c, podeEditar) : el("p", { class: "nota" }, `Cadastro, contato e contrato ficam no geral do grupo ${c.nome}.`),
     seletor,
     !grupo ? el("p", { class: "subtitulo" }, "Este cliente tem uma marca só: a identidade é configurada aqui. Se ele tiver outras marcas com identidades diferentes (ex.: uma loja on-line com nome próprio), crie cada uma em \"+ Marca\" e ele vira um grupo: aí cada marca tem a sua identidade.") : null,
     grupo && !marca ? el("p", { class: "faixa-aviso" }, `${c.nome} é um grupo: a identidade de cada marca fica na própria marca. Esta aqui vale para os posts institucionais do grupo (sem marca) e completa o que estiver vazio nas marcas. Preenchida, ela representa o grupo como um todo; o que ficar vazio (sobre, tom de voz, público, persona) o pedido de copy monta com a combinação das marcas.`) : null,
@@ -344,7 +376,7 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
         podeGerir ? el("button", { class: "secundario mini", onClick: () => abrirMarca(c.id, marca) }, "Editar nome e status") : null,
         ehAdmin() ? el("button", { class: "link", onClick: async (e) => {
           const botao = e.currentTarget;
-          if (!(await confirmar(`Tirar ${marca.nome} de ${c.nome} e transformar num cliente próprio? Os ${contar(marca.id)} post(s) e tarefas dela, a identidade (logo, cores, tom de voz…), contas de anúncio e criativos vão junto. O contrato de ${c.nome} continua no grupo; o de ${marca.nome} você preenche depois no Editar do cliente novo.`))) return;
+          if (!(await confirmar(`Tirar ${marca.nome} de ${c.nome} e transformar num cliente próprio? Os ${contar(marca.id)} post(s) e tarefas dela, a identidade (logo, cores, tom de voz…), contas de anúncio e criativos vão junto. O contrato de ${c.nome} continua no grupo; o de ${marca.nome} você preenche depois na aba Marca do cliente novo.`))) return;
           botao.disabled = true;
           try {
             const novo = await separarMarca(c, marca, (msg) => avisar(msg));
