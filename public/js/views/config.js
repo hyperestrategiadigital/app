@@ -1,9 +1,7 @@
-// Ajustes (só administradores): e-mails automáticos, Meta, importação dos arquivos do Claude e backup.
-import { el, confirmar, avisar, abrirModal, hojeISO, vazio, normalizar, baixar } from "../ui.js";
-import { dados, criar, atualizar, marcasDo } from "../db.js";
+// Ajustes (só administradores): e-mails automáticos, Meta, manual, menus, checklists e backup.
+import { el, confirmar, avisar, hojeISO, vazio, baixar } from "../ui.js";
+import { dados, atualizar } from "../db.js";
 import { cabecalho } from "./componentes.js";
-import { previaPlanejamento } from "./importarPlanejamento.js";
-import { previaImportacao } from "./comercial.js";
 import { salvarComId, carregarArquivo, listarErros, excluirErro, bancoInfo, listarSub, excluirSub, todasTarefas, notificar } from "../db.js";
 import { caminhoArtes, excluirArte } from "../arquivos.js";
 import { dataPost } from "../exportacao.js";
@@ -11,9 +9,7 @@ import { ehAdmin } from "../permissoes.js";
 import { configMeta } from "../meta.js";
 import { configAgenda, agendaConectada, testarAgenda } from "../agenda.js";
 import { MANUAL_PADRAO } from "../manual.js";
-import { quandoDoTexto } from "../datas.js";
-import { FREQUENCIAS, QUEM_FAZ } from "./escopo.js";
-import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO, REDES, TIPOS_FIXOS, ANTECEDENCIA, LISTAS_PADRAO, antecedenciaDe, SERVICOS } from "../constantes.js";
+import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO, REDES, TIPOS_FIXOS, ANTECEDENCIA, LISTAS_PADRAO, antecedenciaDe } from "../constantes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
 
 async function baixarBackup() {
@@ -23,7 +19,7 @@ async function baixarBackup() {
 
 export function render() {
   return el("div", { class: "tela" },
-    cabecalho("Ajustes", "E-mails automáticos, importação e backup. Sua Google Agenda fica em Minha conta (clique no seu nome)."),
+    cabecalho("Ajustes", "E-mails automáticos, manual de escrita, menus e backup. Sua Google Agenda fica em Minha conta (clique no seu nome)."),
 
     blocoEmail(),
     blocoMeta(),
@@ -31,8 +27,6 @@ export function render() {
     ehAdmin() ? blocoListas() : null,
     blocoModelos(),
     blocoErros(),
-
-    ehAdmin() ? blocoImportar() : null,
 
     ehAdmin() ? el("section", { class: "bloco" },
       el("h2", {}, "Backup"),
@@ -88,172 +82,6 @@ function blocoCriativos() {
       el("button", { class: "secundario", disabled: criativos.ocupado, onClick: analisar }, "Ver o espaço dos criativos"),
       criativos.apagar.length && !criativos.ocupado ? el("button", { class: "perigo-texto", onClick: apagarAntigos }, `Apagar ${criativos.apagar.length} criativo(s) antigos`) : null),
     criativos.texto ? el("p", { class: "subtitulo" }, criativos.texto) : null);
-}
-
-const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "palavrasChave", "evitar", "pilares", "diretrizes", "datas", "escopo", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];
-const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", pilares: "pilares", diretrizes: "diretrizes de conteúdo", palavrasChave: "palavras e expressões", evitar: "o que evitar", datas: "datas comemorativas", escopo: "escopo (no cliente)", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
-const preenchido = (x) => (Array.isArray(x) ? x.filter(Boolean).length : String(x ?? "").trim());
-const chaveNome = (s) => normalizar(s || "").replace(/[^a-z0-9]/g, "");
-/** Cliente pelo nome, aceitando pequenas diferenças ("Domo" acha "Domo Empório"; "Jocelene" acha "Jocelene Fernandes"). */
-function acharClientePorNome(nome) {
-  const k = chaveNome(nome);
-  if (!k) return null;
-  const ativos = dados.clientes.filter((c) => c.ativo !== false);
-  return ativos.find((c) => chaveNome(c.nome) === k) || ativos.find((c) => chaveNome(c.nome).includes(k) || k.includes(chaveNome(c.nome))) || null;
-}
-/** Marca do cliente pelo nome (mesma tolerância). */
-function acharMarca(clienteId, nome) {
-  const k = chaveNome(nome);
-  const lista = (dados.marcas || []).filter((m) => m.clienteId === clienteId);
-  return lista.find((m) => chaveNome(m.nome) === k) || lista.find((m) => chaveNome(m.nome).includes(k) || k.includes(chaveNome(m.nome))) || null;
-}
-
-/** Linhas de escopo vindas do .json, com os nomes das listas do app (serviço, frequência, quem faz). */
-function escopoImportado(lista) {
-  const achar = (opcoes, valor, padrao = "") => opcoes.find((o) => chaveNome(o) === chaveNome(valor)) || String(valor || padrao).trim();
-  return (Array.isArray(lista) ? lista : []).map((l) => ({
-    servico: achar(SERVICOS, l?.servico), frequencia: achar(FREQUENCIAS, l?.frequencia), quantidade: l?.quantidade == null ? "" : String(l.quantidade),
-    quem: achar(QUEM_FAZ, l?.quem, "Hyper"), obs: String(l?.obs || l?.observacao || "").trim()
-  })).filter((l) => l.servico);
-}
-
-/**
- * Importa definições de marca (arquivo .json preparado pelo Claude a partir do ChatGPT).
- * Cada item: { cliente, marca?, descricao, tomDeVoz, publico, persona, diretrizes, ... }. Sem "marca", vai para o próprio
- * cliente; com "marca", vai para a marca do cliente com esse nome (mesmo que ela tenha o nome do grupo) ou cria a marca.
- * O cliente de cada linha é escolhido na prévia (já vem sugerido pelo nome); nada cria cliente sem você escolher.
- */
-function previaMarcas(lista) {
-  const NOVO = "__novo";
-  const nomesCli = [...new Set(lista.map((m) => m.cliente || m.nome || "").filter(Boolean))];
-  const seletores = new Map(nomesCli.map((n) => {
-    const achado = acharClientePorNome(n);
-    return [n, el("select", { "aria-label": `Cliente para ${n}`, onChange: () => { lista.forEach((m, i) => { if ((m.cliente || m.nome || "") === n) escolhas.delete(i); }); desenhar(); } },
-      el("option", { value: "" }, "— não importar —"),
-      el("option", { value: NOVO }, `+ Criar cliente "${n}"`),
-      dados.clientes.filter((c) => c.ativo !== false).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
-        .map((c) => el("option", { value: c.id, selected: c.id === achado?.id }, c.nome)))];
-  }));
-  const sobrescrever = el("input", { type: "checkbox", id: "marcas-sobrescrever", checked: true });
-  const lista_ = el("ul", { class: "lista-importar-marcas" });
-  const status = el("p", { class: "subtitulo" });
-  const GERAL = "__geral", NOVA = "__nova";
-  const escolhas = new Map(); // índice do bloco -> GERAL | NOVA | id da marca (escolhido na prévia)
-  const clienteDe = (m) => {
-    const nomeCli = m.cliente || m.nome || "";
-    const clienteId = seletores.get(nomeCli)?.value || "";
-    return { nomeCli, clienteId, cliente: clienteId && clienteId !== NOVO ? dados.clientes.find((c) => c.id === clienteId) : null };
-  };
-  /** Sugestão pelo nome: a marca do grupo com esse nome, uma marca nova ou o geral (o próprio cliente). */
-  const sugerida = (m, cliente, nomeCli) => {
-    if (!m.marca) return GERAL;
-    const achada = cliente ? acharMarca(cliente.id, m.marca) : null;
-    if (achada) return achada.id;
-    const temMarcas = cliente && (dados.marcas || []).some((x) => x.clienteId === cliente.id);
-    return chaveNome(m.marca) === chaveNome(cliente?.nome || nomeCli) && !temMarcas ? GERAL : NOVA;
-  };
-  /** Para onde vai cada item com o cliente e a marca escolhidos agora. */
-  const destino = (m, i) => {
-    const { nomeCli, clienteId, cliente } = clienteDe(m);
-    const escolha = escolhas.get(i) ?? sugerida(m, cliente, nomeCli);
-    const marca = escolha !== GERAL && escolha !== NOVA ? (dados.marcas || []).find((x) => x.id === escolha) || null : null;
-    const criarMarca = escolha === NOVA ? (m.marca || "") : "";
-    return { nomeCli, clienteId, cliente, marca, criarMarca, escolha, campos: CAMPOS_MARCA.filter((k) => preenchido(m[k])) };
-  };
-  /** Escolha da marca de um bloco: o geral do grupo (ou o próprio cliente), cada marca do cliente ou uma marca nova. */
-  const seletorMarca = (m, i, d) => {
-    const marcas = d.cliente ? marcasDo(d.cliente.id) : [];
-    if (!marcas.length && !m.marca) return null;
-    return el("select", { class: "seletor-marca-importar", "aria-label": `Marca para ${m.marca || d.nomeCli}`, onChange: (e) => { escolhas.set(i, e.target.value); desenhar(); } },
-      el("option", { value: GERAL, selected: d.escolha === GERAL }, marcas.length ? "Geral do grupo (institucional)" : "O próprio cliente (marca única)"),
-      marcas.map((x) => el("option", { value: x.id, selected: d.escolha === x.id }, x.nome)),
-      m.marca && !marcas.some((x) => chaveNome(x.nome) === chaveNome(m.marca)) ? el("option", { value: NOVA, selected: d.escolha === NOVA }, `+ Nova marca "${m.marca}"`) : null);
-  };
-  function desenhar() {
-    lista_.replaceChildren(...lista.map((m, i) => {
-      const d = destino(m, i);
-      const onde = !d.clienteId ? "não importar"
-        : `${d.cliente ? d.cliente.nome : `${d.nomeCli} (cliente novo)`}${d.marca ? ` › ${d.marca.nome}` : d.criarMarca ? ` › ${d.criarMarca} (marca nova)` : d.cliente && marcasDo(d.cliente.id).length ? " › geral do grupo" : ""}`;
-      return el("li", { class: d.clienteId ? "" : "apagado" },
-        el("div", { class: "linha-importar" }, el("strong", {}, m.marca ? `${m.marca}: ` : `${d.nomeCli}: `), d.clienteId ? seletorMarca(m, i, d) : null),
-        el("span", {}, `${onde} · `, d.campos.map((k) => ROTULO_CAMPO[k]).join(", ") || "nada para importar"));
-    }));
-  }
-  desenhar();
-  const fechar = abrirModal("Importar definições de marca", el("div", { class: "importacao-previa" },
-    el("p", {}, "Confira de qual cliente e de qual marca é cada bloco. O app já sugere pelo nome; num grupo, escolha a marca (ou o geral do grupo)."),
-    el("div", { class: "lista" }, nomesCli.map((n) => el("div", { class: "linha-importar" }, el("strong", {}, n), seletores.get(n)))),
-    el("h3", { class: "form-secao" }, "O que vai ser preenchido"),
-    lista_,
-    el("label", { class: "check-inline", for: "marcas-sobrescrever" }, sobrescrever, "Substituir o que já está preenchido (desmarcado: só preenche os campos vazios)"),
-    status,
-    el("div", { class: "acoes" },
-      el("button", { class: "secundario negar", onClick: () => fechar() }, "Cancelar"),
-      el("button", { class: "confirmar", onClick: async (e) => {
-        const botao = e.currentTarget;
-        botao.disabled = true;
-        let n = 0;
-        const criados = {};
-        try {
-          for (const [i, m] of lista.entries()) {
-            const d = destino(m, i);
-            if (!d.clienteId || !d.campos.length) continue;
-            status.textContent = `${d.nomeCli}${m.marca ? ` › ${m.marca}` : ""}…`;
-            let clienteId = d.cliente?.id || criados[d.nomeCli];
-            if (!clienteId) {
-              clienteId = (await criar("clientes", { nome: d.nomeCli, ativo: true, servicos: [], paleta: [] })).id;
-              criados[d.nomeCli] = clienteId;
-            }
-            const marca = d.marca || (d.criarMarca ? acharMarca(clienteId, d.criarMarca) : null);
-            const atual = marca || (d.criarMarca ? null : dados.clientes.find((c) => c.id === clienteId));
-            const v = {};
-            for (const k of d.campos) if (sobrescrever.checked || !atual || !preenchido(atual[k])) v[k] = m[k];
-            if (v.paleta) v.cor = v.paleta[0];
-            if (v.datas) v.datas = (Array.isArray(v.datas) ? v.datas : []).map((d) => ({ nome: String(d?.nome || "").trim(), quando: quandoDoTexto(d?.quando) })).filter((d) => d.nome && d.quando);
-            // Escopo é do cliente (o que a Hyper entrega), mesmo quando o bloco é de uma marca do grupo
-            if (v.escopo) {
-              const linhas = escopoImportado(v.escopo);
-              delete v.escopo;
-              if (linhas.length) await atualizar("clientes", clienteId, { escopo: linhas, servicos: [...new Set(linhas.filter((l) => l.quem === "Hyper").map((l) => l.servico))] });
-            }
-            if (!Object.keys(v).length) { n++; continue; }
-            if (marca) await atualizar("marcas", marca.id, v);
-            else if (d.criarMarca) await criar("marcas", { nome: d.criarMarca, clienteId, ativo: true, paleta: [], criadoEm: Date.now(), ...v });
-            else await atualizar("clientes", clienteId, v);
-            n++;
-          }
-          avisar(`${n} cliente(s)/marca(s) atualizados. Confira cada um na aba Marca.`);
-          fechar();
-        } catch (erro) { avisar("Parou no meio: " + erro.message, "erro"); botao.disabled = false; }
-      } }, "Importar definições"))), { largo: true });
-}
-
-/** Um lugar só para os arquivos .json que o Claude prepara: reconhece o tipo e mostra tudo antes de aplicar. */
-function blocoImportar() {
-  const entrada = el("input", { id: "importar-arquivo", type: "file", accept: ".json,application/json", hidden: true });
-  entrada.addEventListener("change", async () => {
-    const arquivo = entrada.files[0];
-    entrada.value = "";
-    if (!arquivo) return;
-    importarTexto(await arquivo.text());
-  });
-  // O mesmo, colando o texto do .json direto (a resposta da IA), sem precisar salvar arquivo
-  const colado = el("textarea", { id: "importar-texto", rows: 5, placeholder: "Cole aqui o JSON que a IA respondeu" });
-  function importarTexto(texto) {
-    let j;
-    const bloco = String(texto).match(/```(?:json)?\s*([\s\S]*?)```/)?.[1] || texto;
-    try { j = JSON.parse(bloco); } catch { avisar("Esse texto não é um JSON válido. Copie a resposta inteira da IA (só o bloco do JSON).", "erro"); return; }
-    if (j.tipo === "planejamento-hyper") previaPlanejamento(j);
-    else if (j.tipo === "financeiro-hyper") previaImportacao(j);
-    else if (Array.isArray(j) || j.tipo === "marcas-hyper" || j.marcas || j.clientes) previaMarcas(Array.isArray(j) ? j : j.marcas || j.clientes || []);
-    else avisar("Não reconheci esse arquivo. Use um .json que o Claude preparou.", "erro");
-  }
-  return el("section", { class: "bloco" },
-    el("h2", {}, "Importar arquivo do Claude"),
-    el("p", {}, "Para os arquivos .json que o Claude prepara: planejamento de posts (a partir de prints ou planilhas), definições de marca (tom de voz, persona, cores) e financeiro (contratos, despesas fixas, preços). O app reconhece o tipo e mostra tudo antes de aplicar. Importar de novo não duplica."),
-    el("label", { class: "botao-link secundario", for: "importar-arquivo" }, "Escolher arquivo .json", entrada),
-    el("details", {}, el("summary", {}, "Ou colar o texto"), colado,
-      el("div", { class: "acoes" }, el("button", { class: "secundario", onClick: () => { if (colado.value.trim()) importarTexto(colado.value); } }, "Importar texto colado"))));
 }
 
 /** E-mails e automações pelo Google Apps Script da conta da Hyper (docs/email). */

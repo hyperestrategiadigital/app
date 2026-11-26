@@ -1,12 +1,9 @@
 // Contratos e orçamentos gerados pelo app (só administradores), e a aba Configurar do Financeiro:
 // dados da Hyper, serviços e preços, despesas fixas, reserva, modelo do contrato e importação da planilha.
-import { el, avisar, formulario, abrirModal, confirmar, fecharModais, hojeISO, addDias, fmtMoeda, normalizar } from "../ui.js";
-import { dados, porId, contrato, salvarComId, criar, atualizar, opcoesClientes, clientesAtivos } from "../db.js";
+import { el, avisar, formulario, abrirModal, confirmar, fecharModais, hojeISO, fmtMoeda, normalizar } from "../ui.js";
+import { dados, porId, contrato, salvarComId, criar, atualizar, opcoesClientes } from "../db.js";
 import { STATUS_ORCAMENTO, CATEGORIAS_FIN } from "../constantes.js";
-import {
-  configComercial, servicosCatalogo, servicoPorNome, SERVICOS_PADRAO, MODELO_CONTRATO, textoContrato, documentoContrato,
-  abrirParaPDF, baixarWord, totaisOrcamento, documentoOrcamento, despesasFixas, textoVencimento, textoPagamento, entregasDe
-} from "../comercial.js";
+import { configComercial, servicosCatalogo, servicoPorNome, SERVICOS_PADRAO, MODELO_CONTRATO, textoContrato, documentoContrato, abrirParaPDF, baixarWord, totaisOrcamento, documentoOrcamento, despesasFixas, textoPagamento, entregasDe } from "../comercial.js";
 
 import { garantirMes } from "../recorrencias.js";
 
@@ -352,77 +349,4 @@ export function abaConfigurar() {
           el("button", { class: "secundario", onClick: async () => { if (await confirmar("Voltar ao texto padrão do contrato?")) { modelo.value = MODELO_CONTRATO; await salvar({ modeloContrato: "" }, "Modelo padrão restaurado."); } } }, "Voltar ao padrão"),
           el("button", { onClick: () => salvar({ modeloContrato: modelo.value === MODELO_CONTRATO ? "" : modelo.value }, "Modelo salvo.") }, "Salvar modelo"))))
   ];
-}
-
-/* ---------------- Importação ---------------- */
-
-const chave = (s) => normalizar(s || "").replace(/[^a-z0-9]/g, "");
-function acharCliente(nome) {
-  const k = chave(nome);
-  const ativos = clientesAtivos();
-  return ativos.find((c) => chave(c.nome) === k) || ativos.find((c) => chave(c.nome).includes(k) || k.includes(chave(c.nome))) || null;
-}
-
-/** { tipo: "financeiro-hyper", contratada, reserva, servicos, despesasFixas, contratos: [{ cliente, mensalidade, diaVencimento, vencimentoUtil, pagamento, verbaAnuncios, observacao }], avulsos: [{ cliente, descricao, valor, vencimento, categoria }], quitarAte: "AAAA-MM" } */
-export function previaImportacao(j) {
-  const contratos = (j.contratos || []).map((k) => ({ ...k, sel: el("select", { "aria-label": `Cliente para ${k.cliente}` },
-    el("option", { value: "" }, "— não importar —"),
-    clientesAtivos().map((c) => el("option", { value: c.id, selected: c.id === acharCliente(k.cliente)?.id }, c.nome))) }));
-  const avulsos = (j.avulsos || []).map((a) => ({ ...a, clienteId: acharCliente(a.cliente)?.id || "" }));
-  const status = el("p", { class: "subtitulo" });
-  const fechar = abrirModal("Importar financeiro", el("div", {},
-    contratos.length ? [el("h3", { class: "form-secao" }, "Contratos (confira o cliente de cada linha)"),
-      el("div", { class: "lista" }, contratos.map((k) => el("div", { class: "linha-importar" },
-        el("span", {}, el("strong", {}, k.cliente), el("br"), el("small", { class: "subtitulo" }, `${fmtMoeda(k.mensalidade)}/mês · ${textoVencimento(k)}${k.pagamento ? ` · ${k.pagamento === "pre" ? "pré" : "pós"}` : ""}${k.observacao ? ` · ${k.observacao}` : ""}`)),
-        k.sel)))] : null,
-    j.despesasFixas ? el("p", {}, `Despesas fixas: ${j.despesasFixas.length} (${fmtMoeda(j.despesasFixas.reduce((s, f) => s + f.valor, 0))}/mês) — substituem a lista atual.`) : null,
-    j.servicos ? el("p", {}, `Serviços e preços: ${j.servicos.map((s) => `${s.nome}${s.preco ? ` (${fmtMoeda(s.preco)})` : ""}`).join(", ")}.`) : null,
-    j.contratada ? el("p", {}, `Dados da Hyper: ${j.contratada.nome || ""} · ${j.contratada.documento || ""}.`) : null,
-    j.reserva != null ? el("p", {}, `Reserva sobre as receitas: ${j.reserva}%.`) : null,
-    avulsos.length ? el("p", {}, `Lançamentos avulsos: ${avulsos.map((a) => `${a.descricao} ${fmtMoeda(a.valor)} em ${a.vencimento.split("-").reverse().join("/")}${a.clienteId ? "" : " (sem cliente)"}`).join("; ")}.`) : null,
-    j.quitarAte ? el("p", { class: "faixa-aviso" }, `Tudo que vence até o fim de ${j.quitarAte.split("-").reverse().join("/")} fica marcado como pago (zero a zero).`) : null,
-    status,
-    el("div", { class: "acoes" },
-      el("button", { class: "secundario negar", onClick: () => fechar() }, "Cancelar"),
-      el("button", { class: "confirmar", onClick: async (e) => {
-        const botao = e.currentTarget;
-        botao.disabled = true;
-        try {
-          await aplicarImportacao(j, contratos.map((k) => ({ ...k, clienteId: k.sel.value })), avulsos, (m) => (status.textContent = m));
-          fechar();
-          avisar("Financeiro importado.");
-        } catch (erro) { console.error(erro); avisar(erro.message, "erro"); botao.disabled = false; }
-      } }, "Importar"))), { largo: true });
-}
-
-async function aplicarImportacao(j, contratos, avulsos, progresso) {
-  const cfg = {};
-  for (const k of ["contratada", "reserva", "servicos", "despesasFixas"]) if (j[k] != null) cfg[k] = j[k];
-  if (Object.keys(cfg).length) { progresso("Salvando configurações…"); await salvarComId("config", "comercial", cfg); }
-  for (const k of contratos.filter((x) => x.clienteId)) {
-    progresso(`Contrato: ${k.cliente}…`);
-    await salvarComId("contratos", k.clienteId, {
-      clienteId: k.clienteId, mensalidade: Number(k.mensalidade) || 0, diaVencimento: Number(k.diaVencimento) || 10,
-      vencimentoUtil: !!k.vencimentoUtil, pagamento: k.pagamento || "", verbaAnuncios: k.verbaAnuncios || "", observacaoContrato: k.observacao || ""
-    });
-  }
-  for (const a of avulsos) {
-    progresso(`Lançamento: ${a.descricao}…`);
-    await salvarComId("financeiro", `avulso-${chave(a.descricao)}-${a.vencimento}`, {
-      descricao: a.descricao, tipo: a.tipo || "receita", categoria: a.categoria || "Projeto", clienteId: a.clienteId || "",
-      valor: Number(a.valor) || 0, vencimento: a.vencimento, status: "pendente", pagoEm: null, criadoEm: Date.now()
-    });
-  }
-  if (j.quitarAte) {
-    await new Promise((r) => setTimeout(r, 400)); // espera os contratos novos chegarem na memória
-    for (let mes = hojeISO().slice(0, 7); mes <= j.quitarAte; mes = addDias(`${mes}-28`, 7).slice(0, 7)) {
-      progresso(`Gerando ${mes}…`);
-      await garantirMes(mes);
-    }
-    await new Promise((r) => setTimeout(r, 400));
-    const fim = `${j.quitarAte}-31`;
-    const abertos = dados.financeiro.filter((f) => f.status !== "pago" && f.vencimento && f.vencimento <= fim);
-    progresso(`Marcando ${abertos.length} lançamento(s) como pagos…`);
-    for (const f of abertos) await atualizar("financeiro", f.id, { status: "pago", pagoEm: f.vencimento < hojeISO() ? f.vencimento : hojeISO() });
-  }
 }

@@ -9,6 +9,7 @@ import { caminhoArtes, comprimirImagem } from "../arquivos.js";
 import { CAMPOS_REDES } from "../constantes.js";
 import { ajustesPedidos } from "../ia.js";
 import { quandoDoTexto, quandoParaTela } from "../datas.js";
+import { abrirImportarBriefing } from "./importarBriefing.js";
 import { medidorMarca } from "./assistenteIA.js";
 
 // Texto digitado e ainda não salvo sobrevive às atualizações de tela
@@ -354,6 +355,7 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
     // Para a copy: quanto a ficha está completa e o que os clientes já pediram para ajustar
     el("div", { class: "bloco-ia-marca" },
       medidorMarca(c.id, marca?.id || ""),
+      podeGerir ? el("div", { class: "acoes" }, el("button", { class: "secundario mini", onClick: () => abrirImportarBriefing(alvo, c) }, "Importar briefing (JSON)")) : null,
       blocoAprendizados(c, marca, alvo)),
     campoLogo(alvo),
     campoLink(alvo, "linkDrive", "Pasta da marca no Drive",
