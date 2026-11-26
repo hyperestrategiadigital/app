@@ -54,6 +54,10 @@ Toda interface deste repositório segue `docs/identidade-visual.md`.
 - Faxina automática (`limparAntigos`, admin ao entrar): lixeira e erros com mais de 30 dias e links de aprovação vencidos há mais de 7 dias (com as imagens); e, uma vez por dia, os criativos (imagens) dos posts publicados há mais de 7 dias (`limparCriativosPublicados()` em `arquivos.js`, `DIAS_CRIATIVOS`): o texto do post fica (vai para `tarefasArquivo` depois de 90 dias). Ajustes: cada quadro recolhe (`recolhivel()`), backup por último. Migrações em `migracoes.js` só normalizam (tipos, formatos, etapa e listas); não crie migrações de uma vez só sem tirá-las depois.
 - Nunca coloque chaves no código: o repositório é público.
 
+## Próximos passos
+
+- `docs/proximos-passos.md` é o registro interno do que ficou para depois (fila curta, ideias que saíram e podem voltar, sugestões e pendências de configuração). Quando o usuário pedir "o próximo passo", leia esse arquivo e recomende um passo com o porquê. Ao terminar algo, mova para "Feito"; ao surgir ideia nova, anote. Sem dados de clientes (o repositório é público).
+
 ## Publicação
 
 - Um push no `main` roda os testes e publica o Hosting pelo GitHub Actions (`.github/workflows/deploy.yml`, secret `FIREBASE_SERVICE_ACCOUNT`). Pull requests rodam só os testes.
