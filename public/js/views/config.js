@@ -12,7 +12,8 @@ import { configMeta } from "../meta.js";
 import { configAgenda, agendaConectada, testarAgenda } from "../agenda.js";
 import { MANUAL_PADRAO } from "../manual.js";
 import { quandoDoTexto } from "../datas.js";
-import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO, REDES, TIPOS_FIXOS, ANTECEDENCIA, LISTAS_PADRAO, antecedenciaDe } from "../constantes.js";
+import { FREQUENCIAS, QUEM_FAZ } from "./escopo.js";
+import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO, REDES, TIPOS_FIXOS, ANTECEDENCIA, LISTAS_PADRAO, antecedenciaDe, SERVICOS } from "../constantes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
 
 async function baixarBackup() {
@@ -89,8 +90,8 @@ function blocoCriativos() {
     criativos.texto ? el("p", { class: "subtitulo" }, criativos.texto) : null);
 }
 
-const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "palavrasChave", "evitar", "pilares", "diretrizes", "datas", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];
-const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", pilares: "pilares", diretrizes: "diretrizes de conteúdo", palavrasChave: "palavras e expressões", evitar: "o que evitar", datas: "datas comemorativas", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
+const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "palavrasChave", "evitar", "pilares", "diretrizes", "datas", "escopo", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];
+const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", pilares: "pilares", diretrizes: "diretrizes de conteúdo", palavrasChave: "palavras e expressões", evitar: "o que evitar", datas: "datas comemorativas", escopo: "escopo (no cliente)", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
 const preenchido = (x) => (Array.isArray(x) ? x.filter(Boolean).length : String(x ?? "").trim());
 const chaveNome = (s) => normalizar(s || "").replace(/[^a-z0-9]/g, "");
 /** Cliente pelo nome, aceitando pequenas diferenças ("Domo" acha "Domo Empório"; "Jocelene" acha "Jocelene Fernandes"). */
@@ -105,6 +106,15 @@ function acharMarca(clienteId, nome) {
   const k = chaveNome(nome);
   const lista = (dados.marcas || []).filter((m) => m.clienteId === clienteId);
   return lista.find((m) => chaveNome(m.nome) === k) || lista.find((m) => chaveNome(m.nome).includes(k) || k.includes(chaveNome(m.nome))) || null;
+}
+
+/** Linhas de escopo vindas do .json, com os nomes das listas do app (serviço, frequência, quem faz). */
+function escopoImportado(lista) {
+  const achar = (opcoes, valor, padrao = "") => opcoes.find((o) => chaveNome(o) === chaveNome(valor)) || String(valor || padrao).trim();
+  return (Array.isArray(lista) ? lista : []).map((l) => ({
+    servico: achar(SERVICOS, l?.servico), frequencia: achar(FREQUENCIAS, l?.frequencia), quantidade: l?.quantidade == null ? "" : String(l.quantidade),
+    quem: achar(QUEM_FAZ, l?.quem, "Hyper"), obs: String(l?.obs || l?.observacao || "").trim()
+  })).filter((l) => l.servico);
 }
 
 /**
@@ -200,7 +210,13 @@ function previaMarcas(lista) {
             for (const k of d.campos) if (sobrescrever.checked || !atual || !preenchido(atual[k])) v[k] = m[k];
             if (v.paleta) v.cor = v.paleta[0];
             if (v.datas) v.datas = (Array.isArray(v.datas) ? v.datas : []).map((d) => ({ nome: String(d?.nome || "").trim(), quando: quandoDoTexto(d?.quando) })).filter((d) => d.nome && d.quando);
-            if (!Object.keys(v).length) continue;
+            // Escopo é do cliente (o que a Hyper entrega), mesmo quando o bloco é de uma marca do grupo
+            if (v.escopo) {
+              const linhas = escopoImportado(v.escopo);
+              delete v.escopo;
+              if (linhas.length) await atualizar("clientes", clienteId, { escopo: linhas, servicos: [...new Set(linhas.filter((l) => l.quem === "Hyper").map((l) => l.servico))] });
+            }
+            if (!Object.keys(v).length) { n++; continue; }
             if (marca) await atualizar("marcas", marca.id, v);
             else if (d.criarMarca) await criar("marcas", { nome: d.criarMarca, clienteId, ativo: true, paleta: [], criadoEm: Date.now(), ...v });
             else await atualizar("clientes", clienteId, v);

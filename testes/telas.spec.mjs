@@ -536,11 +536,17 @@ test("importar arquivo do Claude: definições de marca e arquivo desconhecido",
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.persona)).toBe("Ana, 30 anos");
   // Colando a resposta da IA (bloco de código), com palavras e o que evitar
   await page.locator("summary", { hasText: "Ou colar o texto" }).click();
-  await page.fill("#importar-texto", 'Aqui está:\n```json\n' + JSON.stringify({ tipo: "marcas-hyper", marcas: [{ cliente: "Loja Exemplo", palavrasChave: "look do dia", evitar: "gírias" }] }) + '\n```');
+  await page.fill("#importar-texto", 'Aqui está:\n```json\n' + JSON.stringify({ tipo: "marcas-hyper", marcas: [{ cliente: "Loja Exemplo", palavrasChave: "look do dia", evitar: "gírias",
+    datas: [{ quando: "20/01", nome: "Aniversário da loja" }, { quando: "12", nome: "Mês das cestas" }],
+    escopo: [{ servico: "social media", frequencia: "semanal", quantidade: 2, quem: "hyper", obs: "1 estático + 1 vídeo" }, { servico: "Meta Ads", frequencia: "Mensal", quem: "Terceiro" }] }] }) + '\n```');
   await page.getByRole("button", { name: "Importar texto colado" }).click();
   await expect(page.locator(".modal")).toContainText("palavras e expressões, o que evitar");
   await page.locator(".modal").getByRole("button", { name: "Importar definições" }).click();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.evitar)).toBe("gírias");
+  const loja = await page.evaluate(() => window.__store["espacos/hyper/clientes"].loja);
+  expect(loja.datas).toEqual([{ nome: "Aniversário da loja", quando: "01-20" }, { nome: "Mês das cestas", quando: "12" }]);
+  expect(loja.escopo[0]).toMatchObject({ servico: "Social media", frequencia: "Semanal", quantidade: "2", quem: "Hyper", obs: "1 estático + 1 vídeo" });
+  expect(loja.servicos).toEqual(["Social media"]);
   await page.setInputFiles("#importar-arquivo", { name: "x.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ tipo: "outro" })) });
   await expect(page.locator("body")).toContainText("Não reconheci esse arquivo");
 });
