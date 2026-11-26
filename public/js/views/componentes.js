@@ -1,6 +1,6 @@
 // Peças reutilizadas entre telas: cartão e formulário de tarefa, selo de cliente.
 import { pode, eu, ehAdmin } from "../permissoes.js";
-import { seloResposta, gerarLinkAprovacao } from "../aprovacoes.js";
+import { seloResposta, gerarLinkAprovacao, blocoResposta } from "../aprovacoes.js";
 import { avisarMencao } from "../emails.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, normalizar, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
@@ -94,6 +94,10 @@ export function abrirTarefa(tarefa = {}) {
     { nome: "marcaId", rotulo: "Marca", tipo: "select", largura: "metade",
       opcoesDe: (v) => [...marcasDo(v.clienteId).map((m) => [m.id, m.nome]), ["", `${porId("clientes", v.clienteId)?.nome || "Grupo"} (institucional)`]],
       mostrarSe: (v) => marcasDo(v.clienteId).length > 0 },
+    // Campanha junto de cliente e marca: define o contexto do post (o briefing dela vai no pedido da copy)
+    { nome: "campanhaId", rotulo: "Campanha", tipo: "select", largura: "metade",
+      opcoesDe: (v) => [["", "—"], ...campanhasDo(v.clienteId, v.marcaId || "").filter((c) => c.ativa !== false || c.id === tarefa.campanhaId).map((c) => [c.id, c.nome])],
+      mostrarSe: (v) => !!v.clienteId && (campanhasDo(v.clienteId, v.marcaId || "").length > 0 || !!tarefa.campanhaId) },
 
     { tipo: "secao", rotulo: "Post (aparece no calendário de conteúdo)", mostrarSe: conteudo },
     { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: comAtual(FORMATOS, tarefa.formato), padrao: FORMATO_PADRAO, largura: "metade", mostrarSe: conteudo },
@@ -119,9 +123,6 @@ export function abrirTarefa(tarefa = {}) {
     { tipo: "secao", rotulo: "Tarefa" },
     { nome: "responsavel", rotulo: "Responsável", tipo: "select", opcoes: opcoesResponsaveis(tarefa.responsavel), padrao: responsavelPadrao(), largura: "metade" },
     { nome: "prazo", rotulo: "Prazo de entrega", tipo: "date", padrao: hojeISO(), largura: "metade" },
-    { nome: "campanhaId", rotulo: "Campanha", tipo: "select", largura: "metade",
-      opcoesDe: (v) => [["", "—"], ...campanhasDo(v.clienteId, v.marcaId || "").filter((c) => c.ativa !== false || c.id === tarefa.campanhaId).map((c) => [c.id, c.nome])],
-      mostrarSe: (v) => !!v.clienteId && (campanhasDo(v.clienteId, v.marcaId || "").length > 0 || !!tarefa.campanhaId) },
     { nome: "checklist", rotulo: "Checklist", tipo: "checklist" },
     { nome: "linkCanva", rotulo: "Link do Canva (criativo)", dica: "https://www.canva.com/design/...", largura: "metade" },
     { nome: "linkDrive", rotulo: "Link do Drive", dica: "https://drive.google.com/...", largura: "metade" },
@@ -137,7 +138,7 @@ export function abrirTarefa(tarefa = {}) {
     editando ? el("button", {
       type: "button", class: "secundario mini", title: "Abre um post novo igual a este para você mudar a data",
       onClick: () => {
-        const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, artes, qtdComentarios, exemplo, ...copia } = { ...(porId("tarefas", tarefa.id) || tarefa), ...(ultimoForm()?.lerValores?.() || {}) };
+        const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, respostaCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, artes, qtdComentarios, exemplo, ...copia } = { ...(porId("tarefas", tarefa.id) || tarefa), ...(ultimoForm()?.lerValores?.() || {}) };
         fecharModais();
         abrirTarefa({ ...copia, titulo: `${copia.titulo} (cópia)`, statusConteudo: "ideia", status: "a_fazer", checklist: (copia.checklist || []).map((i) => ({ ...i, feito: false })) });
       }
@@ -189,7 +190,15 @@ export function abrirTarefa(tarefa = {}) {
   // Criativos anexados ao post (imagens guardadas no banco)
   if (form) form.querySelector(".acoes").before(secaoCriativos(tarefa));
   // Ajuste pedido pelo cliente no link de aprovação
-  if (form && tarefa.ajusteCliente) form.querySelector(".form-grade").before(el("p", { class: "faixa-alerta" }, el("strong", {}, "Ajuste pedido pelo cliente: "), tarefa.ajusteCliente));
+  // Resposta do cliente pelo link (ainda não vista): pedido e legenda sugerida, para aceitar ou não
+  const resposta = form && tarefa.id ? porId("tarefas", tarefa.id)?.respostaCliente : null;
+  if (resposta) {
+    const bloco = blocoResposta(porId("tarefas", tarefa.id), ({ copy }) => {
+      if (copy) { const campo = form.querySelector("#f-copy"); if (campo) campo.value = copy; }
+      bloco.replaceWith(el("p", { class: "faixa-ok" }, copy ? "Legenda do cliente aplicada." : "Resposta do cliente vista."));
+    });
+    form.querySelector(".form-grade").before(bloco);
+  } else if (form && tarefa.ajusteCliente) form.querySelector(".form-grade").before(el("p", { class: "faixa-alerta" }, el("strong", {}, "Ajuste pedido pelo cliente: "), tarefa.ajusteCliente));
   // Comentários (com @menção) e histórico de mudanças
   if (form && tarefa.id) form.querySelector(".acoes").before(secaoAtividade(tarefa));
   // Rotina "Produzir semana": mostra ao vivo os posts da semana seguinte do cliente
@@ -369,7 +378,8 @@ function secaoSemana(tarefa) {
       el("span", { class: "etiqueta formato" }, p.formato || "Post"),
       el("strong", {}, p.titulo),
       p.marcaId ? el("span", { class: "etiqueta" }, porId("marcas", p.marcaId)?.nome || "") : null,
-      el("span", { class: `etiqueta st-${p.statusConteudo || "ideia"}` }, rotuloStatusConteudo(p.statusConteudo || "ideia"))));
+      el("span", { class: `etiqueta st-${p.statusConteudo || "ideia"}` }, rotuloStatusConteudo(p.statusConteudo || "ideia")),
+      porId("tarefas", p.id)?.respostaCliente ? seloResposta(porId("tarefas", p.id)) : null));
   const desenhar = () => {
     const posts = postsDaProducao(tarefa);
     const roteiros = roteirosDaProducao(tarefa);
@@ -422,7 +432,7 @@ async function copiarSemana(tarefa, posts) {
   if (!v?.semana) return;
   const delta = Math.round((new Date(`${v.semana}T12:00:00`) - new Date(`${tarefa.semanaInicio}T12:00:00`)) / 86400000);
   for (const p of posts) {
-    const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, artes, qtdComentarios, exemplo, ...copia } = p;
+    const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, respostaCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, artes, qtdComentarios, exemplo, ...copia } = p;
     const data = addDias(p.dataPublicacao || p.prazo, delta);
     await criar("tarefas", { ...copia, dataPublicacao: data, prazo: prazoDoPost(data, p.formato, hojeISO()), statusConteudo: "ideia", status: "a_fazer",
       checklist: (p.checklist || []).map((i) => ({ ...i, feito: false })) });

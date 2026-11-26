@@ -11,6 +11,7 @@ import { pode, tarefaVisivel, eu, ehAdmin } from "../permissoes.js";
 import { compromissosEntre } from "../agenda.js";
 import { abrirCompromisso, cartaoCompromisso, avisoPendentes } from "../compromissos.js";
 import { menuSuspenso, novoPost } from "./calendario.js";
+import { respostasPendentes, abrirRespostasClientes } from "../aprovacoes.js";
 
 const lerPreferencia = () => { try { return localStorage.getItem("hyper-hoje-visao"); } catch { return null; } };
 const guardar = (chave, valor) => { try { localStorage.setItem(chave, valor); } catch {} };
@@ -125,6 +126,15 @@ export function render({ estado = {}, renderizar = () => {} } = {}) {
       cartaoNumero("Concluídas hoje", concluidasHoje, "ok")),
 
     avisoPendentes(),
+    (() => { // Respostas dos clientes pelo link de aprovação: a equipe vê e decide (aprovações, pedidos e legendas sugeridas)
+      const lista = pode("conteudo") ? respostasPendentes() : [];
+      if (!lista.length) return null;
+      const revisoes = lista.filter((t) => t.respostaCliente.status !== "aprovado").length;
+      const legendas = lista.filter((t) => t.respostaCliente.copyNova).length;
+      const clientes = [...new Set(lista.map((t) => nomeCliente(t.clienteId)))].join(", ");
+      return el("a", { class: "faixa-alerta faixa-respostas", href: "#/hoje", onClick: (e) => { e.preventDefault(); abrirRespostasClientes(abrirTarefa); } },
+        `✉ ${lista.length} resposta(s) de cliente para ver (${clientes}): ${[lista.length - revisoes ? `${lista.length - revisoes} aprovação(ões)` : "", revisoes ? `${revisoes} revisão(ões)` : "", legendas ? `${legendas} legenda(s) sugerida(s)` : ""].filter(Boolean).join(", ")}. Ver →`);
+    })(),
     vencidas.length ? el("a", { class: "faixa-alerta", href: "#/financeiro" },
       `💰 ${vencidas.length} recebimento(s) vencido(s): ${fmtMoeda(vencidas.reduce((s, f) => s + (f.valor || 0), 0))}. Ver financeiro →`) : null,
 

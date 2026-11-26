@@ -319,7 +319,7 @@ test("aprovação do cliente por link: o cliente aprova e o post muda de etapa",
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].p2.statusConteudo), { timeout: 10000 }).toBe("aprovado");
 });
 
-test("aprovação por link: a pessoa edita a legenda na revisão e ela vira a copy do post; ou pede revisão", async ({ page, context }) => {
+test("aprovação por link: o cliente edita a legenda ou pede revisão; a equipe vê no Hoje e decide", async ({ page, context }) => {
   await abrir(page);
   const hoje = new Date().toISOString().slice(0, 10);
   await page.evaluate(async (hoje) => {
@@ -351,11 +351,33 @@ test("aprovação por link: a pessoa edita a legenda na revisão e ela vira a co
   await revisar.getByPlaceholder(/Quer mudar mais alguma coisa/).fill("Trocar a foto por uma da fachada");
   await revisar.getByRole("button", { name: "Enviar revisão" }).click();
   await expect(revisar).toContainText("Revisão pedida");
-  // No app: a legenda dela virou a copy (a antiga fica no histórico) e o outro voltou para a produção com o pedido
+  // No app: as etapas mudam, mas a legenda dela NÃO troca a nossa sozinha: fica pendente para a equipe ver
   await page.reload();
-  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.copy), { timeout: 10000 }).toBe("Legenda do jeito da cliente");
-  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.statusConteudo)).toBe("aprovado");
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.statusConteudo), { timeout: 10000 }).toBe("aprovado");
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pr.ajusteCliente)).toBe("Trocar a foto por uma da fachada");
+  expect(await page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.copy)).toBe("Legenda da equipe");
+  // Aviso no Hoje e número no menu
+  await page.goto("/#/hoje");
+  await expect(page.locator("#menu > a", { hasText: "Hoje" }).locator(".menu-contador")).toHaveText("2");
+  const faixa = page.locator(".faixa-respostas");
+  await expect(faixa).toContainText("2 resposta(s) de cliente para ver");
+  await expect(faixa).toContainText("1 legenda(s) sugerida(s)");
+  await faixa.click();
+  const janela = page.locator(".modal").last();
+  await expect(janela.locator(".item-resposta")).toHaveCount(2);
+  const editado = janela.locator(".item-resposta", { hasText: "Post para editar" });
+  await expect(editado.locator(".comparar-legendas")).toContainText("Legenda da equipe");
+  await expect(editado.locator(".comparar-legendas")).toContainText("Legenda do jeito da cliente");
+  await editado.getByRole("button", { name: "Usar a do cliente" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.copy)).toBe("Legenda do jeito da cliente");
+  await expect(janela.locator(".item-resposta")).toHaveCount(1);
+  await expect(janela.locator(".item-resposta")).toContainText("Trocar a foto por uma da fachada");
+  await page.keyboard.press("Escape");
+  // No post: a resposta aparece no topo, com o botão para dar como vista
+  await page.evaluate(async () => { const c = await import("/js/views/componentes.js"); const db = await import("/js/db.js"); c.abrirTarefa(db.porId("tarefas", "pr")); });
+  await expect(page.locator(".modal .resposta-cliente")).toContainText("Pediu revisão");
+  await page.locator(".modal .resposta-cliente").getByRole("button", { name: "Ok, visto" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pr.respostaCliente ?? null)).toBe(null);
   const historico = await page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas/pe/atividade"] || {}).map((a) => a.texto).join("\n"));
   expect(historico).toContain("Legenda anterior:\nLegenda da equipe");
 });

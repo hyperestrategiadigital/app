@@ -3,7 +3,9 @@
 // espacos/hyper/aprovacoes/{token}            fotografia dos posts (o link vale 60 dias)
 //                       /{token}/artes/{post}   imagem de cada post (uma por documento, por causa do limite de 1 MB)
 //                       /{token}/respostas/{post} { status: "aprovado" | "ajuste", comentario, nome, em, copyNova? }
-// copyNova: a legenda editada pelo próprio cliente na revisão (vira a copy do post; a anterior fica no histórico).
+// copyNova: a legenda editada pelo próprio cliente na revisão. Não troca a copy sozinha: toda resposta fica no post
+// como `respostaCliente` (pendente) até a equipe ver no Hoje → "Respostas dos clientes" e decidir (usar a legenda
+// do cliente ou manter a nossa). As etapas mudam na hora (aprovado → Aprovado; revisão → Em produção).
 import { el, avisar, abrirModal, fmtData } from "./ui.js";
 import { dados, porId, salvarComId, salvarSub, listarSub, ouvirSub, excluirSub, atualizarSub, espacoInfo, identidade, atualizar, registrarAtividade } from "./db.js";
 import { eu, pode } from "./permissoes.js";
@@ -113,23 +115,24 @@ async function aplicarResposta(token, r) {
   try {
     await atualizarSub(["aprovacoes", token, "respostas"], r.id, { aplicadaEm: Date.now() });
     const quem = r.nome ? `${r.nome} (cliente)` : "O cliente";
-    // Legenda editada pelo cliente: vira a copy do post; a anterior fica no histórico
-    const copy = r.copyNova && r.copyNova !== t.copy ? { copy: r.copyNova } : {};
-    if (copy.copy) registrarAtividade(t.id, { tipo: "comentario", texto: `${quem} editou a legenda pelo link. Legenda anterior:\n${t.copy || "(vazia)"}` });
+    // A resposta fica no post para a equipe ver e decidir (a legenda do cliente não substitui a nossa sozinha)
+    const editou = r.copyNova && r.copyNova !== t.copy;
+    const copy = { respostaCliente: { status: r.status, comentario: r.comentario || "", copyNova: editou ? r.copyNova : "", nome: r.nome || "", em: r.em || Date.now() } };
+    if (editou) registrarAtividade(t.id, { tipo: "comentario", texto: `${quem} sugeriu outra legenda pelo link:\n${r.copyNova}` });
     if (r.status === "aprovado" && (t.statusConteudo || "ideia") === "ideia") {
       // Era o tema (validação do conceito): segue para a produção
-      await atualizar("tarefas", t.id, { statusConteudo: "producao", status: statusDaEtapa("producao"), ajusteCliente: "" });
+      await atualizar("tarefas", t.id, { statusConteudo: "producao", status: statusDaEtapa("producao"), ajusteCliente: "", ...copy });
       registrarAtividade(t.id, { texto: `— ${quem} aprovou o tema pelo link${r.comentario ? `: "${r.comentario}"` : ""}` });
     } else if (r.status === "aprovado") {
       if (["producao", "aprovacao"].includes(t.statusConteudo)) await atualizar("tarefas", t.id, { statusConteudo: "aprovado", status: statusDaEtapa("aprovado"), ajusteCliente: "", ...copy });
-      else if (copy.copy) await atualizar("tarefas", t.id, copy);
-      registrarAtividade(t.id, { texto: `— ${quem} aprovou pelo link${copy.copy ? " com a legenda editada por ele" : ""}${r.comentario ? `: "${r.comentario}"` : ""}` });
+      else await atualizar("tarefas", t.id, copy);
+      registrarAtividade(t.id, { texto: `— ${quem} aprovou pelo link${editou ? " com uma legenda editada por ele (para a equipe ver)" : ""}${r.comentario ? `: "${r.comentario}"` : ""}` });
     } else if ((t.statusConteudo || "ideia") === "ideia") {
-      await atualizar("tarefas", t.id, { ajusteCliente: r.comentario || "ajuste pedido" });
+      await atualizar("tarefas", t.id, { ajusteCliente: r.comentario || "ajuste pedido", ...copy });
       registrarAtividade(t.id, { tipo: "comentario", texto: `${quem} pediu ajuste no tema: ${r.comentario || "(sem comentário)"}` });
     } else {
       await atualizar("tarefas", t.id, { statusConteudo: "producao", status: statusDaEtapa("producao"), ajusteCliente: r.comentario || "ajuste pedido", ...copy });
-      registrarAtividade(t.id, { tipo: "comentario", texto: `${quem} pediu revisão: ${r.comentario || "(sem comentário)"}${copy.copy ? " (e editou a legenda)" : ""}` });
+      registrarAtividade(t.id, { tipo: "comentario", texto: `${quem} pediu revisão: ${r.comentario || "(sem comentário)"}${editou ? " (e sugeriu outra legenda)" : ""}` });
     }
     if (ultimoAviso !== token) { ultimoAviso = token; avisar(`${quem} respondeu a aprovação de ${porId("clientes", t.clienteId)?.nome || "um cliente"}.`); }
   } catch (e) { console.warn("Resposta do cliente:", e.message); }
@@ -137,9 +140,72 @@ async function aplicarResposta(token, r) {
 
 /** Selo para mostrar no post: aprovado ou ajuste pedido pelo cliente. */
 export function seloResposta(t) {
+  // Resposta que a equipe ainda não viu: destaque (abre o post para decidir)
+  if (t.respostaCliente) return el("span", { class: "etiqueta resposta-pendente", title: t.respostaCliente.comentario || "Resposta do cliente para ver" },
+    t.respostaCliente.status === "aprovado" ? (t.respostaCliente.copyNova ? "✉ Cliente sugeriu legenda" : "✉ Cliente aprovou: ver") : "✉ Cliente pediu revisão");
   const r = dados.respostasCliente?.[t.id];
   if (!r) return null;
   return r.status === "aprovado"
     ? el("span", { class: "etiqueta ok", title: `Aprovado por ${r.nome || "cliente"} em ${fmtData(new Date(r.em).toISOString().slice(0, 10))}` }, r.copyNova ? "✓ Cliente aprovou (legenda editada)" : "✓ Cliente aprovou")
     : el("span", { class: "etiqueta alerta", title: r.comentario || "" }, "✎ Cliente pediu revisão");
+}
+
+/* ---------------- Respostas dos clientes para a equipe ver ---------------- */
+
+/** Posts com resposta do cliente que a equipe ainda não viu (aprovação, revisão ou legenda sugerida). */
+export const respostasPendentes = () => dados.tarefas.filter((t) => t.respostaCliente && t.tipo === "Conteúdo");
+
+/** A equipe decide: usa a legenda do cliente (se houver) ou mantém a nossa, e a resposta sai da fila. */
+export async function resolverResposta(t, { usarLegenda = false } = {}) {
+  const r = t.respostaCliente || {};
+  const mudancas = { respostaCliente: null };
+  if (usarLegenda && r.copyNova) mudancas.copy = r.copyNova;
+  await atualizar("tarefas", t.id, mudancas);
+  if (r.copyNova) registrarAtividade(t.id, { texto: usarLegenda ? `— usou a legenda do cliente. Legenda anterior:\n${t.copy || "(vazia)"}` : "— manteve a legenda da equipe (a sugerida pelo cliente ficou no histórico)" });
+  return mudancas;
+}
+
+const rotuloResposta = (r) => r.status === "aprovado" ? (r.copyNova ? "✓ Aprovou com outra legenda" : "✓ Aprovou") : "✎ Pediu revisão";
+
+/** Um bloco por resposta: o pedido, a legenda atual ao lado da sugerida e os botões para decidir. */
+export function blocoResposta(t, aoResolver = () => {}) {
+  const r = t.respostaCliente;
+  if (!r) return null;
+  const decidir = async (botao, usarLegenda) => {
+    botao.disabled = true;
+    try { await resolverResposta(t, { usarLegenda }); aoResolver({ usarLegenda, copy: usarLegenda ? r.copyNova : null }); }
+    catch (e) { botao.disabled = false; avisar("Não consegui salvar: " + e.message, "erro"); }
+  };
+  return el("div", { class: `resposta-cliente ${r.status}` },
+    el("div", { class: "resposta-topo" },
+      el("span", { class: `etiqueta ${r.status === "aprovado" ? "ok" : "alerta"}` }, rotuloResposta(r)),
+      el("span", { class: "subtitulo" }, `${r.nome || "Cliente"} · ${fmtData(new Date(r.em).toISOString().slice(0, 10))}`)),
+    r.comentario ? el("p", {}, el("strong", {}, "Pedido: "), r.comentario) : null,
+    r.copyNova ? el("div", { class: "comparar-legendas" },
+      el("div", {}, el("span", { class: "subtitulo" }, "Legenda atual (nossa)"), el("p", {}, t.copy || "(vazia)")),
+      el("div", {}, el("span", { class: "subtitulo" }, "Legenda do cliente"), el("p", {}, r.copyNova))) : null,
+    el("div", { class: "acoes" }, r.copyNova
+      ? [el("button", { class: "secundario mini", onClick: (e) => decidir(e.currentTarget, false) }, "Manter a nossa"),
+         el("button", { class: "confirmar mini", onClick: (e) => decidir(e.currentTarget, true) }, "Usar a do cliente")]
+      : el("button", { class: "secundario mini", onClick: (e) => decidir(e.currentTarget, false) }, "Ok, visto")));
+}
+
+/** Janela "Respostas dos clientes" (aberta pelo aviso do Hoje), agrupada por cliente. */
+export function abrirRespostasClientes(abrirPost) {
+  const corpo = el("div", { class: "respostas-clientes" });
+  const montar = () => {
+    const lista = respostasPendentes().sort((a, b) => (a.dataPublicacao || "").localeCompare(b.dataPublicacao || ""));
+    if (!lista.length) { corpo.replaceChildren(el("p", {}, "Tudo visto. Nenhuma resposta pendente.")); return; }
+    const porCliente = {};
+    for (const t of lista) (porCliente[t.clienteId] ??= []).push(t);
+    corpo.replaceChildren(...Object.entries(porCliente).map(([cid, posts]) => el("section", { class: "grupo-respostas" },
+      el("h3", {}, porId("clientes", cid)?.nome || "Cliente"),
+      ...posts.map((t) => el("article", { class: "item-resposta" },
+        el("div", { class: "com-acao" },
+          el("strong", {}, `${t.dataPublicacao ? fmtData(t.dataPublicacao, true) + " · " : ""}${t.titulo}`),
+          abrirPost ? el("button", { class: "link", onClick: () => abrirPost(t) }, "Abrir o post") : null),
+        blocoResposta(t, () => setTimeout(montar, 300)))))));
+  };
+  montar();
+  abrirModal("Respostas dos clientes", corpo, { largo: true });
 }

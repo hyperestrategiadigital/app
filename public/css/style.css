@@ -1045,3 +1045,18 @@ details.quadro-marca .cadastro-cliente { border-bottom: 0; margin-bottom: 0; pad
 .aprov-imagem-espaco:empty { height: 240px; margin-bottom: 10px; border-radius: var(--raio-pequeno); background: linear-gradient(90deg, var(--cor-fundo), var(--cor-borda-suave), var(--cor-fundo)); background-size: 200% 100%; animation: aprov-carregando 1.2s ease-in-out infinite; }
 @keyframes aprov-carregando { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 .aprov-ajuste textarea { width: 100%; }
+
+/* Respostas dos clientes (link de aprovação) para a equipe ver */
+.etiqueta.resposta-pendente { background: var(--cor-destaque); color: var(--hyper-preto); font-weight: 700; }
+.menu-selo.menu-contador { background: var(--cor-destaque); color: var(--hyper-preto); min-width: 20px; text-align: center; }
+.faixa-respostas { display: block; text-decoration: none; cursor: pointer; }
+.resposta-cliente { border: 2px solid var(--cor-destaque); background: var(--cor-destaque-clara); border-radius: var(--raio-pequeno); padding: 12px 14px; margin: 0 0 14px; }
+.resposta-cliente .resposta-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 6px; }
+.resposta-cliente p { margin: 6px 0; }
+.comparar-legendas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; }
+.comparar-legendas > div { background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 10px; }
+.comparar-legendas p { white-space: pre-wrap; font-size: 14px; }
+.respostas-clientes .grupo-respostas { margin-bottom: 18px; }
+.respostas-clientes .item-resposta { border-top: 1px solid var(--cor-borda-suave); padding-top: 10px; margin-top: 10px; }
+@media (max-width: 760px) { .comparar-legendas { grid-template-columns: 1fr; } }
+.faixa-alerta.faixa-respostas { background: var(--cor-destaque-clara); color: var(--hyper-preto); border-left: 4px solid var(--cor-destaque); }

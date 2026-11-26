@@ -85,7 +85,8 @@ function chip(t) {
     el("span", { class: "chip-icone", "aria-hidden": "true" }, ICONE_FORMATO[t.formato] || "•"),
     t.hora ? el("small", {}, t.hora) : null,
     t.qtdArtes ? el("span", { class: "chip-arte", title: "Tem criativo" }, "🖼 ") : null,
-    dados.respostasCliente?.[t.id] ? el("span", { class: "chip-arte", title: dados.respostasCliente[t.id].status === "aprovado" ? "Cliente aprovou" : `Cliente pediu ajuste: ${dados.respostasCliente[t.id].comentario || ""}` }, dados.respostasCliente[t.id].status === "aprovado" ? "✓ " : "✎ ") : null,
+    t.respostaCliente ? el("span", { class: "chip-arte chip-resposta", title: `Resposta do cliente para ver${t.respostaCliente.comentario ? `: ${t.respostaCliente.comentario}` : ""}` }, "✉ ")
+    : dados.respostasCliente?.[t.id] ? el("span", { class: "chip-arte", title: dados.respostasCliente[t.id].status === "aprovado" ? "Cliente aprovou" : `Cliente pediu ajuste: ${dados.respostasCliente[t.id].comentario || ""}` }, dados.respostasCliente[t.id].status === "aprovado" ? "✓ " : "✎ ") : null,
     t.titulo),
   prox ? el("span", { class: "chip-avancar", role: "button", tabindex: "0", title: `Avançar para: ${rotuloStatusConteudo(prox)}`,
     onClick: (e) => { e.stopPropagation(); mudarEtapa(t, prox); } }, "›") : null);
