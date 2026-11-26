@@ -1,8 +1,52 @@
 // Tráfego pago: contas de anúncio por cliente, verba e diário de manutenções.
-import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, diasAte, linkExterno, vazio, fecharModais } from "../ui.js";
+import { el, formulario, confirmar, avisar, hojeISO, addDias, fmtData, fmtMoeda, diasAte, linkExterno, vazio, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, opcoesClientes, clientesAtivos, marcasDo, porId } from "../db.js";
 import { cabecalho, seloCliente, corCliente } from "./componentes.js";
 import { PLATAFORMAS } from "../constantes.js";
+import { metaDisponivel, metaConectada, conectarMeta, anuncios, somarAnuncios } from "../meta.js";
+
+/** Dias sem manutenção para virar aviso (no Hoje e no cartão do cliente). */
+export const DIAS_MANUTENCAO = 7;
+/** Clientes ativos com conta de anúncio ativa e sem manutenção há mais de DIAS_MANUTENCAO dias: [{ c, dias }] (dias null = nunca). */
+export function manutencoesAtrasadas() {
+  const ids = new Set(dados.contasAds.filter((x) => x.ativo !== false).map((x) => x.clienteId));
+  return clientesAtivos().filter((c) => ids.has(c.id)).map((c) => {
+    const u = dados.manutencoes.filter((m) => m.clienteId === c.id).map((m) => m.data).sort().pop();
+    return { c, dias: u ? -diasAte(u) : null };
+  }).filter((x) => x.dias === null || x.dias > DIAS_MANUTENCAO).sort((a, b) => (b.dias ?? 999) - (a.dias ?? 999));
+}
+
+const fmtNumero = (n) => Number(n || 0).toLocaleString("pt-BR");
+/** Números dos anúncios da Meta de várias contas, no período. Carrega depois; sem conexão, mostra o botão de conectar. */
+export function numerosAnuncios(contas, de, ate, renderizar, { titulo = "" } = {}) {
+  const meta = contas.filter((x) => x.plataforma === "Meta Ads" && x.ativo !== false);
+  if (!meta.length || !metaDisponivel()) return null;
+  if (!metaConectada()) return el("div", { class: "numeros-anuncios vazio-meta" },
+    el("span", { class: "subtitulo" }, "Conecte o Facebook para ver investimento, leads e custo por lead."),
+    el("button", { class: "secundario mini", onClick: async (e) => {
+      e.currentTarget.disabled = true;
+      try { await conectarMeta(); renderizar?.(); } catch (erro) { avisar(erro.message, "erro"); e.currentTarget.disabled = false; }
+    } }, "Conectar Facebook"));
+  const caixa = el("div", { class: "numeros-anuncios" }, el("span", { class: "subtitulo" }, "Carregando números da Meta…"));
+  Promise.allSettled(meta.map((x) => anuncios(x.idConta, de, ate))).then((r) => {
+    const ok = r.filter((x) => x.status === "fulfilled").map((x) => x.value);
+    const erro = r.find((x) => x.status === "rejected")?.reason;
+    if (!ok.length) { caixa.replaceChildren(el("span", { class: "subtitulo" }, `Não consegui ler os anúncios: ${erro?.message || "sem resposta da Meta"}`)); return; }
+    const t = somarAnuncios(ok);
+    const item = (rotulo, valor) => el("div", { class: "numero-anuncio" }, el("strong", {}, valor), el("span", {}, rotulo));
+    caixa.replaceChildren(...[
+      titulo ? el("span", { class: "rotulo-anuncios" }, titulo) : null,
+      item("Investido", fmtMoeda(t.investido)),
+      item("Leads", fmtNumero(t.leads)),
+      item("Custo por lead", t.custoLead == null ? "—" : fmtMoeda(t.custoLead)),
+      t.conversas ? item("Conversas", fmtNumero(t.conversas)) : null,
+      t.conversas ? item("Custo por conversa", fmtMoeda(t.custoConversa)) : null,
+      item("Alcance", fmtNumero(t.alcance)),
+      item("Cliques", fmtNumero(t.cliques)),
+      erro ? el("span", { class: "subtitulo" }, `Uma das contas não respondeu: ${erro.message}`) : null].filter(Boolean));
+  });
+  return caixa;
+}
 
 const linkGerenciador = (conta) => {
   const id = (conta.idConta || "").replace(/\D/g, "");
@@ -101,7 +145,8 @@ export function render({ params, estado, renderizar } = {}) {
           el("span", {}, x.verbaMensal ? `${fmtMoeda(x.verbaMensal)}/mês` : ""),
           linkExterno(linkGerenciador(x), "abrir ↗")))
           : el("button", { class: "link", onClick: () => abrirConta({ clienteId: c.id }) }, "+ cadastrar conta"),
-        el("div", { class: `ultima-manutencao ${dias === null || dias > 7 ? "alerta" : "ok"}` },
+        numerosAnuncios(suas, addDias(hojeISO(), -30), addDias(hojeISO(), -1), renderizar, { titulo: "Últimos 30 dias" }),
+        el("div", { class: `ultima-manutencao ${dias === null || dias > DIAS_MANUTENCAO ? "alerta" : "ok"}` },
           u ? `Última manutenção: ${fmtData(u.data, true)} (${dias === 0 ? "hoje" : `${dias} dia(s)`})` : "Nenhuma manutenção registrada"),
         el("button", { class: "mini", onClick: () => abrirManutencao({ clienteId: c.id, data: hojeISO(), plataforma: suas[0]?.plataforma }) }, "Registrar manutenção"));
     })) : vazio("Marque o serviço Meta Ads ou Google Ads na ficha dos clientes, ou cadastre uma conta de anúncio."),
@@ -114,5 +159,5 @@ export function render({ params, estado, renderizar } = {}) {
         el("span", { class: "resumo-texto" }, m.resultados || m.acoes || ""),
         m.investimento ? el("span", {}, fmtMoeda(m.investimento)) : null)))
       : vazio("Os registros de manutenção aparecem aqui. Registrar uma manutenção conclui a tarefa de tráfego pago do cliente."),
-    el("p", { class: "nota" }, "Métricas automáticas do Meta e do Google Ads (investimento, leads, CPL) entram numa próxima etapa, com a integração das APIs."));
+    el("p", { class: "nota" }, "Os números da Meta vêm direto do Gerenciador de Anúncios (permissão ads_read do Facebook conectado em Minha conta). Google Ads entra numa próxima etapa."));
 }

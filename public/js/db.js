@@ -306,7 +306,6 @@ export async function criar(col, valores) {
   await comPrazo(setDoc(novo, { ...valores, criadoEm: Date.now() }));
   return novo;
 }
-export const novoId = (col) => doc(ref(col)).id;
 export const salvarComId = (col, id, valores) =>
   comPrazo(setDoc(col === "config" ? docConfig(id) : doc(ref(col), id), valores, { merge: true }));
 export const atualizar = (col, id, valores) => comPrazo(updateDoc(doc(ref(col), id), { ...valores, atualizadoEm: Date.now() }));
@@ -479,6 +478,11 @@ export async function salvarSub(caminho, valores, id) {
   const r = id ? doc(refSub(caminho), id) : doc(refSub(caminho));
   await comPrazo(setDoc(r, { ...valores, criadoEm: Date.now() }, { merge: true }), 60);
   return r.id;
+}
+/** Lê um documento de subcoleção pelo id (null se não existe). */
+export async function lerSub(caminho, id) {
+  const d = await comPrazo(getDoc(doc(refSub(caminho), id)), 30);
+  return d.exists() ? { id: d.id, ...d.data() } : null;
 }
 /** Atualiza só os campos dados de um documento de subcoleção (sem mexer em criadoEm). */
 export const atualizarSub = (caminho, id, valores) => comPrazo(updateDoc(doc(refSub(caminho), id), valores));

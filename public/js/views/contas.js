@@ -1,6 +1,6 @@
 // Aba "Contas" da ficha do cliente: redes sociais e canais, com atalhos para agendar (Meta Business Suite, LinkedIn).
 // Igual para todos: cliente sem marcas preenche direto; grupo escolhe a marca (ou o institucional) e preenche cada uma.
-// Contas de anúncio ficam só na aba Tráfego pago.
+// Contas de anúncio ficam só na tela Tráfego pago.
 // A publicação/leitura automática pela API fica para uma etapa futura (exige app aprovado e servidor).
 import { el, formulario, avisar, linkExterno } from "../ui.js";
 import { atualizar, porId } from "../db.js";
@@ -14,8 +14,6 @@ export const linkAgendadorMeta = (c) => c.facebookPageId
   ? `https://business.facebook.com/latest/content_calendar?asset_id=${soNumeros(c.facebookPageId)}`
   : "https://business.facebook.com/latest/content_calendar";
 export const linkLinkedinAdmin = (c) => c.linkedin ? comHttp(c.linkedin).replace(/\/?$/, "/admin/page-posts/published/") : "";
-export const linkGerenciadorMeta = (conta) => soNumeros(conta.idConta) ? `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${soNumeros(conta.idConta)}` : "https://adsmanager.facebook.com/";
-export const linkGoogleAds = () => "https://ads.google.com/aw/overview";
 
 const semProtocolo = (u) => String(u || "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
 const perfil = (v) => String(v || "").replace(/^@/, "").replace(/^https?:\/\/[^/]+\//, "").replace(/\/$/, "");
@@ -29,6 +27,14 @@ function exibir(campo, tipo, valor) {
   if (tipo === "id") return [valor, ""];
   return [semProtocolo(valor), comHttp(valor)];
 }
+
+/** Link do perfil da rede de um post (ex.: rede "Instagram" → https://instagram.com/perfil); "" se não tiver. */
+export function linkDaRede(conta, rede) {
+  const n = normalizarRede(rede);
+  const campo = CAMPOS_REDES.find(([k, rotulo, , tipo]) => tipo !== "id" && (normalizarRede(rotulo).startsWith(n) || normalizarRede(k) === n));
+  return campo ? exibir(campo[0], campo[3], conta?.[campo[0]])[1] : "";
+}
+const normalizarRede = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[^a-z]/g, "");
 
 /** Redes de um post/tarefa: as da marca, se tiver; senão as do cliente. Rede não passa do grupo para a marca. */
 export function redesDe(clienteId, marcaId) {
@@ -77,5 +83,5 @@ export function abaContas(c, estado = {}) {
     cartaoConta(c, marca, marca ? `Redes · ${marca.nome}` : grupo ? `Redes · ${c.nome} (institucional)` : "Redes sociais"),
     !marca && (c.businessManagerId || c.googleAdsId) ? el("p", { class: "nota" },
       [c.businessManagerId ? `Gerenciador de Negócios (Meta): ${c.businessManagerId}` : "", c.googleAdsId ? `Google Ads: ${c.googleAdsId}` : ""].filter(Boolean).join(" · ")) : null,
-    el("p", { class: "nota" }, "Para o atalho de agendar abrir direto na página certa, preencha o ID da página do Facebook. As contas de anúncio ficam na aba Tráfego pago."));
+    el("p", { class: "nota" }, "Para o atalho de agendar abrir direto na página certa, preencha o ID da página do Facebook. As contas de anúncio ficam na tela Tráfego pago."));
 }

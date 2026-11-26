@@ -64,6 +64,7 @@ test("todas as telas abrem sem erro e o menu agrupa a administração", async ({
   }
   await expect(page.locator(".menu-grupo summary")).toHaveText(/Administração/);
   await expect(page.locator("#menu > a")).toHaveCount(6); // Tarefas e Calendário são um item só; Relatórios no menu principal
+  await expect(page.locator("#menu > a", { hasText: "Tráfego pago" }).locator(".menu-selo")).toHaveText("Beta");
   await expect(page.locator("#menu")).not.toContainText("Studio");
   for (const rota of ["lixeira"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
   expect(erros).toEqual([]);
@@ -109,6 +110,7 @@ test("ficha do cliente: cadastro na aba Marca, contrato na janela; marcas com id
   await expect(page).toHaveURL(/#\/clientes\/grupo\/marca\//);
   await expect(page.locator("#conteudo h1")).toHaveText("Marca Um");
   await page.getByRole("tab", { name: "Marca" }).click();
+  await page.locator("details.quadro-marca[data-quadro=ia] > summary").click();
   await page.fill("#marca-tomDeVoz", "Técnico e acolhedor");
   await page.locator(".campo-marca", { has: page.locator("#marca-tomDeVoz") }).getByRole("button", { name: "Salvar" }).click();
   await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/marcas"] || {}).find((m) => m.nome === "Marca Um")?.tomDeVoz)).toBe("Técnico e acolhedor");
@@ -505,6 +507,9 @@ test("celular: barra de baixo com 5 atalhos e o + no meio", async ({ page }) => 
   await expect(itens.nth(2)).toHaveClass(/nav-novo/);
   const caixa = await itens.nth(2).boundingBox();
   expect(Math.abs(caixa.x + caixa.width / 2 - 195)).toBeLessThan(6);
+  await itens.nth(2).click(); // o "+" oferece post, tarefa ou compromisso
+  await expect(page.locator(".modal .escolha-dia button")).toHaveCount(3);
+  await page.keyboard.press("Escape");
   await page.goto("/#/financeiro");
   for (const n of await page.locator(".numero strong").all()) expect(await n.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
 });
@@ -609,7 +614,8 @@ test("portal do cliente: só as marcas dele, aprova, pede ajuste e sugere post",
       tarefas: {
         pa: { titulo: "Post para aprovar", tipo: "Conteúdo", clienteId: "grupo", marcaId: "ma", status: "andamento", statusConteudo: "aprovacao", dataPublicacao: dia(3), prazo: dia(3), copy: "Legenda do post A", checklist: [] },
         pc: { titulo: "Post com ajuste", tipo: "Conteúdo", clienteId: "grupo", marcaId: "ma", status: "andamento", statusConteudo: "aprovacao", dataPublicacao: dia(4), prazo: dia(4), checklist: [] },
-        pb: { titulo: "Post da outra marca", tipo: "Conteúdo", clienteId: "grupo", marcaId: "mb", status: "andamento", statusConteudo: "aprovacao", dataPublicacao: dia(3), prazo: dia(3), checklist: [] }
+        pb: { titulo: "Post da outra marca", tipo: "Conteúdo", clienteId: "grupo", marcaId: "mb", status: "andamento", statusConteudo: "aprovacao", dataPublicacao: dia(3), prazo: dia(3), checklist: [] },
+        pp: { titulo: "Post publicado antigo", tipo: "Conteúdo", clienteId: "grupo", marcaId: "ma", status: "concluido", statusConteudo: "publicado", rede: "Instagram", dataPublicacao: `${MES}-01`, prazo: `${MES}-01`, qtdArtes: 0, artes: [], checklist: [] }
       }
     }
   });
@@ -635,6 +641,13 @@ test("portal do cliente: só as marcas dele, aprova, pede ajuste e sugere post",
   await page.click(".modal button[type=submit]");
   await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "Ideia da Carla")))
     .toMatchObject({ tipo: "Conteúdo", clienteId: "grupo", marcaId: "ma", statusConteudo: "ideia", sugeridoPeloCliente: "Carla Cliente" });
+
+  // Publicado há mais de 7 dias (imagem já apagada pela faxina): aviso com o link do perfil, não um buraco
+  await page.goto("/#/calendario");
+  await page.locator(".portal-post", { hasText: "Post publicado antigo" }).getByRole("button", { name: /Ver post/ }).click();
+  await expect(page.locator(".modal .arte-publicada")).toContainText("já está publicada no Instagram");
+  await expect(page.locator(".modal .arte-publicada a")).toHaveAttribute("href", "https://instagram.com/marcaa");
+  await page.keyboard.press("Escape");
 
   await page.goto("/#/marca");
   await expect(page.locator("#conteudo")).toContainText("Animado e próximo");
@@ -706,6 +719,10 @@ test("Produzir semana: posts planejados viram checklist dentro da tarefa; extras
   await expect(page.locator(".cartao-tarefa", { hasText: "Post planejado A" })).toHaveCount(1);
   await page.locator(".painel-filtros select[aria-label=Formato]").selectOption("Vídeo");
   await expect(page.locator(".cartao-tarefa", { hasText: "Post planejado A" })).toHaveCount(0);
+  await expect(page.locator(".filtros-tarefas .filtro-ativo")).toHaveText(["Só posts ✕", "Formato: Vídeo ✕"]);
+  await page.getByRole("button", { name: "Tirar filtro Formato: Vídeo" }).click();
+  await expect(page.locator(".cartao-tarefa", { hasText: "Post planejado A" })).toHaveCount(1);
+  await page.locator(".painel-filtros select[aria-label=Formato]").selectOption("Vídeo");
   await page.locator(".painel-filtros").getByRole("button", { name: "Limpar filtros" }).click();
   await expect(page.locator(".botao-filtros")).toHaveText("Filtros ▾");
 
@@ -1002,6 +1019,7 @@ test("escopo do cliente e datas comemorativas da Hyper", async ({ page }) => {
 
   // Datas comemorativas ficam na marca; feriados aparecem no calendário de todos
   await page.getByRole("tab", { name: "Marca" }).click();
+  await page.locator("details.quadro-marca[data-quadro=pilares] > summary").click();
   await page.fill("#marca-data-quando", "20/01");
   await page.fill("#marca-data-nome", "Dia do Queijo");
   await page.locator(".datas-marca").getByRole("button", { name: "+ Data" }).click();
@@ -1057,6 +1075,12 @@ test("planejamento: importar JSON coloca os posts do mês no rascunho", async ({
   await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"] || {}).filter((t) => t.clienteId === "loja" && (t.dataPublicacao || "").startsWith("2027-03")).length)).toBe(2);
   const post = await page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "5 dicas de outono"));
   expect(post).toMatchObject({ formato: "Carrossel", pilar: "Educação", copy: "Legenda pronta", tipo: "Conteúdo", statusConteudo: "ideia" });
+  // Importar de novo não duplica: os dois já estão no planejamento
+  await page.keyboard.press("Escape"); // fecha o "Planejamento salvo"
+  await page.getByRole("button", { name: "Importar planejamento (JSON)" }).click();
+  await page.fill("#plano-json", JSON.stringify({ posts: [{ data: "2027-03-02", formato: "Carrossel", titulo: "5 Dicas de Outono" }, { data: "2027-03-20", formato: "Estático", titulo: "Novo" }] }));
+  await expect(page.locator(".previa-briefing")).toContainText("1 post(s) já estão no planejamento");
+  await expect(page.locator(".previa-briefing")).toContainText("1 post(s) de");
 });
 
 test("aprovação de tema: ideia aprovada pelo link vai para a produção", async ({ page, context }) => {
@@ -1103,4 +1127,65 @@ test("importar briefing dentro da marca: escolhe o bloco certo, converte datas e
   expect(loja.cor).toBe("#C98A00");
   expect(loja.escopo).toEqual([{ servico: "Social media", frequencia: "Semanal", quantidade: "3", quem: "Hyper", obs: "" }]);
   expect(loja.servicos).toEqual(["Social media"]);
+});
+
+test("criativos: o post guarda os ids e abre só os dele; posts antigos são indexados", async ({ page }) => {
+  await abrir(page, { extra: { tarefas: {
+    p1: { titulo: "Post um", tipo: "Conteúdo", clienteId: "loja", statusConteudo: "producao", status: "andamento", dataPublicacao: dia(2), checklist: [] },
+    p2: { titulo: "Post dois", tipo: "Conteúdo", clienteId: "loja", statusConteudo: "producao", status: "andamento", dataPublicacao: dia(3), checklist: [] },
+    antigo: { titulo: "Post antigo", tipo: "Conteúdo", clienteId: "loja", statusConteudo: "producao", status: "andamento", dataPublicacao: dia(4), qtdArtes: 1, checklist: [] }
+  } } });
+  const r = await page.evaluate(async () => {
+    const a = await import("/js/arquivos.js");
+    const db = await import("/js/db.js");
+    const img = "data:image/png;base64,iVBORw0KGgo=";
+    await a.salvarArte("loja", "p1", img, { nome: "um-a" });
+    await a.salvarArte("loja", "p1", img, { nome: "um-b" });
+    await a.salvarArte("loja", "p2", img, { nome: "dois" });
+    await db.salvarSub(a.caminhoArtes("loja"), { tarefaId: "antigo", dados: img, origem: "final" }, "arte-antiga");
+    await db.atualizar("tarefas", "antigo", { artes: null, qtdArtes: 1 }); // como um post de antes desta versão
+    await new Promise((ok) => setTimeout(ok, 300)); // a memória recebe a mudança
+    const doP1 = (await a.listarArtesTarefa("loja", "p1")).map((x) => x.nome).sort();
+    const idsP1 = window.__store["espacos/hyper/tarefas"].p1.artes;
+    await a.excluirArte("loja", "p1", idsP1[0]);
+    await a.indexarArtes();
+    return { doP1, idsP1: idsP1.length, depois: window.__store["espacos/hyper/tarefas"].p1, antigo: window.__store["espacos/hyper/tarefas"].antigo.artes };
+  });
+  expect(r.doP1).toEqual(["um-a", "um-b"]);
+  expect(r.idsP1).toBe(2);
+  expect(r.depois).toMatchObject({ qtdArtes: 1 });
+  expect(r.depois.artes).toHaveLength(1);
+  expect(r.antigo).toEqual(["arte-antiga"]);
+});
+
+test("tráfego: aviso de manutenção atrasada no Hoje e números da Meta no cartão e nos Relatórios", async ({ page }) => {
+  // Facebook já conectado neste navegador e a Graph API simulada (cada campo pedido separado)
+  await page.addInitScript(() => sessionStorage.setItem("hyper-meta", JSON.stringify({ token: "t", nome: "Teste", expira: Date.now() + 3600000 })));
+  await abrir(page, { extra: {
+    config: { meta: { appId: "123" } },
+    contasAds: { c1: { clienteId: "loja", plataforma: "Meta Ads", idConta: "act_123", ativo: true } }
+  } });
+  // depois do abrir: a rota da Meta fica por cima das rotas dos mocks
+  const pedidos = [];
+  await page.route("https://graph.facebook.com/**", (route) => {
+    const url = new URL(route.request().url());
+    const campo = url.searchParams.get("fields");
+    pedidos.push(campo);
+    const valores = { spend: "1000.00", reach: "12000", impressions: "30000", clicks: "800",
+      actions: [{ action_type: "lead", value: "50" }, { action_type: "onsite_conversion.messaging_conversation_started_7d", value: "20" }] };
+    return route.fulfill({ json: { data: [{ [campo]: valores[campo] }] } });
+  });
+  await page.goto("/#/hoje");
+  await expect(page.locator(".faixa-alerta", { hasText: "Manutenção de tráfego atrasada" })).toContainText("Loja Exemplo (nunca)");
+
+  await page.goto("/#/trafego");
+  const numeros = page.locator(".cartao-cliente", { hasText: "Loja Exemplo" }).locator(".numeros-anuncios");
+  await expect(numeros).toContainText("R$ 1.000,00");
+  await expect(numeros.locator(".numero-anuncio", { hasText: "Custo por lead" })).toContainText("R$ 20,00");
+  await expect(numeros.locator(".numero-anuncio", { hasText: "Custo por conversa" })).toContainText("R$ 50,00");
+  expect(new Set(pedidos)).toEqual(new Set(["spend", "reach", "impressions", "clicks", "actions"]));
+
+  await page.goto("/#/relatorios/loja");
+  await expect(page.locator("#conteudo h2", { hasText: "Anúncios da Meta" })).toHaveCount(1);
+  await expect(page.locator(".numeros-anuncios")).toContainText("Leads");
 });

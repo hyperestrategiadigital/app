@@ -130,7 +130,7 @@ function blocoMeta() {
   return el("div", { class: "conexao" },
     el("div", { class: "com-acao" }, el("h3", {}, "Facebook e Instagram (relatórios)"),
       metaConectada() ? el("span", { class: "etiqueta ok" }, "Conectado") : el("span", { class: "etiqueta" }, "Não conectado")),
-    el("p", {}, metaConectada() ? ["Conectado como ", el("strong", {}, contaMeta()), ". Os números aparecem na aba Resultados de cada cliente."]
+    el("p", {}, metaConectada() ? ["Conectado como ", el("strong", {}, contaMeta()), ". Os números aparecem em Relatórios (orgânico e anúncios) e no Tráfego pago."]
       : "Conecte o Facebook que administra as páginas dos clientes para ver os resultados. O acesso vale por algumas horas e fica só neste navegador."),
     el("div", { class: "acoes" }, metaConectada()
       ? el("button", { class: "perigo-texto", onClick: () => { desconectarMeta(); avisar("Facebook desconectado."); location.reload(); } }, "Desconectar")

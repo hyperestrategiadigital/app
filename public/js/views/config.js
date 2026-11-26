@@ -228,7 +228,7 @@ function blocoMeta() {
   const li = (...c) => el("li", {}, ...c);
   return el("section", { class: "bloco" },
     el("h2", {}, "Relatórios do Instagram e Facebook"),
-    cfg.appId ? el("p", {}, el("span", { class: "etiqueta ok" }, "Ligado"), " Cada pessoa conecta o próprio Facebook na aba Resultados do cliente (ou em Minha conta).")
+    cfg.appId ? el("p", {}, el("span", { class: "etiqueta ok" }, "Ligado"), " Cada pessoa conecta o próprio Facebook em Minha conta (ou em Relatórios e no Tráfego pago).")
       : el("p", {}, "Para puxar os números das contas e de cada post, crie uma vez um app gratuito na Meta e cole os IDs aqui."),
     el("details", { class: "passo-a-passo", open: !cfg.appId || !cfg.configId },
       el("summary", {}, "Como configurar o app da Meta (tipo Negócio)"),
@@ -238,9 +238,9 @@ function blocoMeta() {
         li("Se aparecer o aviso \"requires advanced access\": clique em Get Advanced Access e peça o acesso avançado de ", el("code", {}, "public_profile"), " (é automático)."),
         li("Em Configurações do app → Básico: Domínios do app = ", el("code", {}, location.hostname), ". Salve."),
         li("Login do Facebook para Empresas → Configurações (Configurations) → Criar configuração. Nome: Relatórios Hyper. Variação: Login geral. Token: Token de acesso do usuário. Permissões: ",
-          el("code", {}, "pages_show_list, pages_read_engagement, read_insights, instagram_basic, instagram_manage_insights, business_management"), ". Crie e copie o ID da configuração."),
+          el("code", {}, "pages_show_list, pages_read_engagement, read_insights, instagram_basic, instagram_manage_insights, business_management, ads_read"), " (ads_read traz os números dos anúncios no Tráfego pago; se a configuração já existe, edite e acrescente). Crie e copie o ID da configuração."),
         li("Em Funções do app → Funções, adicione como Testadoras as pessoas da equipe que vão ver os relatórios (o app pode ficar em modo de desenvolvimento)."),
-        li("Cole o App ID e o ID da configuração aqui embaixo e salve. Depois: um cliente → aba Resultados → Conectar."))),
+        li("Cole o App ID e o ID da configuração aqui embaixo e salve. Depois: Minha conta (clique no seu nome) → Conectar Facebook."))),
     el("div", { class: "form-grade" },
       el("label", { class: "campo metade", for: "meta-app" }, el("span", {}, "App ID"), appId),
       el("label", { class: "campo metade", for: "meta-config" }, el("span", {}, "ID da configuração (Login para Empresas)"), configId)),

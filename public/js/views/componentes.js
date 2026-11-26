@@ -135,7 +135,7 @@ export function abrirTarefa(tarefa = {}) {
     editando ? el("button", {
       type: "button", class: "secundario mini", title: "Abre um post novo igual a este para você mudar a data",
       onClick: () => {
-        const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, qtdComentarios, exemplo, ...copia } = { ...(porId("tarefas", tarefa.id) || tarefa), ...(ultimoForm()?.lerValores?.() || {}) };
+        const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, artes, qtdComentarios, exemplo, ...copia } = { ...(porId("tarefas", tarefa.id) || tarefa), ...(ultimoForm()?.lerValores?.() || {}) };
         fecharModais();
         abrirTarefa({ ...copia, titulo: `${copia.titulo} (cópia)`, statusConteudo: "ideia", status: "a_fazer", checklist: (copia.checklist || []).map((i) => ({ ...i, feito: false })) });
       }
@@ -420,7 +420,7 @@ async function copiarSemana(tarefa, posts) {
   if (!v?.semana) return;
   const delta = Math.round((new Date(`${v.semana}T12:00:00`) - new Date(`${tarefa.semanaInicio}T12:00:00`)) / 86400000);
   for (const p of posts) {
-    const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, qtdComentarios, exemplo, ...copia } = p;
+    const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, artes, qtdComentarios, exemplo, ...copia } = p;
     const data = addDias(p.dataPublicacao || p.prazo, delta);
     await criar("tarefas", { ...copia, dataPublicacao: data, prazo: prazoDoPost(data, p.formato, hojeISO()), statusConteudo: "ideia", status: "a_fazer",
       checklist: (p.checklist || []).map((i) => ({ ...i, feito: false })) });

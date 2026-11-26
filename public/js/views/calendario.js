@@ -43,8 +43,8 @@ function chipCompromisso({ c }) {
   }, el("span", { class: "chip-icone", "aria-hidden": "true" }, "◷"), rotuloCompromisso(c));
 }
 
-/** Clique num dia no modo "Tudo": escolhe entre post, tarefa e compromisso. */
-function escolherNoDia(data, clienteId) {
+/** Clique num dia no modo "Tudo" (e o "+" do celular): escolhe entre post, tarefa e compromisso. */
+export function escolherNoDia(data, clienteId) {
   const fechar = abrirModal("O que você quer criar?", el("div", { class: "escolha-dia" },
     pode("conteudo") ? el("button", { class: "destaque", onClick: () => { fechar(); novoPost({ data, clienteId }); } }, "▣ Post de conteúdo") : null,
     el("button", { onClick: () => { fechar(); abrirTarefa({ prazo: data, clienteId }); } }, "✓ Tarefa (entrega no dia)"),
@@ -174,8 +174,15 @@ export function topoTarefas(estado, renderizar, { calendario = false } = {}) {
       onInput: (e) => { estado.busca = e.target.value; clearTimeout(estado.tBusca); estado.tBusca = setTimeout(() => { renderizar(); document.getElementById("busca-tarefas")?.focus(); }, 300); } }),
     el("button", { class: `secundario mini botao-filtros ${nFiltros ? "com-filtro" : ""}`, "aria-expanded": String(!!estado.filtrosAbertos),
       onClick: () => { estado.filtrosAbertos = !estado.filtrosAbertos; renderizar(); } }, `Filtros${nFiltros ? ` (${nFiltros})` : ""} ▾`),
-    estado.cliente ? el("span", { class: "etiqueta" }, porId("clientes", estado.cliente)?.nome || "") : null,
-    estado.responsavel ? el("span", { class: "etiqueta" }, estado.responsavel) : null);
+    // Uma etiqueta para cada filtro ligado, com ✕ para tirar (nada fica filtrado sem aparecer)
+    ...[
+      estado.camada !== "tudo" ? [{ conteudo: "Só posts", tarefas: "Só tarefas", compromissos: "Só compromissos" }[estado.camada], () => { estado.camada = "tudo"; }] : null,
+      estado.cliente ? [porId("clientes", estado.cliente)?.nome || "Cliente", () => { estado.cliente = ""; estado.marca = null; }] : null,
+      estado.marca != null ? [estado.marca ? porId("marcas", estado.marca)?.nome || "Marca" : "Institucional do grupo", () => { estado.marca = null; }] : null,
+      estado.responsavel ? [`Responsável: ${estado.responsavel === eu.nome ? "eu" : estado.responsavel}`, () => { estado.responsavel = ""; }] : null,
+      estado.formato ? [`Formato: ${estado.formato}`, () => { estado.formato = ""; }] : null
+    ].filter(Boolean).map(([texto, tirar]) => el("button", { type: "button", class: "filtro-ativo", "aria-label": `Tirar filtro ${texto}`,
+      onClick: () => { tirar(); renderizar(); } }, texto, el("span", { "aria-hidden": "true" }, " ✕"))));
 
   return [
     cabecalho("Tarefas", atrasadas ? `${atrasadas} atrasada(s)` : "Tudo em dia", acoesMes, novo),
