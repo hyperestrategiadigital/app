@@ -1,7 +1,7 @@
 // Aprovação do cliente por link: o cliente abre aprovar.html?t=<token> (sem login), vê os posts do mês
 // e aprova ou pede ajuste em cada um. As respostas voltam para os posts no app.
 // espacos/hyper/aprovacoes/{token}            fotografia dos posts (o link vale 60 dias)
-//                       /{token}/artes/{post}   imagem de cada post (uma por documento, por causa do limite de 1 MB)
+//                       /{token}/artes/{post}   imagens de cada post, na ordem do post: {post}, {post}__1, {post}__2… (uma por documento, limite de 1 MB)
 //                       /{token}/respostas/{post} { status: "aprovado" | "ajuste", comentario, nome, em, copyNova? }
 // copyNova: a legenda editada pelo próprio cliente na revisão. Não troca a copy sozinha: toda resposta fica no post
 // como `respostaCliente` (pendente) até a equipe ver no Hoje → "Respostas dos clientes" e decidir (usar a legenda
@@ -10,7 +10,7 @@ import { el, avisar, abrirModal, fmtData } from "./ui.js";
 import { dados, porId, salvarComId, salvarSub, listarSub, ouvirSub, excluirSub, atualizarSub, espacoInfo, identidade, atualizar, registrarAtividade } from "./db.js";
 import { eu, pode } from "./permissoes.js";
 import { postsDoMes, dataPost, nomeMes } from "./exportacao.js";
-import { artePrincipal, comprimirImagem } from "./arquivos.js";
+import { artesNaOrdem, comprimirImagem } from "./arquivos.js";
 import { statusDaEtapa, rotuloObjetivo } from "./constantes.js";
 
 const DIAS_VALIDADE = 60;
@@ -35,24 +35,25 @@ export async function gerarLinkAprovacao(clienteId, mes, marcaId, { lista = null
   const token = atual?.id || novoToken();
   const fechar = abrirModal("Link de aprovação", el("p", { class: "subtitulo" }, "Preparando o link…"));
   try {
-    // Uma imagem por post (o criativo final tem preferência), menor que a original: o link abre bem mais rápido no celular
-    const artes = await artePrincipal(posts);
-    for (const id of Object.keys(artes)) artes[id] = await comprimirImagem(artes[id], { maxLado: 1080, qualidade: 0.75 }).catch(() => artes[id]);
+    // Todas as imagens de cada post, na ordem do post (carrossel), menores que as originais: o link abre rápido no celular
+    const artes = await artesNaOrdem(posts);
+    for (const id of Object.keys(artes)) artes[id] = await Promise.all(artes[id].map((d) => comprimirImagem(d, { maxLado: 1080, qualidade: 0.75 }).catch(() => d)));
     await salvarComId("aprovacoes", token, {
       clienteId, marcaId: marcaId || "", mes, rotulo: rotulo || "", nome: marca.nome || "", cor: marca.cor || marca.paleta?.[0] || "",
       posts: posts.map((t) => ({
         id: t.id, titulo: t.titulo || "", formato: t.formato || "", rede: t.rede || "", data: dataPost(t), hora: t.hora || "",
         tema: (t.statusConteudo || "ideia") === "ideia", // ainda é ideia: o cliente aprova o tema antes da produção
         objetivo: rotuloObjetivo(t.objetivo), roteiro: t.roteiro || "", copy: t.copy || "", linkCanva: t.linkCanva || "",
-        temArte: !!artes[t.id] // a página só busca a imagem de quem tem
+        temArte: !!artes[t.id]?.length, qtdArtes: artes[t.id]?.length || 0 // a página só busca as imagens de quem tem
       })),
       postIds: posts.map((t) => t.id),
       emailUrl: espacoInfo.emailUrl || "",
       criadoPor: eu.nome || eu.email, atualizadoEm: Date.now(), criadoEm: atual?.criadoEm || Date.now(),
       expiraEm: Date.now() + DIAS_VALIDADE * 86400000
     });
-    for (const [tarefaId, dadosArte] of Object.entries(artes)) {
-      await salvarSub(["aprovacoes", token, "artes"], { dados: dadosArte }, tarefaId);
+    // Uma imagem por documento (limite de 1 MB por documento): a 1ª com o id do post, as outras <post>__<n>
+    for (const [tarefaId, lista] of Object.entries(artes)) {
+      for (const [i, dadosArte] of lista.entries()) await salvarSub(["aprovacoes", token, "artes"], { dados: dadosArte }, i ? `${tarefaId}__${i}` : tarefaId);
     }
     // Link refeito: as respostas antigas saem (o cliente responde de novo sobre a versão atual)
     if (atual) for (const r of await listarSub(["aprovacoes", token, "respostas"]).catch(() => [])) {

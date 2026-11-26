@@ -12,7 +12,9 @@ export const caminhoArtes = (clienteId) => ["clientes", clienteId || "sem-client
 // sem baixar as imagens do cliente inteiro. Posts antigos sem `artes` caem na leitura da subcoleção
 // (e `indexarArtes()` grava os ids neles na primeira vez que um administrador entra).
 const cache = new Map(); // tarefaId -> Promise<lista de artes>
-const maisNovas = (a, b) => (a.origem === "final" ? 0 : 1) - (b.origem === "final" ? 0 : 1) || (b.criadoEm || 0) - (a.criadoEm || 0);
+// Ordem dos criativos = a ordem de `artes` no post (a ordem em que foram anexados, ou a que a equipe arrumou):
+// é a ordem do carrossel, do PDF e do link de aprovação. Posts antigos sem `artes`: do mais antigo para o mais novo.
+const naOrdemAnexada = (a, b) => (a.criadoEm || 0) - (b.criadoEm || 0);
 
 /** Todos os criativos de um cliente (só para mover entre clientes e para posts antigos sem `artes`). */
 export const listarArtesCliente = (clienteId) => listarSub(caminhoArtes(clienteId), { marcas: marcasRestritas() ? eu.marcas : null });
@@ -22,13 +24,30 @@ export function listarArtesTarefa(clienteId, tarefaId, { recarregar = false } = 
     const post = porId("tarefas", tarefaId);
     const ler = Array.isArray(post?.artes)
       ? Promise.all(post.artes.map((id) => lerSub(caminhoArtes(clienteId), id).catch(() => null))).then((l) => l.filter(Boolean))
-      : listarArtesCliente(clienteId).then((l) => l.filter((a) => a.tarefaId === tarefaId));
-    cache.set(tarefaId, ler.then((l) => l.sort(maisNovas)).catch((e) => { cache.delete(tarefaId); throw e; }));
+      : listarArtesCliente(clienteId).then((l) => l.filter((a) => a.tarefaId === tarefaId).sort(naOrdemAnexada));
+    cache.set(tarefaId, ler.catch((e) => { cache.delete(tarefaId); throw e; }));
   }
   return cache.get(tarefaId);
 }
 
-/** Criativo principal de cada post da lista (PDF e link de aprovação): { tarefaId: dataURL }. */
+/** Todos os criativos de cada post da lista, na ordem do post (link de aprovação): { tarefaId: [dataURL, …] }. */
+export async function artesNaOrdem(posts) {
+  const pares = await Promise.all(posts.filter((t) => t.qtdArtes > 0)
+    .map(async (t) => [t.id, (await listarArtesTarefa(t.clienteId, t.id).catch(() => [])).map((a) => a.dados).filter(Boolean)]));
+  return Object.fromEntries(pares.filter(([, l]) => l.length));
+}
+
+/** Muda a posição de um criativo no post (delta -1 = para a esquerda, +1 = para a direita). */
+export async function moverArte(clienteId, tarefaId, id, delta) {
+  const ids = (await listarArtesTarefa(clienteId, tarefaId)).map((a) => a.id);
+  const i = ids.indexOf(id), j = i + delta;
+  if (i < 0 || j < 0 || j >= ids.length) return;
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  cache.delete(tarefaId);
+  await gravarIds(tarefaId, ids);
+}
+
+/** Primeiro criativo de cada post da lista (a capa, para o PDF): { tarefaId: dataURL }. */
 export async function artePrincipal(posts) {
   const pares = await Promise.all(posts.filter((t) => t.qtdArtes > 0)
     .map(async (t) => [t.id, (await listarArtesTarefa(t.clienteId, t.id).catch(() => []))[0]?.dados]));
@@ -66,7 +85,7 @@ export async function indexarArtes() {
     const artes = await listarSub(caminhoArtes(clienteId)).catch(() => null);
     if (!artes) continue;
     for (const t of semIds.filter((x) => (x.clienteId || "") === clienteId)) {
-      await gravarIds(t.id, artes.filter((a) => a.tarefaId === t.id).sort(maisNovas).map((a) => a.id)).catch(() => {});
+      await gravarIds(t.id, artes.filter((a) => a.tarefaId === t.id).sort(naOrdemAnexada).map((a) => a.id)).catch(() => {});
     }
   }
 }

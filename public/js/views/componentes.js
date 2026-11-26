@@ -12,7 +12,7 @@ import { abrirAssistenteIA } from "./assistenteIA.js";
 import { camposDaResposta } from "../ia.js";
 import { postsPorSemana } from "./escopo.js";
 import { producaoDoPost, postsDaProducao, roteirosDaProducao, postsAtrasando } from "../producao.js";
-import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
+import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem, moverArte } from "../arquivos.js";
 import { abrirCompromisso } from "../compromissos.js";
 import { responsaveis, responsavelPadrao } from "../agenda.js";
 import { linkAgendadorMeta, linkLinkedinAdmin, redesDe } from "./contas.js";
@@ -448,10 +448,15 @@ function secaoCriativos(tarefa) {
   const carregar = async () => {
     try {
       const artes = await listarArtesTarefa(tarefa.clienteId, tarefa.id);
-      lista.replaceChildren(...(artes.length ? artes.map((a) => el("figure", { class: "criativo" },
-        el("a", { href: a.dados, download: `${tarefa.titulo}.jpg`, title: "Baixar" }, el("img", { src: a.dados, alt: a.nome || "Criativo" })),
-        el("figcaption", {}, "Criativo final"),
-        el("button", { type: "button", class: "icone", "aria-label": "Remover criativo", onClick: async () => {
+      // Na ordem do carrossel (é a ordem que o cliente vê no link de aprovação); as setas mudam a posição
+      const mover = async (a, delta) => { await moverArte(tarefa.clienteId, tarefa.id, a.id, delta); carregar(); };
+      lista.replaceChildren(...(artes.length ? artes.map((a, i) => el("figure", { class: "criativo" },
+        el("a", { href: a.dados, download: `${tarefa.titulo}-${i + 1}.jpg`, title: "Baixar" }, el("img", { src: a.dados, alt: a.nome || `Criativo ${i + 1}` })),
+        el("figcaption", {}, artes.length > 1 ? `${i + 1} de ${artes.length}` : "Criativo final",
+          artes.length > 1 ? el("span", { class: "ordem-criativo" },
+            el("button", { type: "button", class: "icone", "aria-label": `Mover o criativo ${i + 1} para a esquerda`, disabled: i === 0, onClick: () => mover(a, -1) }, "←"),
+            el("button", { type: "button", class: "icone", "aria-label": `Mover o criativo ${i + 1} para a direita`, disabled: i === artes.length - 1, onClick: () => mover(a, 1) }, "→")) : null),
+        el("button", { type: "button", class: "icone remover-criativo", "aria-label": "Remover criativo", onClick: async () => {
           if (await confirmar("Remover este criativo do post?")) { await excluirArte(tarefa.clienteId, tarefa.id, a.id); carregar(); }
         } }, "✕")))
         : [el("p", { class: "subtitulo" }, "Nenhum criativo anexado. Depois de finalizar no Canva, baixe e anexe aqui.")]));
