@@ -7,6 +7,7 @@ import {
   configComercial, servicosCatalogo, servicoPorNome, SERVICOS_PADRAO, MODELO_CONTRATO, textoContrato, documentoContrato,
   abrirParaPDF, baixarWord, totaisOrcamento, documentoOrcamento, despesasFixas, textoVencimento, textoPagamento, entregasDe
 } from "../comercial.js";
+
 import { garantirMes } from "../recorrencias.js";
 
 const proximoMes = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 1).toISOString().slice(0, 10); };

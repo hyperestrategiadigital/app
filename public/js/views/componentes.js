@@ -4,7 +4,7 @@ import { seloResposta, gerarLinkAprovacao } from "../aprovacoes.js";
 import { avisarMencao } from "../emails.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, normalizar, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
-import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo, desfazerExclusao, listarAtividade, registrarAtividade, excluirAtividade } from "../db.js";
+import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, marcasDo, desfazerExclusao, listarAtividade, registrarAtividade, excluirAtividade } from "../db.js";
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, FORMATO_PADRAO, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa, MODELOS_PADRAO, comAtual, prazoDoPost } from "../constantes.js";
 import { pilaresDe } from "../ia.js";
 import { identidade } from "../db.js";
@@ -13,7 +13,7 @@ import { camposDaResposta } from "../ia.js";
 import { producaoDoPost, postsDaProducao, roteirosDaProducao, postsAtrasando } from "../producao.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
 import { abrirCompromisso } from "../compromissos.js";
-import { configEquipe, responsaveis, responsavelPadrao } from "../agenda.js";
+import { responsaveis, responsavelPadrao } from "../agenda.js";
 import { linkAgendadorMeta, linkLinkedinAdmin, redesDe } from "./contas.js";
 
 /** Nomes da equipe (Ajustes → Equipe) + quem já aparece nas tarefas. */

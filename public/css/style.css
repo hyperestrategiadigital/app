@@ -423,7 +423,6 @@ a.cartao-cliente:hover { transform: translateY(-2px); }
   box-shadow: var(--sombra-forte); z-index: 100; transition: opacity 0.25s ease, transform 0.25s ease; font-weight: 500; max-width: calc(100vw - 32px);
 }
 .aviso.visivel { opacity: 1; transform: translate(-50%, 0); }
-.aviso-erro { background: var(--cor-alerta); }
 .aviso { display: flex; align-items: center; gap: 16px; }
 .aviso .desfazer {
   background: none; border: 0; padding: 0; color: var(--cor-destaque); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline;
@@ -553,20 +552,10 @@ a.cartao-cliente:hover { transform: translateY(-2px); }
 .campo-marca { margin-top: 8px; }
 .campo-marca .com-acao { margin: 16px 0 6px; }
 .campo-marca h3 { margin: 0; }
-
-/* ---------------- Criar ---------------- */
-.criar-grade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-.criar-grade .bloco h2:first-child { margin-top: 0; }
 .prompt-final { margin-top: 12px; }
 .prompt-final summary { cursor: pointer; color: var(--cor-primaria); font-weight: 600; }
 .prompt-final pre { white-space: pre-wrap; background: var(--cor-fundo); padding: 10px; border-radius: var(--raio-pequeno); font-size: 12px; }
 .galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
-.miniatura { padding: 0; background: none; border: 3px solid transparent; border-radius: var(--raio-pequeno); overflow: hidden; }
-.miniatura:hover { background: none; border-color: var(--hyper-gelo); }
-.miniatura.ativa { border-color: var(--cor-destaque); }
-.miniatura img { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
-.previa-imagem { display: block; width: 100%; max-height: 420px; object-fit: contain; background: var(--cor-fundo); border-radius: var(--raio-pequeno); margin-bottom: 12px; }
-.link-canva { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--cor-borda); }
 
 /* Criativos anexados no post */
 .criativos-post { margin-top: 16px; }
@@ -579,7 +568,6 @@ a.cartao-cliente:hover { transform: translateY(-2px); }
 .chip-arte { font-size: 10px; }
 
 @media (max-width: 900px) {
-  .criar-grade { grid-template-columns: 1fr; }
   .plano-calendario { overflow-x: auto; }
   .plano-grade { min-width: 860px; }
   .colunas-hoje, .ficha { grid-template-columns: 1fr; }
@@ -637,8 +625,6 @@ a.cartao-cliente:hover { transform: translateY(-2px); }
 .membro-acessos { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .avatar.grande { width: 42px; height: 42px; font-size: 15px; }
 img.avatar { object-fit: cover; padding: 0; }
-.avatar.enorme { width: 96px; height: 96px; font-size: 32px; }
-.destaque-admin { align-self: flex-start; }
 @media (max-width: 760px) { .faixa-topo { margin: 12px 14px 0; } }
 
 /* ---------------- Marcas ---------------- */
@@ -650,7 +636,6 @@ img.avatar { object-fit: cover; padding: 0; }
 .marcas-seletor .legenda-item small { margin-left: 4px; }
 .marca-cabeca { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
 .marca-cabeca .campo { flex: 1; min-width: 200px; }
-.lista-fundir { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 6px; }
 
 /* ---------------- Minha conta e Usuários ---------------- */
 .conta-perfil { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
@@ -760,11 +745,6 @@ img.avatar { object-fit: cover; padding: 0; }
 .comentario-topo .link { margin-left: auto; font-size: 12px; }
 .mudanca { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--cor-texto-suave); padding-left: 32px; }
 
-/* ---------------- Creators (em breve) ---------------- */
-.menu-selo { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--cor-destaque); color: var(--hyper-preto); padding: 1px 6px; border-radius: 99px; font-weight: 700; }
-.em-breve h2 { margin-top: 10px; }
-.lista-em-breve { display: grid; gap: 8px; padding-left: 18px; }
-
 /* ---------------- Página de aprovação do cliente ---------------- */
 .pagina-aprovacao { background: var(--cor-fundo); }
 .aprovacao-topo { background: var(--hyper-roxo); padding: 14px 20px; }
@@ -796,7 +776,6 @@ img.avatar { object-fit: cover; padding: 0; }
 .ficha-titulo { display: flex; align-items: center; gap: 14px; }
 .logo-ficha { width: 56px; height: 56px; object-fit: contain; border-radius: var(--raio-pequeno); background: var(--cor-superficie); }
 .marca-etiqueta { border-left: 3px solid var(--selo); display: inline-flex; align-items: center; gap: 4px; }
-.legenda-grupo { opacity: 0.8; border-style: dashed; }
 
 /* Cartão do cliente: marcas do grupo quebram linha dentro da caixa */
 .cartao-cliente { min-width: 0; overflow: hidden; }
@@ -911,26 +890,6 @@ a.marca:focus-visible, .logo-movel:focus-visible { outline: 2px solid var(--hype
 .paleta-leitura, .portal-redes { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 @media (max-width: 760px) { .portal-artes img { height: 200px; } }
 
-/* Studio */
-.studio-selo { background: var(--cor-primaria-clara); color: var(--hyper-roxo); }
-.studio-kit { border-left: 4px solid var(--selo); margin-bottom: 16px; }
-.studio-kit p { margin: 6px 0 0; }
-.studio-kit-topo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.studio-kit .paleta-leitura { margin: 0; }
-.studio-modos { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-.studio-modo {
-  display: grid; gap: 6px; padding: 20px; border-radius: var(--raio); background: var(--cor-superficie);
-  border: 1px solid var(--hyper-gelo); border-top: 4px solid var(--selo); color: var(--cor-texto); text-decoration: none;
-}
-.studio-modo:hover { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); }
-.studio-modo strong { font-family: var(--fonte-titulo); font-style: italic; font-size: 22px; color: var(--hyper-roxo); }
-.studio-modo span:last-child { color: var(--cor-texto-suave); font-size: 14px; }
-.studio-icone { font-size: 30px; }
-.tela-studio .bloco { margin-bottom: 16px; }
-.grade-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 14px; }
-.studio-dicas { margin: 6px 0 0; padding-left: 18px; line-height: 1.6; }
-.studio-referencia { max-height: 420px; border-radius: var(--raio-pequeno); }
-
 /* Assinatura do produto (o logo é sempre só o da Hyper; "Hyper Studio" vai em texto) */
 .login-caixa h1 { font-weight: 400; }
 .login-caixa h1 strong { font-weight: 800; }
@@ -962,9 +921,6 @@ details.grupo-dia:not([open]) > summary h3 { margin-bottom: 4px; }
 .faixa-info, .faixa-ok { margin: 0 0 14px; padding: 10px 14px; border-radius: var(--raio-pequeno); font-size: 14px; }
 .faixa-info { background: var(--cor-primaria-clara); color: var(--hyper-roxo); }
 .faixa-ok { background: rgba(30, 142, 78, 0.1); color: var(--cor-confirmar); font-weight: 600; margin-top: 10px; }
-
-/* Botão "Criar copy" junto do campo da copy */
-.acoes-campo { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 -4px; }
 
 /* Card de tarefa/post: mais respiro entre seções e campos */
 .modal-largo .form-grade { gap: 16px 18px; }
@@ -1007,7 +963,6 @@ details.grupo-dia:not([open]) > summary h3 { margin-bottom: 4px; }
 .botoes-escolha.mini button { padding: 6px 12px; font-size: 13px; }
 .pedido-ia { white-space: pre-wrap; max-height: 280px; overflow: auto; font-size: 12px; background: var(--cor-fundo); border-radius: var(--raio-pequeno); padding: 12px; }
 .passo-ia textarea { width: 100%; }
-.campos-extra-ia .campo { margin-top: 10px; }
 .medidor-marca { display: grid; gap: 6px; padding: 10px 14px; border-radius: var(--raio-pequeno); background: var(--cor-fundo); margin-bottom: 12px; }
 .medidor-topo { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 13px; }
 .medidor-barra { height: 8px; border-radius: 99px; background: var(--hyper-gelo); overflow: hidden; }
@@ -1017,5 +972,4 @@ details.grupo-dia:not([open]) > summary h3 { margin-bottom: 4px; }
 .bloco-ia-marca { margin-bottom: 18px; }
 .aprendizados ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
 .aprendizados li { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
-.kit-ia ol { padding-left: 18px; line-height: 1.6; }
 #manual-hyper { width: 100%; font-family: inherit; line-height: 1.5; margin-top: 10px; }

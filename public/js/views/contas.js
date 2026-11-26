@@ -13,7 +13,6 @@ const comHttp = (u) => (!u ? "" : /^https?:\/\//i.test(u) ? u : `https://${u}`);
 export const linkAgendadorMeta = (c) => c.facebookPageId
   ? `https://business.facebook.com/latest/content_calendar?asset_id=${soNumeros(c.facebookPageId)}`
   : "https://business.facebook.com/latest/content_calendar";
-export const linkInstagram = (c) => c.instagram ? `https://instagram.com/${c.instagram.replace(/^@/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//, "")}` : "";
 export const linkLinkedinAdmin = (c) => c.linkedin ? comHttp(c.linkedin).replace(/\/?$/, "/admin/page-posts/published/") : "";
 export const linkGerenciadorMeta = (conta) => soNumeros(conta.idConta) ? `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${soNumeros(conta.idConta)}` : "https://adsmanager.facebook.com/";
 export const linkGoogleAds = () => "https://ads.google.com/aw/overview";

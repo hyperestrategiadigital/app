@@ -103,7 +103,7 @@ test("administrador e dono liberam acessos", async () => {
   await assertSucceeds(updateDoc(doc(como("dono"), `${E}/membros/basico`), { papel: "admin" }));
 });
 
-test("básico: vê clientes, marcas e tarefas; não vê valores, contas de anúncio nem a chave da OpenAI", async () => {
+test("básico: vê clientes, marcas e tarefas; não vê valores nem contas de anúncio", async () => {
   for (const c of ["clientes/c1", "marcas/m1", "tarefas/t1", "tarefasArquivo/t0", "config/equipe", "recorrencias/r1"]) await assertSucceeds(ler("basico", `${E}/${c}`));
   for (const c of ["contratos/c1", "financeiro/f1", "orcamentos/o1", "contasAds/a1", "manutencoes/x1", "config/openai", "clientes/c1/artes/a1"])
     await assertFails(ler("basico", `${E}/${c}`));
@@ -115,10 +115,10 @@ test("básico: vê clientes, marcas e tarefas; não vê valores, contas de anún
   await assertFails(gravar("basico", `${E}/config/equipe`));
 });
 
-test("conteúdo: edita clientes e marcas, lê a chave da OpenAI e os criativos; não vê valores", async () => {
+test("conteúdo: edita clientes, marcas e criativos; não vê valores nem a chave antiga da OpenAI", async () => {
   await assertSucceeds(gravar("conteudo", `${E}/clientes/c1`));
   await assertSucceeds(gravar("conteudo", `${E}/marcas/m2`, { nome: "Nova", clienteId: "c1" }));
-  await assertSucceeds(ler("conteudo", `${E}/config/openai`));
+  await assertFails(ler("conteudo", `${E}/config/openai`));
   await assertSucceeds(gravar("conteudo", `${E}/clientes/c1/artes/a2`, { dados: "data:" }));
   await assertFails(gravar("conteudo", `${E}/config/openai`, { chave: "sk-outra" }));
   for (const c of ["contratos/c1", "financeiro/f1", "contasAds/a1"]) await assertFails(ler("conteudo", `${E}/${c}`));
@@ -144,19 +144,24 @@ test("administrador: rotinas, arquivo, configurações e tudo o mais", async () 
   await assertSucceeds(gravar("admin", `${E}/recorrencias/r2`, { modelo: "cobranca" }));
   await assertSucceeds(gravar("admin", `${E}/tarefasArquivo/t9`, { titulo: "Arquivada" }));
   await assertSucceeds(deleteDoc(doc(como("admin"), `${E}/tarefas/t1`)));
-  await assertSucceeds(gravar("admin", `${E}/config/openai`, { chave: "sk-nova" }));
+  await assertFails(ler("admin", `${E}/config/openai`)); // chave antiga: ninguém lê pelo app
   await assertSucceeds(ler("dono", `${E}/contratos/c1`));
 });
 
-test("coisas pessoais: só a própria pessoa", async () => {
+test("coisas pessoais: só a própria pessoa, e só da equipe", async () => {
   await assertSucceeds(ler("basico", `${E}/pessoal/basico/config/agenda`));
+  await assertFails(gravar("pendente", `${E}/pessoal/pendente/config/agenda`));
   await assertFails(ler("admin", `${E}/pessoal/basico/config/agenda`));
   await assertFails(gravar("conteudo", `${E}/pessoal/basico/config/agenda`));
 });
 
-test("backup antigo users/{uid}: só o dono da conta", async () => {
-  await assertSucceeds(gravar("basico", "users/basico/clientes/c1"));
-  await assertFails(ler("admin", "users/basico/clientes/c1"));
+test("fora do espaço da Hyper: nada (backup antigo users/{uid} e espaços novos)", async () => {
+  await assertFails(gravar("basico", "users/basico/clientes/c1"));
+  await assertFails(ler("basico", "users/basico/clientes/c1"));
+  await assertFails(setDoc(doc(como("estranho"), "espacos/outro"), { dono: "estranho" }));
+  await assertFails(ler("estranho", "espacos/outro"));
+  await assertFails(setDoc(doc(como("estranho"), "espacos/hyper/erros/e1"), { msg: "x", detalhe: "", rota: "", uid: "estranho", email: "", navegador: "", em: 1 }));
+  await assertFails(setDoc(doc(como("novo9"), `${E}/membros/novo9`), { nome: "Novo", papel: "basico", permissoes: [], status: "pendente", lixo: "x".repeat(100) }));
 });
 
 test("convite: a pessoa convidada entra liberada, exatamente com o que o administrador definiu", async () => {

@@ -3,7 +3,7 @@
 // lê a resposta colada de volta (marcadores como [LEGENDA]). Camadas, sempre nesta ordem:
 //   papel → manual da Hyper → marca → exemplos aprovados → o conteúdo → regras do formato/rede → como responder → checklist.
 import { dados, porId, identidade, marcasDo } from "./db.js";
-import { TIPO_CONTEUDO, FORMATO_VIDEO } from "./constantes.js";
+import { TIPO_CONTEUDO } from "./constantes.js";
 import { MANUAL_PADRAO } from "./manual.js";
 
 /* ---------------- Básicos ---------------- */
@@ -283,4 +283,3 @@ export function ajustesPedidos(clienteId, marcaId = "", dias = 90) {
     ]).filter((x) => x && x.texto && x.em >= limite).sort((a, b) => b.em - a.em);
 }
 
-export const ehVideo = (formato) => formato === FORMATO_VIDEO;

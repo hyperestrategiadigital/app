@@ -63,10 +63,9 @@ test("todas as telas abrem sem erro e o menu agrupa a administração", async ({
     await expect(page.locator("#conteudo h1").first()).toBeVisible();
   }
   await expect(page.locator(".menu-grupo summary")).toHaveText(/Administração/);
-  await expect(page.locator("#menu > a")).toHaveCount(6); // Tarefas e Calendário são um item só
-  await expect(page.locator("#menu")).toContainText("Creators");
+  await expect(page.locator("#menu > a")).toHaveCount(5); // Tarefas e Calendário são um item só
   await expect(page.locator("#menu")).not.toContainText("Studio");
-  for (const rota of ["lixeira", "creators"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
+  for (const rota of ["lixeira"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
   expect(erros).toEqual([]);
 });
 
@@ -606,17 +605,8 @@ test("importar marcas: acha o cliente por nome parecido e manda para a marca com
   expect(Object.keys(s["espacos/hyper/clientes"])).toHaveLength(2);
 });
 
-test("status da tarefa em botões e grupo que sumiu volta para a lista", async ({ page }) => {
+test("status da tarefa em botões", async ({ page }) => {
   await abrir(page);
-  // grupo que foi "juntado nele mesmo" pelo Organizar grupos antigo
-  await page.evaluate(async () => {
-    const db = await import("/js/db.js");
-    await db.salvarComId("marcas", "m-grupo", { nome: "Grupo Exemplo", clienteId: "grupo", ativo: true, paleta: [] });
-    await db.atualizar("clientes", "grupo", { ativo: false, viraMarcaDe: "grupo" });
-    const m = await import("/js/migracoes.js");
-    await m.reativarGruposSumidos();
-  });
-  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].grupo.ativo)).toBe(true);
   await page.goto("/#/tarefas");
   await page.getByRole("button", { name: /\+ Novo/ }).click();
   await page.getByRole("menuitem", { name: /Tarefa/ }).click();

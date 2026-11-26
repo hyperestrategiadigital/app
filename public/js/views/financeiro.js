@@ -4,7 +4,7 @@ import { abrirGeradorContrato, abrirOrcamentoNovo, abaConfigurar } from "./comer
 import { reserva, despesasFixas, textoVencimento, documentoOrcamento, abrirParaPDF } from "../comercial.js";
 import { ehAdmin } from "../permissoes.js";
 import { el, formulario, confirmar, avisar, hojeISO, fmtData, fmtMoeda, vazio, fecharModais } from "../ui.js";
-import { dados, criar, atualizar, excluir, salvarComId, nomeCliente, opcoesClientes, clientesAtivos, contrato } from "../db.js";
+import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, clientesAtivos, contrato } from "../db.js";
 import { cabecalho, abas, seloCliente } from "./componentes.js";
 import { CATEGORIAS_FIN, STATUS_ORCAMENTO } from "../constantes.js";
 

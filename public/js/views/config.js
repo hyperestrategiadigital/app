@@ -1,17 +1,18 @@
 // Ajustes (só administradores): e-mails automáticos, Meta, importação dos arquivos do Claude e backup.
-import { el, formulario, confirmar, avisar, abrirModal, hojeISO, addDias, vazio, normalizar, baixar } from "../ui.js";
-import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes, nomeCliente, clientesAtivos, marcasDo } from "../db.js";
+import { el, confirmar, avisar, abrirModal, hojeISO, vazio, normalizar, baixar } from "../ui.js";
+import { dados, criar, atualizar, marcasDo } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { previaPlanejamento } from "./importarPlanejamento.js";
 import { previaImportacao } from "./comercial.js";
-import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js";
+import { salvarComId, carregarArquivo, listarErros, excluirErro, bancoInfo, listarSub, excluirSub, todasTarefas } from "../db.js";
+import { caminhoArtes, excluirArte } from "../arquivos.js";
+import { dataPost } from "../exportacao.js";
 import { ehAdmin } from "../permissoes.js";
 import { configMeta } from "../meta.js";
 import { configAgenda, agendaConectada, testarAgenda } from "../agenda.js";
 import { MANUAL_PADRAO } from "../manual.js";
 import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO, REDES, TIPOS_FIXOS, ANTECEDENCIA, LISTAS_PADRAO, antecedenciaDe } from "../constantes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
-
 
 async function baixarBackup() {
   await carregarArquivo(); // inclui as tarefas arquivadas
@@ -34,7 +35,51 @@ export function render() {
     ehAdmin() ? el("section", { class: "bloco" },
       el("h2", {}, "Backup"),
       el("p", {}, `${dados.tarefas.length} tarefas · ${dados.clientes.length} clientes · ${dados.compromissos.length} compromissos · ${dados.financeiro.length} lançamentos`),
-      el("button", { class: "secundario", onClick: baixarBackup }, "Baixar backup (.json)")) : null);
+      el("button", { class: "secundario", onClick: baixarBackup }, "Baixar backup (.json)"),
+      el("p", { class: "nota" }, `Banco do Firestore em uso: ${bancoInfo.id || "(default)"}.`)) : null,
+
+    ehAdmin() ? blocoCriativos() : null);
+}
+
+/**
+ * Espaço dos criativos: as imagens ficam dentro do Firestore (plano gratuito, 1 GB no total). Mostra quanto ocupam
+ * e apaga as de posts publicados há mais de 6 meses e as que ficaram sem post.
+ */
+function blocoCriativos() {
+  const status = el("p", { class: "subtitulo" });
+  const acoes = el("div", { class: "acoes" });
+  const analisar = async (botao) => {
+    botao.disabled = true; status.textContent = "Contando…";
+    await carregarArquivo().catch(() => {});
+    const limite = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
+    const posts = new Map(todasTarefas().map((t) => [t.id, t]));
+    let total = 0, bytes = 0;
+    const apagar = [];
+    for (const c of dados.clientes) {
+      const artes = await listarSub(caminhoArtes(c.id)).catch(() => []);
+      for (const a of artes) {
+        total++; bytes += (a.dados || "").length;
+        const p = posts.get(a.tarefaId);
+        if (!p || (p.statusConteudo === "publicado" && dataPost(p) < limite)) apagar.push({ clienteId: c.id, id: a.id, tarefaId: p ? a.tarefaId : "", tam: (a.dados || "").length });
+      }
+    }
+    const mb = (n) => `${(n / 1048576).toFixed(1)} MB`;
+    status.textContent = `${total} criativo(s), cerca de ${mb(bytes)} de 1.024 MB do plano gratuito. ${apagar.length} são de posts publicados há mais de 6 meses ou sem post (${mb(apagar.reduce((s, a) => s + a.tam, 0))}).`;
+    botao.disabled = false;
+    acoes.replaceChildren(botao, apagar.length ? el("button", { class: "perigo-texto", onClick: async (e) => {
+      if (!(await confirmar(`Apagar de vez ${apagar.length} criativo(s)? Os posts continuam; só a imagem anexada sai. Os originais seguem no Canva e no Drive.`))) return;
+      e.currentTarget.disabled = true;
+      for (const [i, a] of apagar.entries()) { status.textContent = `Apagando ${i + 1} de ${apagar.length}…`; await (a.tarefaId && dados.tarefas.some((t) => t.id === a.tarefaId) ? excluirArte(a.clienteId, a.tarefaId, a.id) : excluirSub(caminhoArtes(a.clienteId), a.id)).catch(() => {}); }
+      avisar(`${apagar.length} criativo(s) apagados.`);
+      analisar(botao);
+    } }, `Apagar ${apagar.length} criativo(s) antigos`) : null);
+  };
+  const botao = el("button", { class: "secundario", onClick: () => analisar(botao) }, "Ver o espaço dos criativos");
+  acoes.append(botao);
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Espaço dos criativos"),
+    el("p", {}, "Os criativos anexados aos posts ficam no banco. Links de aprovação vencidos há mais de 7 dias já são apagados sozinhos, com as imagens deles."),
+    acoes, status);
 }
 
 const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "palavrasChave", "evitar", "pilares", "diretrizes", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];

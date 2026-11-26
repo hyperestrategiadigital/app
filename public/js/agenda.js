@@ -5,7 +5,7 @@
 // agenda (Gmail, iPhone…), no e-mail que escolheu em Minha conta.
 import { dados, espacoInfo } from "./db.js";
 import { eu } from "./permissoes.js";
-import { addDias, dataDe, hojeISO } from "./ui.js";
+import { addDias, dataDe } from "./ui.js";
 
 export const FUSO = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo";
 
@@ -123,4 +123,3 @@ export const compromissosEntre = (inicio, fim) =>
   dados.compromissos.flatMap((c) => ocorrenciasCompromisso(c, inicio, fim).map((data) => ({ c, data })))
     .sort((a, b) => (a.data + (a.c.hora || "")).localeCompare(b.data + (b.c.hora || "")));
 
-export const compromissosHoje = () => compromissosEntre(hojeISO(), hojeISO());

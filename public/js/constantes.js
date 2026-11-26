@@ -5,7 +5,6 @@ export const STATUS_TAREFA = [
   ["andamento", "Em andamento"],
   ["concluido", "Concluído"]
 ];
-export const rotuloStatus = (s) => STATUS_TAREFA.find(([v]) => v === s)?.[1] || s;
 
 // "Conteúdo" é o único tipo que vira post no calendário
 export const TIPO_CONTEUDO = "Conteúdo";
