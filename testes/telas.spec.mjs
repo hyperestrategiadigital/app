@@ -63,7 +63,7 @@ test("todas as telas abrem sem erro e o menu agrupa a administração", async ({
     await expect(page.locator("#conteudo h1").first()).toBeVisible();
   }
   await expect(page.locator(".menu-grupo summary")).toHaveText(/Administração/);
-  await expect(page.locator("#menu > a")).toHaveCount(5); // Tarefas e Calendário são um item só
+  await expect(page.locator("#menu > a")).toHaveCount(6); // Tarefas e Calendário são um item só; Relatórios no menu principal
   await expect(page.locator("#menu")).not.toContainText("Studio");
   for (const rota of ["lixeira"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
   expect(erros).toEqual([]);
@@ -317,11 +317,10 @@ test("aprovação do cliente por link: o cliente aprova e o post muda de etapa",
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].p2.statusConteudo), { timeout: 10000 }).toBe("aprovado");
 });
 
-test("resultados sem a Meta ligada mostram o caminho", async ({ page }) => {
+test("resultados sem a Meta ligada mostram o caminho (em Relatórios, com o cliente)", async ({ page }) => {
   await abrir(page);
-  await page.goto("/#/clientes/grupo");
-  await page.getByRole("tab", { name: "Resultados" }).click();
-  await expect(page.locator("#conteudo")).toContainText("ainda não foram ligados");
+  await page.goto("/#/relatorios/grupo");
+  await expect(page.locator(".resultados-cliente")).toContainText("ainda não foram ligados");
 });
 
 test("juntar cliente solto numa marca de mesmo nome não duplica a marca", async ({ page }) => {
@@ -563,7 +562,7 @@ test("grupo: escolhe a marca antes e a ficha fica igual à de um cliente comum",
   await expect(page).toHaveURL(/#\/clientes\/grupo\/marca\/ma/);
   await expect(page.locator("#conteudo h1")).toHaveText("Marca A");
   const abas = await page.locator(".ficha .abas [role=tab]").allTextContents();
-  expect(abas).toEqual(["Marca", "Campanhas", "Contas", "Resultados", "Tráfego pago"]); // contrato, escopo e financeiro ficam no geral do grupo
+  expect(abas).toEqual(["Marca", "Campanhas", "Contas"]); // escopo no geral do grupo; tráfego, resultados e financeiro nos menus próprios
   await page.getByRole("tab", { name: "Contas" }).click();
   await expect(page.locator(".cartao-conta")).toHaveCount(1);
   await page.getByRole("button", { name: "Editar redes" }).click();
@@ -581,9 +580,13 @@ test("grupo: escolhe a marca antes e a ficha fica igual à de um cliente comum",
   await page.locator(".botao-filtros").click();
   await expect(page.locator(".painel-filtros select[aria-label=Marca]")).toHaveValue("ma");
 
-  // Geral do grupo: tem tráfego e financeiro
+  // Geral do grupo: escopo; tráfego, relatórios e financeiro abrem nas telas próprias
   await page.goto("/#/clientes/grupo/marca/grupo");
-  await expect(page.locator(".ficha .abas").getByRole("tab", { name: "Financeiro" })).toHaveCount(1);
+  await expect(page.locator(".ficha .abas").getByRole("tab", { name: "Escopo" })).toHaveCount(1);
+  await expect(page.locator(".ficha .abas").getByRole("tab", { name: "Financeiro" })).toHaveCount(0);
+  await page.locator(".atalhos-cliente").getByRole("link", { name: "↗ Tráfego pago" }).click();
+  await expect(page).toHaveURL(/#\/trafego\/grupo/);
+  await expect(page.locator("select[aria-label=Cliente]")).toHaveValue("grupo");
 
   // Cliente comum: abre direto, mesmas abas de redes, sem Tarefas/Conteúdo
   await page.goto("/#/clientes/loja");

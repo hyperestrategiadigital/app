@@ -40,8 +40,9 @@ const ROTAS = {
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
   trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego, area: "trafego" },
   financeiro: { titulo: "Financeiro", icone: "$", view: financeiro, area: "financeiro" },
+  // Relatórios: resumo do período e resultados do Instagram/Facebook por cliente (os valores só para o financeiro)
+  relatorios: { titulo: "Relatórios", icone: "▤", view: relatorios },
   rotinas: { titulo: "Rotinas", icone: "↻", view: rotinas, area: "admin", grupo: "admin" },
-  relatorios: { titulo: "Relatórios", icone: "▤", view: relatorios, area: "admin", grupo: "admin" },
   usuarios: { titulo: "Usuários e equipe", icone: "☺", view: usuarios, area: "admin", grupo: "admin" },
   lixeira: { titulo: "Lixeira", icone: "⌫", view: lixeira, area: "admin", grupo: "admin" },
   config: { titulo: "Ajustes", icone: "⚙", view: config, area: "admin", grupo: "admin" },

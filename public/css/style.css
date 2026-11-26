@@ -1008,3 +1008,4 @@ details.bloco.recolhivel[open] { padding-bottom: 20px; }
 .grade-cadastro { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 14px; margin-bottom: 10px; }
 .grade-cadastro .campo { grid-column: auto; }
 .cadastro-cliente { padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--cor-borda); }
+.atalhos-cliente { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
