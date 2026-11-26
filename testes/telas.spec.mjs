@@ -87,10 +87,15 @@ test("busca rápida com Ctrl+K", async ({ page }) => {
   await expect(page).toHaveURL(/#\/clientes\/loja/);
 });
 
-test("ficha do cliente: editar só cadastro e contrato; marcas com identidade própria", async ({ page }) => {
+test("ficha do cliente: cadastro na aba Marca, contrato na janela; marcas com identidade própria", async ({ page }) => {
   await abrir(page);
   await page.goto("/#/clientes/grupo");
-  await page.getByRole("button", { name: "Editar" }).click();
+  await expect(page.locator(".ficha-topo").getByRole("button", { name: /^Editar/ })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Marca" }).click();
+  await page.fill("#cadastro-segmento", "Varejo de teste");
+  await page.locator(".cadastro-cliente").getByRole("button", { name: "Salvar" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].grupo.segmento)).toBe("Varejo de teste");
+  await page.getByRole("button", { name: "Contrato, status e excluir…" }).click();
   const campos = await page.locator(".modal .campo > span").allTextContents();
   expect(campos).toContain("Mensalidade (R$)");
   expect(campos).not.toContain("Tom de voz da marca");

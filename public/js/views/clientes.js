@@ -141,7 +141,7 @@ function ficha(id, estado, renderizar, resto = []) {
   const geral = !escolhida; // cliente comum ou o geral do grupo: tem contrato, tráfego e financeiro
   // A ficha é a configuração do cliente. Tarefas e posts ficam na tela Tarefas (filtrada pelo cliente/marca).
   const abasPermitidas = [
-    ...(pode("conteudo") ? [["marca", "Marca"]] : []),
+    ...(pode("conteudo") || pode("trafego") ? [["marca", "Marca"]] : []), // tráfego vê só o cadastro
     ...(pode("conteudo") || pode("trafego") ? [["campanhas", "Campanhas"]] : []),
     ...(geral ? [["escopo", "Escopo"]] : []),
     ...(pode("conteudo") || pode("trafego") ? [["contas", "Contas"]] : []),
@@ -198,8 +198,7 @@ function ficha(id, estado, renderizar, resto = []) {
           el("h1", {}, quem.nome, c.ativo === false ? el("span", { class: "etiqueta" }, "Inativo") : null),
           el("div", { class: "cartao-meta" }, (c.servicos || []).map((s) => el("span", { class: "etiqueta" }, s))))),
       el("div", { class: "tela-acoes" },
-        el("a", { class: "botao-link secundario", href: `#/tarefas/${id}${escolhida ? `/${escolhida.id}` : ""}` }, `✓ Tarefas (${abertas.length} abertas${atrasadas ? `, ${atrasadas} atrasadas` : ""}) →`),
-        podeEditar() ? el("button", { class: "secundario", onClick: () => abrirCliente(c) }, grupo ? "Editar grupo" : "Editar") : null)),
+        el("a", { class: "botao-link secundario", href: `#/tarefas/${id}${escolhida ? `/${escolhida.id}` : ""}` }, `✓ Tarefas (${abertas.length} abertas${atrasadas ? `, ${atrasadas} atrasadas` : ""}) →`))),
     el("div", { class: "ficha" },
       el("aside", { class: "bloco lateral" },
         info("Contato", c.contato), c.whatsapp ? el("div", { class: "info" }, el("span", {}, "WhatsApp"), zap) : null,
@@ -207,7 +206,7 @@ function ficha(id, estado, renderizar, resto = []) {
         el("div", { class: "links-cliente" }, linkExterno(c.linkDrive, "📁 Drive"), linkExterno(c.linkCanva, "🎨 Canva")),
         info("Mensalidade", geral && contrato(c.id).mensalidade ? `${fmtMoeda(contrato(c.id).mensalidade)} · ${textoVencimento(contrato(c.id)).replace(" de cada mês", "")}` : null),
         info("Segmento", c.segmento), info("Observações", c.observacoes),
-        !c.contato && geral ? el("p", { class: "subtitulo" }, "Complete o contato em Editar. Cores, fontes e tom de voz ficam na aba Marca.") : null),
+        !c.contato && geral ? el("p", { class: "subtitulo" }, "Complete o contato na aba Marca (Cadastro e contato), junto com cores, fontes e tom de voz.") : null),
       el("section", { class: "bloco" },
         abasPermitidas.length ? [abas(abasPermitidas, estado.aba, (a) => { estado.aba = a; renderizar(); }), conteudoAba[estado.aba]()]
           : el("p", { class: "subtitulo" }, "As tarefas deste cliente ficam na tela Tarefas."))));
