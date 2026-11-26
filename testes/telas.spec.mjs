@@ -787,6 +787,7 @@ test("marca: medidor, aprendizados dos ajustes, sem botões de IA, e manual edit
 
   await page.goto("/#/config");
   await expect(page.locator("#conteudo")).not.toContainText("OpenAI");
+  await page.locator("summary", { hasText: "Manual de escrita da Hyper" }).click();
   await page.getByText("Ver e editar o manual").click();
   await page.fill("#manual-hyper", "# Manual de teste\nSempre falar de você.");
   await page.getByRole("button", { name: "Salvar manual" }).click();
@@ -846,6 +847,7 @@ test("Produzir semana: roteiros dos vídeos da semana seguinte, alerta, aprovaç
 test("Ajustes: menus configuráveis aparecem no card; prazo automático, pilar, briefing e duplicar", async ({ page }) => {
   await abrir(page, { extra: { clientes: { loja: { nome: "Loja Exemplo", ativo: true, paleta: [], cor: "#C98A00", tomDeVoz: "Leve e direto", pilares: "Educativo\nOferta" } } } });
   await page.goto("/#/config");
+  await page.locator("summary", { hasText: "Menus e listas" }).click();
   await page.getByText("Editar menus").click();
   const tipos = page.locator(".editor-lista", { hasText: "Tipos de tarefa" });
   await expect(tipos.locator("li", { hasText: "Conteúdo" }).getByRole("button", { name: /Tirar/ })).toHaveCount(0); // fixo
@@ -970,7 +972,7 @@ test("campanha: agrupa peças na ficha, aparece no post e entra no pedido de cop
   expect(erros).toEqual([]);
 });
 
-test("escopo do cliente, datas comemorativas da Hyper e espaço dos criativos", async ({ page }) => {
+test("escopo do cliente e datas comemorativas da Hyper", async ({ page }) => {
   await abrir(page);
   await page.goto("/#/clientes/loja");
   await page.getByRole("tab", { name: "Escopo" }).click();
@@ -1000,8 +1002,46 @@ test("escopo do cliente, datas comemorativas da Hyper e espaço dos criativos", 
   await expect(page.locator(".plano-dia .data-cal.marca", { hasText: "Dia do Queijo" })).toHaveCount(1);
   await page.goto("/#/config");
   await expect(page.locator("#conteudo h2", { hasText: "Datas comemorativas" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Ver o espaço dos criativos" }).click();
-  await expect(page.locator("#conteudo")).toContainText("do plano gratuito");
+  await expect(page.locator("#conteudo h2", { hasText: "Espaço dos criativos" })).toHaveCount(0);
+});
+
+test("ajustes: quadros recolhem, backup por último e o aberto é lembrado", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/config");
+  const quadros = page.locator("#conteudo details.recolhivel");
+  await expect(quadros.last().locator("summary")).toHaveText("Backup");
+  await expect(page.getByRole("button", { name: "Baixar backup (.json)" })).toBeHidden();
+  await quadros.last().locator("summary").click();
+  await expect(page.getByRole("button", { name: "Baixar backup (.json)" })).toBeVisible();
+  await page.goto("/#/hoje");
+  await page.goto("/#/config");
+  await expect(page.getByRole("button", { name: "Baixar backup (.json)" })).toBeVisible();
+});
+
+test("hoje: + Novo oferece post, tarefa e compromisso", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/hoje");
+  await page.getByRole("button", { name: "+ Novo" }).click();
+  await expect(page.getByRole("menuitem")).toHaveText(["▣ Post", "✓ Tarefa", "◷ Compromisso"]);
+  await page.getByRole("menuitem", { name: "✓ Tarefa" }).click();
+  await expect(page.locator(".modal h2")).toHaveText("Nova tarefa");
+});
+
+test("planejamento: importar JSON coloca os posts do mês no rascunho", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/calendario/loja/2027-03/planejar");
+  await page.getByRole("button", { name: "Importar planejamento (JSON)" }).click();
+  await page.fill("#plano-json", JSON.stringify({ tipo: "planejamento-hyper", posts: [
+    { data: "2027-03-02", formato: "Carrossel", rede: "Instagram", titulo: "5 dicas de outono", pilar: "Educação", objetivo: "Topo", copy: "Legenda pronta" },
+    { data: "2027-03-09", formato: "Reels", titulo: "Bastidores" },
+    { data: "2027-04-01", formato: "Estático", titulo: "De outro mês" }] }));
+  await expect(page.locator(".previa-briefing")).toContainText("2 post(s) de");
+  await expect(page.locator(".previa-briefing")).toContainText("1 post(s) de outro mês");
+  await page.getByRole("button", { name: "Colocar no planejamento" }).click();
+  await page.getByRole("button", { name: /Salvar planejamento/ }).click();
+  await expect.poll(() => page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"] || {}).filter((t) => t.clienteId === "loja" && (t.dataPublicacao || "").startsWith("2027-03")).length)).toBe(2);
+  const post = await page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas"]).find((t) => t.titulo === "5 dicas de outono"));
+  expect(post).toMatchObject({ formato: "Carrossel", pilar: "Educação", copy: "Legenda pronta", tipo: "Conteúdo", statusConteudo: "ideia" });
 });
 
 test("aprovação de tema: ideia aprovada pelo link vai para a produção", async ({ page, context }) => {

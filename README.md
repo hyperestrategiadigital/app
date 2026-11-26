@@ -23,7 +23,7 @@ Menu: **Hoje, Tarefas, Calendário, Clientes, Tráfego pago, Financeiro** e o gr
 | Portal do cliente | Quem tem acesso de **cliente** (de um cliente ou só de algumas marcas) vê um Hyper Studio simplificado: **Início** (posts para aprovar com imagem e legenda, "Aprovar" e "Pedir ajuste", próximas publicações; pelo link de aprovação as ideias chegam como **tema para aprovar** e, aprovadas, vão para a produção), **Calendário**, **Marca** (identidade e redes, só leitura), **Resultados** e **Sugerir um post** (entra como ideia; "✨ Criar copy" usa o tom de voz da marca). Não vê tarefas internas, outros clientes, valores nem a equipe |
 | Minha conta | Clique no seu nome no menu: foto, nome, seu acesso, pedir mais acesso (áreas ou clientes) e suas conexões (Google Agenda) |
 | Lixeira | O que foi excluído nos últimos 30 dias, com restaurar (administrador) |
-| Ajustes | E-mails e automações (resumo diário, backup semanal), relatórios da Meta (App ID), manual de escrita, menus e listas, modelos de checklist, erros recentes, backup, banco em uso e **espaço dos criativos** (quanto ocupam e limpeza dos antigos) |
+| Ajustes | E-mails e automações (resumo diário, backup semanal), relatórios da Meta (App ID), manual de escrita, menus e listas, modelos de checklist, erros recentes e, por último, backup e banco em uso. Cada quadro recolhe (o aberto é lembrado no navegador) |
 
 ### Marcas e grupos
 

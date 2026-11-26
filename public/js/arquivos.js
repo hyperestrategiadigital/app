@@ -1,7 +1,7 @@
 // Criativos (imagens) anexados aos posts, guardados dentro do Firestore (sem Firebase Storage).
 // Cada imagem é um documento em espacos/hyper/clientes/{clienteId}/artes, comprimida para caber no limite de 1 MB.
 // Os arquivos da marca (logos, fontes, referências) ficam na pasta do Drive do cliente, não aqui.
-import { listarSub, salvarSub, excluirSub, atualizar, porId } from "./db.js";
+import { listarSub, salvarSub, excluirSub, atualizar, porId, dados } from "./db.js";
 import { eu, marcasRestritas } from "./permissoes.js";
 
 export const LIMITE_BYTES = 700 * 1024; // ~930 KB depois do base64
@@ -36,6 +36,30 @@ export async function excluirArte(clienteId, tarefaId, id) {
   await excluirSub(caminhoArtes(clienteId), id);
   cache.delete(clienteId);
   await contarArtes(clienteId, tarefaId);
+}
+
+/** Dias que os criativos de um post publicado ficam guardados depois da data de publicação (o texto do post fica). */
+export const DIAS_CRIATIVOS = 7;
+
+/**
+ * Faxina dos criativos (admin, uma vez por dia neste navegador): apaga as imagens dos posts publicados há mais de
+ * DIAS_CRIATIVOS dias. O post (texto, copy, etapa) continua; a arte final segue no Canva/Drive.
+ */
+export async function limparCriativosPublicados(hoje = new Date()) {
+  const dia = hoje.toISOString().slice(0, 10);
+  try { if (localStorage.getItem("hyper-faxina-criativos") === dia) return 0; } catch {}
+  const limite = new Date(hoje.getTime() - DIAS_CRIATIVOS * 86400000).toISOString().slice(0, 10);
+  const posts = dados.tarefas.filter((t) => t.qtdArtes > 0 && t.statusConteudo === "publicado" && (t.dataPublicacao || t.prazo || "") && (t.dataPublicacao || t.prazo) < limite);
+  let apagados = 0;
+  for (const clienteId of new Set(posts.map((t) => t.clienteId || ""))) {
+    const ids = new Set(posts.filter((t) => (t.clienteId || "") === clienteId).map((t) => t.id));
+    const artes = (await listarArtesCliente(clienteId, { recarregar: true }).catch(() => [])).filter((a) => ids.has(a.tarefaId));
+    for (const a of artes) { await excluirSub(caminhoArtes(clienteId), a.id).catch(() => {}); apagados++; }
+    cache.delete(clienteId);
+    for (const id of ids) if (porId("tarefas", id)) await atualizar("tarefas", id, { qtdArtes: 0 }).catch(() => {});
+  }
+  try { localStorage.setItem("hyper-faxina-criativos", dia); } catch {}
+  return apagados;
 }
 
 export const lerComoDataURL = (arquivo) => new Promise((ok, erro) => {

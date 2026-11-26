@@ -94,7 +94,7 @@ function chip(t) {
 }
 
 /** Menu suspenso simples: um botão que abre uma lista de ações. */
-function menuSuspenso(rotulo, itens, classe = "secundario") {
+export function menuSuspenso(rotulo, itens, classe = "secundario") {
   const lista = el("div", { class: "menu-suspenso-lista", role: "menu", hidden: true });
   const fechar = () => { lista.hidden = true; document.removeEventListener("click", foraClique, true); };
   const foraClique = (e) => { if (!caixa.contains(e.target)) fechar(); };

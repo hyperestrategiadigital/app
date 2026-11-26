@@ -10,6 +10,7 @@ import { dentroDaProducao } from "../producao.js";
 import { pode, tarefaVisivel, eu, ehAdmin } from "../permissoes.js";
 import { compromissosEntre } from "../agenda.js";
 import { abrirCompromisso, cartaoCompromisso, avisoPendentes } from "../compromissos.js";
+import { menuSuspenso, novoPost } from "./calendario.js";
 
 const lerPreferencia = () => { try { return localStorage.getItem("hyper-hoje-visao"); } catch { return null; } };
 const guardar = (chave, valor) => { try { localStorage.setItem(chave, valor); } catch {} };
@@ -109,7 +110,11 @@ export function render({ estado = {}, renderizar = () => {} } = {}) {
   return el("div", { class: "tela" },
     cabecalho(`${saudacao}${eu.nome ? `, ${eu.nome.split(" ")[0]}` : ""}!`, dataExtenso.charAt(0).toUpperCase() + dataExtenso.slice(1),
       abas([["minhas", "Minhas"], ["equipe", "Equipe"]], estado.visao, (v) => { estado.visao = v; guardar("hyper-hoje-visao", v); renderizar(); }),
-      el("button", { class: "destaque", onClick: () => abrirTarefa({ prazo: hoje, responsavel: eu.nome }) }, "+ Nova tarefa")),
+      menuSuspenso("+ Novo", [
+        pode("conteudo") ? ["▣ Post", () => novoPost({ data: hoje })] : null,
+        ["✓ Tarefa", () => abrirTarefa({ prazo: hoje, responsavel: eu.nome })],
+        ["◷ Compromisso", () => abrirCompromisso({ data: hoje })]
+      ], "destaque")),
     primeirosPassos(renderizar),
     dicas(renderizar),
 

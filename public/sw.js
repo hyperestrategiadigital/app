@@ -1,6 +1,6 @@
 // Service worker do Hyper Studio: permite instalar o app e abrir sem internet.
 // Estratégia "rede primeiro": sempre busca a versão nova; sem internet, usa a última cópia guardada.
-const CACHE = "hyper-studio-v4";
+const CACHE = "hyper-studio-v5";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(

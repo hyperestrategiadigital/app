@@ -5,6 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 
 import { conectar, desconectar, aoMudar, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes, registrarErro, limparAntigos, porId, notificar } from "./db.js";
+import { limparCriativosPublicados } from "./arquivos.js";
 import { aplicarListas } from "./constantes.js";
 import { acompanharRespostas } from "./aprovacoes.js";
 import { avisarAdmins, sincronizarAdmins } from "./emails.js";
@@ -258,7 +259,7 @@ async function entrar(usuario) {
   // Rotinas automáticas e ajustes de dados antigos: só o administrador roda
   if (ehAdmin()) {
     gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
-    atualizarListas().then(migrarTipos).then(migrarFormatos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).catch((e) => console.error("Ajustes de dados:", e));
+    atualizarListas().then(migrarTipos).then(migrarFormatos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).then(() => limparCriativosPublicados()).catch((e) => console.error("Ajustes de dados:", e));
   }
 }
 

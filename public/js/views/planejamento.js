@@ -1,16 +1,16 @@
 // Planejamento do mês de um cliente: uma tabela onde cada linha é um post.
 // Ao salvar, cada linha vira (ou atualiza) uma tarefa do tipo Conteúdo — aparece na lista de tarefas e no calendário.
-import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal, confirmar, formulario, vazio, fecharModais } from "../ui.js";
+import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal, confirmar, formulario, vazio, fecharModais, normalizar } from "../ui.js";
 import { porId, criar, atualizar, excluir, clientesAtivos, marcasDo } from "../db.js";
 import { cabecalho, abas, modeloChecklist } from "./componentes.js";
 import { responsavelPadrao } from "../agenda.js";
 import { datasEntre } from "../datas.js";
-import { FORMATOS, formatoAtual, prazoDoPost, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa, OBJETIVOS, rotuloObjetivo } from "../constantes.js";
+import { FORMATOS, formatoAtual, prazoDoPost, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa, OBJETIVOS, rotuloObjetivo, objetivoDe } from "../constantes.js";
 import { postsDoMes, dataPost, exportarPDF, nomeMes, temPrefixo } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
 import { gerarLinkAprovacao } from "../aprovacoes.js";
 
-const CAMPOS = ["dataPublicacao", "hora", "formato", "rede", "titulo", "objetivo", "roteiro", "prazo", "statusConteudo", "marcaId"];
+const CAMPOS = ["dataPublicacao", "hora", "formato", "rede", "titulo", "objetivo", "roteiro", "prazo", "statusConteudo", "marcaId", "pilar", "copy"];
 let contador = 0;
 const novaChave = () => `n${Date.now().toString(36)}${contador++}`;
 
@@ -24,7 +24,7 @@ function linhaDePost(t) {
 function linhaNova(data, base = {}) {
   return {
     chave: novaChave(), id: null, dataPublicacao: data, hora: base.hora || "", formato: formatoAtual(base.formato) || "Estático",
-    rede: base.rede || "Instagram", titulo: "", objetivo: "", roteiro: "", prazo: "", statusConteudo: "ideia", marcaId: base.marcaId || ""
+    rede: base.rede || "Instagram", titulo: "", objetivo: "", roteiro: "", prazo: "", statusConteudo: "ideia", marcaId: base.marcaId || "", pilar: "", copy: ""
   };
 }
 
@@ -107,6 +107,51 @@ export function render({ params, estado, renderizar }) {
     renderizar();
   };
 
+  /**
+   * Importar planejamento (JSON): os posts entram como rascunho neste mês (você revisa e salva).
+   * Formato: { tipo: "planejamento-hyper", posts: [{ data: "AAAA-MM-DD", hora, marca, formato, rede, titulo, pilar, objetivo, roteiro, copy }] }
+   */
+  const importar = () => {
+    const texto = el("textarea", { rows: 8, id: "plano-json", placeholder: "Cole aqui o JSON do planejamento" });
+    const previa = el("div", { class: "previa-briefing" });
+    let novos = [];
+    const marcaDe = (nome) => !nome ? (estado.marcaAtual || "") : (marcas.find((x) => normalizar(x.nome).replace(/[^a-z0-9]/g, "") === normalizar(nome).replace(/[^a-z0-9]/g, ""))?.id ?? null);
+    const ler = () => {
+      novos = [];
+      if (!texto.value.trim()) { previa.replaceChildren(); botao.disabled = true; return; }
+      let j;
+      try {
+        const t = texto.value; const ini = [t.indexOf("{"), t.indexOf("[")].filter((i) => i >= 0);
+        j = JSON.parse(t.match(/```(?:json)?\s*([\s\S]*?)```/)?.[1] || (ini.length ? t.slice(Math.min(...ini)) : t));
+      } catch { previa.replaceChildren(el("p", { class: "erro" }, "Não consegui ler o JSON. Copie a resposta inteira.")); botao.disabled = true; return; }
+      const posts = Array.isArray(j) ? j : j.posts || [];
+      const foraDoMes = posts.filter((p) => !String(p.data || "").startsWith(mes));
+      const semMarca = new Set();
+      for (const p of posts.filter((x) => String(x.data || "").startsWith(mes) && (x.titulo || x.tema))) {
+        let marcaId = marcas.length ? marcaDe(p.marca) : "";
+        if (marcaId === null) { semMarca.add(p.marca); marcaId = ""; }
+        novos.push({ ...linhaNova(p.data, { formato: p.formato, rede: p.rede, hora: p.hora, marcaId }), titulo: String(p.titulo || p.tema).trim(),
+          pilar: p.pilar || "", objetivo: objetivoDe(p.objetivo || ""), roteiro: p.roteiro || p.briefing || "", copy: p.copy || "",
+          formato: formatoAtual(p.formato) || "Estático", rede: p.rede || "Instagram", hora: p.hora || "" });
+      }
+      botao.disabled = !novos.length;
+      previa.replaceChildren(...[
+        el("p", {}, el("strong", {}, `${novos.length} post(s) de ${nomeMes(mes)}`), " entram como rascunho em ", el("strong", {}, cliente.nome), "."),
+        novos.length ? el("ul", { class: "lista-previa-briefing" }, novos.map((l) => el("li", {}, `${fmtData(l.dataPublicacao, true)} · ${l.formato} | ${l.titulo}${l.marcaId ? ` · ${porId("marcas", l.marcaId)?.nome}` : ""}`))) : null,
+        foraDoMes.length ? el("p", { class: "faixa-aviso" }, `${foraDoMes.length} post(s) de outro mês ficam de fora: importe no mês deles.`) : null,
+        semMarca.size ? el("p", { class: "faixa-aviso" }, `Marca não encontrada (${[...semMarca].join(", ")}): esses posts entram como institucionais do grupo.`) : null
+      ].filter(Boolean));
+    };
+    texto.addEventListener("input", ler);
+    const botao = el("button", { class: "confirmar", disabled: true, onClick: () => {
+      estado.linhas.push(...novos); ordenar(); estado.alterado = true; fechar(); renderizar();
+      avisar(`${novos.length} post(s) no rascunho. Revise e clique em Salvar planejamento.`);
+    } }, "Colocar no planejamento");
+    const fechar = abrirModal(`Importar planejamento · ${cliente.nome} · ${nomeMes(mes)}`, el("div", { class: "importar-briefing" },
+      el("p", {}, "Cole o JSON do planejamento. Os posts deste mês entram como rascunho: nada é gravado até você clicar em Salvar planejamento."),
+      texto, previa, el("div", { class: "acoes" }, el("button", { class: "secundario negar", onClick: () => fechar() }, "Cancelar"), botao)), { largo: true });
+  };
+
   const salvar = async (botao) => {
     const validas = estado.linhas.filter((l) => l.titulo.trim() || l.id);
     const semTema = validas.filter((l) => !l.titulo.trim());
@@ -126,7 +171,7 @@ export function render({ params, estado, renderizar }) {
             atualizados++;
           }
         } else {
-          const ref = await criar("tarefas", { ...v, tipo: TIPO_CONTEUDO, clienteId, responsavel: responsavelPadrao(), status, concluidoEm: status === "concluido" ? hojeISO() : null, checklist: modeloChecklist({ tipo: TIPO_CONTEUDO, formato: v.formato }), notas: "", linkCanva: "", linkDrive: "", copy: "" });
+          const ref = await criar("tarefas", { ...v, tipo: TIPO_CONTEUDO, clienteId, responsavel: responsavelPadrao(), status, concluidoEm: status === "concluido" ? hojeISO() : null, checklist: modeloChecklist({ tipo: TIPO_CONTEUDO, formato: v.formato }), notas: "", linkCanva: "", linkDrive: "" });
           l.id = ref.id; l.chave = ref.id; criados++;
         }
       }
@@ -224,6 +269,7 @@ export function render({ params, estado, renderizar }) {
     el("div", { class: "filtros" },
       abas([["calendario", "Grade do mês"], ["tabela", "Tabela"]], estado.modo, (m) => { estado.modo = m; renderizar(); }),
       el("button", { class: "secundario mini", onClick: preencher }, "Preencher dias fixos"),
+      el("button", { class: "secundario mini", onClick: importar }, "Importar planejamento (JSON)"),
       marcas.length ? el("label", { class: "check-inline" }, "Novos posts da marca ",
         seletor(opcoesMarca, estado.marcaAtual || "", (v) => { estado.marcaAtual = v; }, "Marca dos novos posts")) : null,
       el("span", { class: "espaco" }),
