@@ -2,13 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Dados antigos (antes do espaço compartilhado): só o próprio dono lê, para migrar e como backup.
-    match /users/{uid}/{documento=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-    }
+    // Tudo o que não estiver liberado abaixo é negado (inclusive o backup antigo em users/{uid}, que só se vê pelo console).
 
     // Espaço compartilhado da Hyper. Cada pessoa é um documento em membros/{uid}
-    // com papel ("admin" ou "basico") e permissoes (["conteudo", "trafego", "financeiro"]).
+    // com papel ("admin", "basico" ou "cliente") e permissoes (["conteudo", "trafego"]).
     match /espacos/{esp} {
       function logado() { return request.auth != null; }
       function caminhoMembro() { return /databases/$(database)/documents/espacos/$(esp)/membros/$(request.auth.uid); }
@@ -55,17 +52,17 @@ service cloud.firestore {
       }
 
       // O documento do espaço: qualquer pessoa logada lê (para saber se existe e pedir acesso).
-      // Só pode ser criado uma vez, por quem vira o dono.
-      allow read: if logado();
-      allow create: if logado() && request.resource.data.dono == request.auth.uid;
+      // O espaço da Hyper já existe: ninguém cria outro (evita uso do banco por contas de fora).
+      allow read: if logado() && esp == 'hyper';
       allow update: if dono() || (admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['emailUrl']));
-      allow delete: if dono();
 
       match /membros/{uid} {
         allow read: if ativo() || (logado() && request.auth.uid == uid);
         // Pedido de acesso: a pessoa cria o próprio cadastro, sempre pendente, básica e sem áreas.
         // Com convite: entra direto com o que o administrador definiu.
         allow create: if (logado() && request.auth.uid == uid
+                          && request.resource.data.keys().hasOnly(['nome', 'email', 'papel', 'permissoes', 'status', 'criadoEm', 'pedido'])
+                          && request.resource.data.get('nome', '').size() <= 120
                           && request.resource.data.papel == 'basico'
                           && request.resource.data.permissoes.size() == 0
                           && request.resource.data.status == 'pendente'
@@ -134,6 +131,13 @@ service cloud.firestore {
         allow create: if ativo() && doCliente(cli(request.resource.data));
         allow update: if ativo() && doCliente(cli(resource.data)) && doCliente(cli(request.resource.data));
       }
+      // Campanhas (Natal, Black Friday, lançamentos…): agrupam posts e tarefas; só a equipe vê
+      match /campanhas/{id} {
+        allow read: if ativo() && podeLerEstrito(resource.data);
+        allow delete: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(resource.data));
+        allow create: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(request.resource.data));
+        allow update: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
+      }
       match /recorrencias/{id} {
         allow read: if ativo() && podeLer(resource.data);
         allow write: if admin();
@@ -184,9 +188,9 @@ service cloud.firestore {
         allow delete: if admin() || (ativo() && resource.data.excluidoPorUid == request.auth.uid);
       }
 
-      // Registro de erros: qualquer pessoa logada grava o próprio erro; só o administrador lê
+      // Registro de erros: quem tem cadastro no espaço (mesmo pendente) grava o próprio erro; só o administrador lê
       match /erros/{id} {
-        allow create: if logado() && request.resource.data.uid == request.auth.uid
+        allow create: if logado() && (dono() || exists(caminhoMembro())) && request.resource.data.uid == request.auth.uid
                       && request.resource.data.keys().hasOnly(['msg', 'detalhe', 'rota', 'uid', 'email', 'navegador', 'em'])
                       && request.resource.data.msg.size() <= 200 && request.resource.data.detalhe.size() <= 1500;
         allow read, delete: if admin();
@@ -218,24 +222,20 @@ service cloud.firestore {
         }
       }
 
-      // Configurações: a chave da OpenAI só para quem cria conteúdo; o envio de e-mails só para administradores;
-      // o comercial (preços, despesas fixas, modelo de contrato) só para quem tem Financeiro e vê todos os clientes;
-      // o resto (equipe, lista de nomes de clientes), todos leem
+      // Configurações: o envio de e-mails só para administradores; o comercial (preços, despesas fixas, modelo de
+      // contrato) só para quem tem Financeiro e vê todos os clientes; o resto (equipe, listas, manual), a equipe lê
       match /config/{doc} {
-        allow read: if (doc == 'openai' && pode('conteudo')) || (doc == 'email' && admin())
+        allow read: if (doc == 'email' && admin())
           || (doc == 'comercial' && pode('financeiro') && todosClientes())
           || (!(doc in ['openai', 'email', 'comercial']) && ativo())
           || (doc in ['meta', 'listas', 'manual'] && cliente());
         allow write: if admin();
       }
 
-      // Coisas pessoais de cada um (ex.: Google Agenda conectada)
+      // Coisas pessoais de cada um da equipe (ex.: Google Agenda conectada)
       match /pessoal/{uid}/{documento=**} {
-        allow read, write: if logado() && request.auth.uid == uid;
+        allow read, write: if ativo() && request.auth.uid == uid;
       }
-
-      // Coleção antiga de conteúdos (migrada para tarefas)
-      match /conteudos/{id} { allow read, write: if admin(); }
     }
   }
 }

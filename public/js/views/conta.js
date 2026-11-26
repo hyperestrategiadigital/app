@@ -3,7 +3,7 @@
 import { el, avisar, confirmar, hojeISO } from "../ui.js";
 import { dados, porId, atualizarMeuCadastro } from "../db.js";
 import { cabecalho, avatar } from "./componentes.js";
-import { eu, ehAdmin, ehCliente, AREAS, AREAS_EQUIPE, rotuloArea, clientesRestritos } from "../permissoes.js";
+import { eu, ehAdmin, ehCliente, AREAS_EQUIPE, rotuloArea, clientesRestritos } from "../permissoes.js";
 import { configAgenda, agendaConectada } from "../agenda.js";
 import { comprimirImagem } from "../arquivos.js";
 import { avisarAdmins } from "../emails.js";

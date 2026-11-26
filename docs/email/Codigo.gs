@@ -30,7 +30,7 @@ const FUSO = 'America/Sao_Paulo';
 const LIMITE_AVISOS_POR_HORA = 30;
 const BACKUPS_GUARDADOS = 8;
 const PASTA_BACKUP = 'Backups do app Hyper';
-const COLECOES_BACKUP = ['clientes', 'marcas', 'contratos', 'tarefas', 'tarefasArquivo', 'compromissos', 'recorrencias', 'membros',
+const COLECOES_BACKUP = ['clientes', 'marcas', 'campanhas', 'contratos', 'tarefas', 'tarefasArquivo', 'compromissos', 'recorrencias', 'membros',
   'financeiro', 'orcamentos', 'contasAds', 'manutencoes', 'config', 'convites', 'aprovacoes'];
 
 function doPost(e) {

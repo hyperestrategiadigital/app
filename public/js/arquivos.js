@@ -1,7 +1,7 @@
 // Criativos (imagens) anexados aos posts, guardados dentro do Firestore (sem Firebase Storage).
-// Cada imagem é um documento em users/{uid}/clientes/{clienteId}/artes, comprimida para caber no limite de 1 MB.
+// Cada imagem é um documento em espacos/hyper/clientes/{clienteId}/artes, comprimida para caber no limite de 1 MB.
 // Os arquivos da marca (logos, fontes, referências) ficam na pasta do Drive do cliente, não aqui.
-import { listarSub, salvarSub, excluirSub, atualizar, porId, atualizarSub } from "./db.js";
+import { listarSub, salvarSub, excluirSub, atualizar, porId } from "./db.js";
 import { eu, marcasRestritas } from "./permissoes.js";
 
 export const LIMITE_BYTES = 700 * 1024; // ~930 KB depois do base64
@@ -72,27 +72,4 @@ export async function comprimirImagem(origem, { maxLado = 1600, qualidade = 0.85
     qualidade = Math.max(0.6, qualidade - 0.05);
   }
   throw new Error("Não consegui reduzir a imagem o suficiente.");
-}
-
-/**
- * Criativos antigos sem marcaId: copia o marcaId do post (só para clientes que são grupos).
- * Roda uma vez por navegador do administrador.
- */
-export async function marcarArtesComMarca() {
-  const CHAVE = "hyper-artes-com-marca-v1";
-  try { if (localStorage.getItem(CHAVE)) return 0; } catch { return 0; }
-  const { dados } = await import("./db.js");
-  const grupos = [...new Set((dados.marcas || []).map((m) => m.clienteId))];
-  let n = 0;
-  for (const clienteId of grupos) {
-    const artes = await listarSub(caminhoArtes(clienteId)).catch(() => []);
-    for (const a of artes) {
-      if (a.marcaId !== undefined) continue;
-      const marcaId = porId("tarefas", a.tarefaId)?.marcaId || "";
-      await atualizarSub(caminhoArtes(clienteId), a.id, { marcaId }); n++;
-    }
-    cache.delete(clienteId);
-  }
-  try { localStorage.setItem(CHAVE, "1"); } catch {}
-  return n;
 }

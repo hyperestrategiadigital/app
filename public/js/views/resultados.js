@@ -1,11 +1,11 @@
 // Aba "Resultados" da ficha do cliente: números do Instagram e do Facebook (Meta) da marca escolhida,
 // no período, e de cada post — ligando cada post do Instagram ao post do calendário do app.
 import { el, avisar, hojeISO, addDias, fmtData, vazio } from "../ui.js";
-import { dados, porId, atualizar } from "../db.js";
+import { dados, atualizar } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
 import { TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
-import { abrirTarefa, corCliente } from "./componentes.js";
+import { abrirTarefa } from "./componentes.js";
 import { marcaEscolhida } from "./marca.js";
 import { metaDisponivel, metaConectada, conectarMeta, contaMeta, paginas, resultados } from "../meta.js";
 

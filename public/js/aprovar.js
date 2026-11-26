@@ -69,7 +69,8 @@ async function iniciar() {
     const cartao = el("article", { class: `bloco aprov-post ${r ? `respondido ${r.status}` : ""}` },
       el("div", { class: "aprov-data" },
         el("strong", {}, `${fmtDiaSemana(post.data)} · ${fmtData(post.data)}`), post.hora ? el("span", {}, ` às ${post.hora}`) : null,
-        el("span", { class: "etiqueta" }, [post.formato, post.rede].filter(Boolean).join(" · ")), seloResposta(r)),
+        el("span", { class: "etiqueta" }, [post.formato, post.rede].filter(Boolean).join(" · ")),
+        post.tema ? el("span", { class: "etiqueta alerta" }, "Tema para aprovar") : null, seloResposta(r)),
       artes[post.id] ? el("img", { class: "aprov-imagem", src: artes[post.id], alt: post.titulo, loading: "lazy" }) : null,
       el("h2", {}, post.titulo),
       post.objetivo ? el("p", { class: "subtitulo" }, `Objetivo: ${post.objetivo}`) : null,
@@ -77,7 +78,7 @@ async function iniciar() {
         : post.roteiro ? el("div", { class: "aprov-copy" }, el("span", { class: "subtitulo" }, "Ideia"), el("p", {}, post.roteiro)) : null,
       r?.comentario ? el("p", { class: "faixa-aviso" }, `Seu comentário: ${r.comentario}`) : null,
       el("div", { class: "acoes" },
-        el("button", { class: r?.status === "aprovado" ? "secundario" : "confirmar", onClick: (e) => { e.currentTarget.disabled = true; responder(post, "aprovado", "", cartao); } }, r?.status === "aprovado" ? "Aprovado ✓" : "Aprovar"),
+        el("button", { class: r?.status === "aprovado" ? "secundario" : "confirmar", onClick: (e) => { e.currentTarget.disabled = true; responder(post, "aprovado", "", cartao); } }, r?.status === "aprovado" ? "Aprovado ✓" : post.tema ? "Aprovar tema" : "Aprovar"),
         el("button", { class: "secundario", onClick: () => { caixaAjuste.hidden = false; comentario.focus(); } }, r?.status === "ajuste" ? "Mudar o pedido de ajuste" : "Pedir ajuste")),
       caixaAjuste);
     cartao.dataset.post = post.id;

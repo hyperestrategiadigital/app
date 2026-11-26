@@ -1,10 +1,11 @@
 // Planejamento do mês de um cliente: uma tabela onde cada linha é um post.
 // Ao salvar, cada linha vira (ou atualiza) uma tarefa do tipo Conteúdo — aparece na lista de tarefas e no calendário.
 import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal, confirmar, formulario, vazio, fecharModais } from "../ui.js";
-import { dados, porId, criar, atualizar, excluir, clientesAtivos, marcasDo } from "../db.js";
+import { porId, criar, atualizar, excluir, clientesAtivos, marcasDo } from "../db.js";
 import { cabecalho, abas, modeloChecklist } from "./componentes.js";
 import { responsavelPadrao } from "../agenda.js";
-import { FORMATOS, formatoAtual, prazoDoPost, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
+import { datasEntre } from "../datas.js";
+import { FORMATOS, formatoAtual, prazoDoPost, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa, OBJETIVOS, rotuloObjetivo } from "../constantes.js";
 import { postsDoMes, dataPost, exportarPDF, nomeMes, temPrefixo } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
 import { gerarLinkAprovacao } from "../aprovacoes.js";
@@ -275,7 +276,7 @@ function editarLinha(l, estado, marcar) {
     { nome: "hora", rotulo: "Horário", tipo: "time", largura: "metade" },
     { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, largura: "metade" },
     { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: REDES, largura: "metade" },
-    { nome: "objetivo", rotulo: "Objetivo" },
+    { nome: "objetivo", rotulo: "Objetivo (etapa do funil)", tipo: "select", opcoes: [["", "—"], ...OBJETIVOS, ...(l.objetivo && !OBJETIVOS.some(([v]) => v === l.objetivo) ? [[l.objetivo, l.objetivo]] : [])] },
     { nome: "roteiro", rotulo: "Briefing / ideia", tipo: "textarea", linhas: 3 },
     { nome: "prazo", rotulo: "Prazo de produção", tipo: "date", largura: "metade" },
     { nome: "statusConteudo", rotulo: "Etapa", tipo: "select", opcoes: STATUS_CONTEUDO, largura: "metade" }
@@ -303,6 +304,9 @@ function calendarioPlano({ estado, mes, cliente, renderizar, marcar }) {
   const dias = Array.from({ length: 42 }, (_, i) => addDias(inicio, i));
   const semanas = dias[35].slice(0, 7) === mes ? 6 : 5;
   const hoje = hojeISO();
+  // Feriados, datas comerciais e as datas das marcas do cliente (aba Marca): para planejar em cima delas
+  const datas = datasEntre(dias[0], dias[semanas * 7 - 1], { clienteId: estado.clienteId });
+  const datasDoMes = datas.filter((x) => x.data.startsWith(mes));
 
   const celula = (d) => {
     const doMes = d.startsWith(mes);
@@ -331,12 +335,13 @@ function calendarioPlano({ estado, mes, cliente, renderizar, marcar }) {
       } : undefined
     },
     el("div", { class: "plano-data" }, el("strong", {}, Number(d.slice(8))), el("span", {}, `/${d.slice(5, 7)}`)),
+    datas.filter((x) => x.data === d && x.tipo !== "mes").map((x) => el("span", { class: `data-cal ${x.tipo}`, title: x.nome }, x.nome)),
     doDia.map((l) => {
       const marcaL = porId("marcas", l.marcaId);
       const chip = el("button", {
         class: `plano-post st-${l.statusConteudo || "ideia"} ${l.id ? "" : "novo"}`, draggable: "true",
         style: marcaL ? { "--marca": corCliente(marcaL) } : undefined,
-        title: `${marcaL ? marcaL.nome + " · " : ""}${l.formato} · ${rotuloStatusConteudo(l.statusConteudo || "ideia")}${l.objetivo ? " · " + l.objetivo : ""}`,
+        title: `${marcaL ? marcaL.nome + " · " : ""}${l.formato} · ${rotuloStatusConteudo(l.statusConteudo || "ideia")}${l.objetivo ? " · " + rotuloObjetivo(l.objetivo) : ""}`,
         onClick: () => editarLinha(l, estado, marcar)
       }, marcaL ? el("span", { class: "plano-marca" }, marcaL.nome) : null,
         temPrefixo(l.titulo) ? l.titulo : [el("strong", {}, l.formato), ` | ${l.titulo || "(sem tema)"}`], l.hora ? el("small", {}, ` ${l.hora}`) : null);
@@ -347,6 +352,8 @@ function calendarioPlano({ estado, mes, cliente, renderizar, marcar }) {
   };
 
   return el("div", { class: "bloco plano-calendario", style: { "--selo": cliente.paleta?.[0] || cliente.cor || "#4E2CA3" } },
+    datasDoMes.length ? el("div", { class: "datas-do-mes", "aria-label": "Datas do mês" }, el("strong", {}, "Datas do mês:"),
+      datasDoMes.map((x) => el("span", { class: `data-cal ${x.tipo}` }, x.tipo === "mes" ? `${x.nome} (o mês todo)` : `${fmtData(x.data, true)} ${x.nome}`))) : null,
     el("div", { class: "plano-grade" },
       ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"].map((n) => el("div", { class: "plano-cabeca" }, n)),
       dias.slice(0, semanas * 7).map(celula)),

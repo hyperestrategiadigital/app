@@ -63,10 +63,9 @@ test("todas as telas abrem sem erro e o menu agrupa a administração", async ({
     await expect(page.locator("#conteudo h1").first()).toBeVisible();
   }
   await expect(page.locator(".menu-grupo summary")).toHaveText(/Administração/);
-  await expect(page.locator("#menu > a")).toHaveCount(6); // Tarefas e Calendário são um item só
-  await expect(page.locator("#menu")).toContainText("Creators");
+  await expect(page.locator("#menu > a")).toHaveCount(5); // Tarefas e Calendário são um item só
   await expect(page.locator("#menu")).not.toContainText("Studio");
-  for (const rota of ["lixeira", "creators"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
+  for (const rota of ["lixeira"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
   expect(erros).toEqual([]);
 });
 
@@ -74,7 +73,7 @@ test("ajustes automáticos: tipos novos, status do post e arquivo", async ({ pag
   await abrir(page);
   await page.waitForTimeout(1500);
   const s = await page.evaluate(() => window.__store);
-  expect(s["espacos/hyper/tarefas"].t2.tipo).toBe("Vídeo / Roteiro");
+  expect(s["espacos/hyper/tarefas"].t2.tipo).toBe("Produção");
   expect(s["espacos/hyper/tarefas"].p1.statusConteudo).toBe("publicado");
   expect(s["espacos/hyper/tarefas"].velha).toBeUndefined();
   expect(s["espacos/hyper/tarefasArquivo"].velha.titulo).toBe("Entrega antiga");
@@ -606,17 +605,8 @@ test("importar marcas: acha o cliente por nome parecido e manda para a marca com
   expect(Object.keys(s["espacos/hyper/clientes"])).toHaveLength(2);
 });
 
-test("status da tarefa em botões e grupo que sumiu volta para a lista", async ({ page }) => {
+test("status da tarefa em botões", async ({ page }) => {
   await abrir(page);
-  // grupo que foi "juntado nele mesmo" pelo Organizar grupos antigo
-  await page.evaluate(async () => {
-    const db = await import("/js/db.js");
-    await db.salvarComId("marcas", "m-grupo", { nome: "Grupo Exemplo", clienteId: "grupo", ativo: true, paleta: [] });
-    await db.atualizar("clientes", "grupo", { ativo: false, viraMarcaDe: "grupo" });
-    const m = await import("/js/migracoes.js");
-    await m.reativarGruposSumidos();
-  });
-  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].grupo.ativo)).toBe(true);
   await page.goto("/#/tarefas");
   await page.getByRole("button", { name: /\+ Novo/ }).click();
   await page.getByRole("menuitem", { name: /Tarefa/ }).click();
@@ -668,7 +658,7 @@ test("grupo: escolhe a marca antes e a ficha fica igual à de um cliente comum",
   await expect(page).toHaveURL(/#\/clientes\/grupo\/marca\/ma/);
   await expect(page.locator("#conteudo h1")).toHaveText("Marca A");
   const abas = await page.locator(".ficha .abas [role=tab]").allTextContents();
-  expect(abas).toEqual(["Marca", "Contas", "Resultados", "Tráfego pago"]); // contrato e financeiro ficam no geral do grupo
+  expect(abas).toEqual(["Marca", "Campanhas", "Contas", "Resultados", "Tráfego pago"]); // contrato, escopo e financeiro ficam no geral do grupo
   await page.getByRole("tab", { name: "Contas" }).click();
   await expect(page.locator(".cartao-conta")).toHaveCount(1);
   await page.getByRole("button", { name: "Editar redes" }).click();
@@ -826,7 +816,7 @@ test("post novo: formatos novos, nasce como extra e Criar copy preenche a copy e
   await page.getByRole("button", { name: /\+ Novo/ }).click();
   await page.getByRole("menuitem", { name: /Post/ }).click();
   const opcoes = await page.locator("#f-formato option").allTextContents();
-  expect(opcoes).toEqual(["Estático", "Carrossel", "Vídeo", "Story", "Artigo", "E-mail marketing", "WhatsApp", "Blog", "Outro"]);
+  expect(opcoes).toEqual(["Estático", "Carrossel", "Vídeo", "Story", "Anúncio", "Artigo", "E-mail marketing", "WhatsApp", "Blog", "Outro"]);
   const tipos = await page.locator("#f-tipo option").allTextContents();
   expect(tipos[tipos.length - 1]).toBe("Outro");
   await expect(page.locator("#f-extra")).toBeChecked();
@@ -888,8 +878,12 @@ test("marca: medidor, aprendizados dos ajustes, sem botões de IA, e manual edit
   await expect(page.locator("#marca-estiloVisual, #marca-identidadeVisual")).toHaveCount(0);
   await expect(page.locator("#marca-fontes")).toHaveCount(1);
   await page.locator(".aprendizados summary").click();
-  await page.locator(".aprendizados").getByRole("button", { name: "+ O que evitar" }).click();
-  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.evitar || "")).toContain("Não usar a palavra barato");
+  await page.locator(".aprendizados").getByRole("button", { name: "Só em Estático" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.diretrizes || "")).toContain("[Estático] Não usar a palavra barato");
+  const soEstatico = await page.evaluate(async () => { const ia = await import("/js/ia.js");
+    return [ia.montarPedido("copy", { clienteId: "loja", post: { titulo: "x", formato: "Estático" } }), ia.montarPedido("carrossel", { clienteId: "loja", post: { titulo: "x", formato: "Carrossel" } })]; });
+  expect(soEstatico[0]).toContain("- Não usar a palavra barato");
+  expect(soEstatico[1]).not.toContain("Não usar a palavra barato");
 
   await page.goto("/#/config");
   await expect(page.locator("#conteudo")).not.toContainText("OpenAI");
@@ -996,3 +990,136 @@ test("Ajustes: menus configuráveis aparecem no card; prazo automático, pilar, 
   await expect(page.locator(".resumo-pilares")).toContainText("Oferta · 1");
   await expect(page.locator(".resumo-pilares")).toContainText("Educativo · 0");
 });
+
+test("pedido de copy certo para cada formato, vídeo já gravado, anúncio, exemplos marcados e texto de tarefa", async ({ page }) => {
+  await abrir(page, { extra: { tarefas: {
+    ex1: { titulo: "Post marcado", tipo: "Conteúdo", clienteId: "loja", formato: "Estático", statusConteudo: "ideia", status: "a_fazer", dataPublicacao: dia(-3), prazo: dia(-4), exemplo: true, copy: "Esta é a copy marcada como exemplo pela equipe, com o jeito da loja.", checklist: [] },
+    ex2: { titulo: "Post aprovado comum", tipo: "Conteúdo", clienteId: "loja", formato: "Estático", statusConteudo: "publicado", status: "concluido", concluidoEm: dia(-2), dataPublicacao: dia(-2), prazo: dia(-3), copy: "Copy aprovada mas que ninguém marcou como exemplo para a IA aprender.", checklist: [] } } } });
+  const r = await page.evaluate(async () => {
+    const ia = await import("/js/ia.js");
+    const p = (post) => ia.montarPedido(ia.tipoDoPedido(post), { clienteId: "loja", marcaId: "", post: { titulo: "Tema", ...post } });
+    return {
+      tipos: ["Estático", "Carrossel", "Vídeo", "Story", "Anúncio", "Artigo", "Blog", "E-mail marketing", "WhatsApp", "Outro"].map((formato) => ia.tipoDoPedido({ tipo: "Conteúdo", formato })),
+      gravado: ia.tipoDoPedido({ tipo: "Conteúdo", formato: "Vídeo", videoGravado: true }),
+      tarefa: ia.tipoDoPedido({ tipo: "Projeto" }),
+      email: p({ formato: "E-mail marketing" }), artigo: p({ formato: "Artigo" }), anuncio: p({ formato: "Anúncio" }),
+      video: p({ formato: "Vídeo", videoGravado: true, transcricao: "Oi, eu sou a Ana e hoje vou mostrar a coleção." }),
+      texto: ia.montarPedido("texto", { clienteId: "loja", post: { tipo: "Projeto", titulo: "Apresentação comercial", notas: "Para lojistas" } }),
+      exemplos: ia.exemplosDaMarca("loja", "").map((t) => t.id),
+      email2: ia.camposDaResposta(ia.lerResposta("[ASSUNTO]\nA\n[PRÉ-CABEÇALHO]\nB\n[TEXTO]\nCorpo do e-mail\n[BOTÃO]\nComprar")),
+      anuncio2: ia.camposDaResposta(ia.lerResposta("[TEXTO PRINCIPAL]\nVariação 1\n[TÍTULO]\nT1"))
+    };
+  });
+  expect(r.tipos).toEqual(["copy", "carrossel", "roteiro", "stories", "anuncio", "artigo", "artigo", "email", "whatsapp", "copy"]);
+  expect(r.gravado).toBe("videoGravado");
+  expect(r.tarefa).toBe("texto");
+  expect(r.email).toContain("[ASSUNTO]"); expect(r.email).toContain("[PRÉ-CABEÇALHO]"); expect(r.email).not.toContain("[LEGENDA]");
+  expect(r.artigo).toContain("[TÍTULO]"); expect(r.artigo).toContain("[TEXTO]");
+  expect(r.anuncio).toContain("[TEXTO PRINCIPAL]"); expect(r.anuncio).toContain("políticas de anúncios");
+  expect(r.video).toContain("Transcrição do vídeo já gravado"); expect(r.video).not.toContain("[ROTEIRO]");
+  expect(r.texto).toContain("Apresentação comercial"); expect(r.texto).toContain("Para lojistas"); expect(r.texto).toContain("[TEXTO]");
+  expect(r.exemplos).toEqual(["ex1"]); // marcado tem preferência sobre aprovado
+  expect(r.email2).toEqual({ copy: "Corpo do e-mail", textoArte: "ASSUNTO\nA\n\nPRÉ-CABEÇALHO\nB\n\nBOTÃO\nComprar" });
+  expect(r.anuncio2.copy).toBe("Variação 1");
+
+  // No post: objetivo é a etapa do funil; vídeo já gravado pede a transcrição
+  await page.goto("/#/tarefas");
+  await page.getByRole("button", { name: /\+ Novo/ }).click();
+  await page.getByRole("menuitem", { name: /Post/ }).click();
+  await expect(page.locator("#f-objetivo option")).toHaveText(["—", "Reconhecimento", "Consideração", "Conversão", "Relacionamento"]);
+  await page.selectOption("#f-formato", "Vídeo");
+  await page.locator("#f-videoGravado").check();
+  await expect(page.locator("#f-transcricao")).toBeVisible();
+  await page.keyboard.press("Escape");
+  // Tarefa comum: campo Texto com "Criar texto"
+  await page.getByRole("button", { name: /\+ Novo/ }).click();
+  await page.getByRole("menuitem", { name: /Tarefa/ }).click();
+  await page.selectOption("#f-tipo", "Projeto");
+  await page.selectOption("#f-clienteId", "loja");
+  await page.fill("#f-titulo", "Apresentação comercial");
+  await page.getByRole("button", { name: "✨ Criar texto" }).click();
+  const janela = page.locator(".modal").last();
+  await janela.locator("#ia-resposta").fill("[TEXTO]\nSlide 1: quem somos");
+  await janela.getByRole("button", { name: "Usar resposta" }).click();
+  await expect(page.locator("#f-texto")).toHaveValue(/Slide 1: quem somos/);
+});
+
+test("campanha: agrupa peças na ficha, aparece no post e entra no pedido de copy", async ({ page }) => {
+  const erros = await abrir(page);
+  await page.goto("/#/clientes/loja");
+  await page.getByRole("tab", { name: "Campanhas" }).click();
+  await page.getByRole("button", { name: "+ Campanha" }).click();
+  await page.fill("#f-nome", "Natal da Loja");
+  await page.fill("#f-mensagem", "O presente certo está aqui");
+  await page.fill("#f-condicoes", "10% no Pix até 24/12");
+  await page.click(".modal button[type=submit]");
+  await expect(page.locator(".aba-campanhas .campanha-cartao")).toContainText("Natal da Loja");
+  await page.locator(".aba-campanhas .campanha-cartao").getByRole("button", { name: "+ Post" }).click();
+  await expect(page.locator("#f-campanhaId")).toHaveValue(/.+/);
+  await page.fill("#f-titulo", "Cestas de Natal");
+  await page.click(".modal button[type=submit]");
+  await expect(page.locator(".aba-campanhas .campanha-cartao")).toContainText("Cestas de Natal");
+  await expect(page.locator(".aba-campanhas .campanha-cartao")).toContainText("0 de 1 peça(s) prontas");
+  const pedido = await page.evaluate(async () => {
+    const t = Object.entries(window.__store["espacos/hyper/tarefas"]).find(([, x]) => x.titulo === "Cestas de Natal");
+    const ia = await import("/js/ia.js");
+    return ia.montarPedido("copy", { clienteId: "loja", post: { id: t[0], ...t[1] } });
+  });
+  expect(pedido).toContain("## A campanha deste conteúdo");
+  expect(pedido).toContain("10% no Pix até 24/12");
+  expect(erros).toEqual([]);
+});
+
+test("escopo do cliente, datas comemorativas da Hyper e espaço dos criativos", async ({ page }) => {
+  await abrir(page);
+  await page.goto("/#/clientes/loja");
+  await page.getByRole("tab", { name: "Escopo" }).click();
+  await page.getByRole("button", { name: "+ Linha" }).click();
+  const linha = page.locator(".tabela-escopo tbody tr").last();
+  await linha.locator("select[aria-label=Serviço]").selectOption("Social media");
+  await linha.locator("select[aria-label=Frequência]").selectOption("Semanal");
+  await linha.locator("input[aria-label=Quantidade]").fill("2");
+  await page.getByRole("button", { name: "Salvar escopo" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.escopo?.at(-1))).toMatchObject({ servico: "Social media", frequencia: "Semanal", quantidade: "2", quem: "Hyper" });
+  expect(await page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.servicos)).toContain("Social media");
+
+  // Datas comemorativas ficam na marca; feriados aparecem no calendário de todos
+  await page.getByRole("tab", { name: "Marca" }).click();
+  await page.fill("#marca-data-quando", "20/01");
+  await page.fill("#marca-data-nome", "Dia do Queijo");
+  await page.locator(".datas-marca").getByRole("button", { name: "+ Data" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.datas)).toEqual([{ quando: "01-20", nome: "Dia do Queijo" }]);
+  const datas = await page.evaluate(async () => { const ia = await import("/js/ia.js"); return [ia.datasPerto("2027-01-18", 3, "loja", "").map((d) => d.nome), ia.datasPerto("2027-01-18", 3, "grupo", "").map((d) => d.nome)]; });
+  expect(datas[0]).toContain("Dia do Queijo");
+  expect(datas[0]).toContain("Janeiro Branco (saúde mental)");
+  expect(datas[1]).not.toContain("Dia do Queijo");
+  await page.goto("/#/calendario/loja/2027-01");
+  await expect(page.locator(".datas-do-mes")).toContainText("Dia do Queijo");
+  await expect(page.locator(".cal-dia .data-cal.feriado", { hasText: "Confraternização Universal" })).toHaveCount(1);
+  await page.goto("/#/calendario/loja/2027-01/planejar");
+  await expect(page.locator(".plano-dia .data-cal.marca", { hasText: "Dia do Queijo" })).toHaveCount(1);
+  await page.goto("/#/config");
+  await expect(page.locator("#conteudo h2", { hasText: "Datas comemorativas" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Ver o espaço dos criativos" }).click();
+  await expect(page.locator("#conteudo")).toContainText("do plano gratuito");
+});
+
+test("aprovação de tema: ideia aprovada pelo link vai para a produção", async ({ page, context }) => {
+  await abrir(page);
+  await page.evaluate(async () => { const db = await import("/js/db.js"); await db.salvarComId("tarefas", "id1", { titulo: "Ideia de carrossel", tipo: "Conteúdo", clienteId: "grupo", formato: "Carrossel", rede: "Instagram", dataPublicacao: new Date().toISOString().slice(0, 10), roteiro: "5 dicas", statusConteudo: "ideia", status: "a_fazer", checklist: [] }); });
+  await page.evaluate(async () => { const a = await import("/js/aprovacoes.js"); await a.gerarLinkAprovacao("grupo", new Date().toISOString().slice(0, 7)); });
+  await expect(page.locator(".modal").last()).toContainText("o cliente aprova o tema");
+  const link = await page.locator(".modal input[readonly]").inputValue();
+  expect(await page.evaluate(() => window.__store["espacos/hyper/tarefas"].id1.statusConteudo)).toBe("ideia");
+  const cliente = await context.newPage();
+  await rotearMocks(cliente);
+  await cliente.goto(link.replace(/^https?:\/\/[^/]+/, ""));
+  const cartao = cliente.locator("article.aprov-post", { hasText: "Ideia de carrossel" });
+  await expect(cartao).toContainText("Tema para aprovar");
+  await cliente.fill("#aprov-nome", "Dona do Grupo");
+  await cartao.getByRole("button", { name: "Aprovar tema" }).click();
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].id1.statusConteudo), { timeout: 10000 }).toBe("producao");
+});
+
+

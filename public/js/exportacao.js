@@ -1,7 +1,7 @@
 // Exportação do conteúdo do mês de um cliente: PDF visual para o cliente aprovar.
 import { dados, porId, listarSub, todasTarefas, garantirArquivo, carregarArquivo, limiteArquivo, identidade } from "./db.js";
 import { fmtData, fmtDiaSemana, avisar, esc } from "./ui.js";
-import { TIPO_CONTEUDO } from "./constantes.js";
+import { TIPO_CONTEUDO, rotuloObjetivo } from "./constantes.js";
 import { caminhoArtes } from "./arquivos.js";
 
 export const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -68,7 +68,7 @@ export async function exportarPDF(clienteId, mes, marcaId) {
         <div class="data">${esc(fmtDiaSemana(dataPost(t)))} · ${esc(fmtData(dataPost(t)))}${t.hora ? ` · ${esc(t.hora)}` : ""}</div>
         <h3>${esc(t.titulo)}</h3>
         <div class="tags"><span>${esc(t.formato || "")}</span><span>${esc(t.rede || "")}</span></div>
-        ${t.objetivo ? `<p><b>Objetivo:</b> ${esc(t.objetivo)}</p>` : ""}
+        ${t.objetivo ? `<p><b>Objetivo:</b> ${esc(rotuloObjetivo(t.objetivo))}</p>` : ""}
         ${t.copy ? `<p class="copy">${esc(t.copy)}</p>` : t.roteiro ? `<p class="copy">${esc(t.roteiro)}</p>` : ""}
         ${t.linkCanva ? `<p class="link"><a href="${esc(t.linkCanva)}">Ver arte no Canva</a></p>` : ""}
         <div class="aprovacao">☐ Aprovado &nbsp;&nbsp; ☐ Ajustar: ________________________</div>

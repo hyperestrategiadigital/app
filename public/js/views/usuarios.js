@@ -220,7 +220,7 @@ export function render({ renderizar }) {
       el("button", { class: "destaque", onClick: () => abrirConvite(renderizar) }, "+ Adicionar usuário")),
     el("div", { class: "explica-rotinas" },
       el("strong", {}, "Como funciona: "), "adicione a pessoa pelo e-mail da conta Google dela (ela recebe um convite e já entra liberada) ou peça para ela abrir o app e pedir acesso: o pedido aparece aqui para qualquer administrador aprovar. ",
-      "Áreas: ", el("strong", {}, "Conteúdo"), " (posts, planejamento, criar arte, marca), ", el("strong", {}, "Tráfego pago"), " (contas, verbas, manutenções) e ",
+      "Áreas: ", el("strong", {}, "Conteúdo"), " (posts, planejamento, copy, marca), ", el("strong", {}, "Tráfego pago"), " (contas, verbas, manutenções) e ",
       el("strong", {}, "Financeiro"), " (mensalidades, cobranças, orçamentos). Em ", el("strong", {}, "Clientes que pode ver"), " você limita a pessoa a alguns clientes: ela não vê os outros nem no banco."),
     !emailAtivo() ? el("p", { class: "faixa-aviso" }, "E-mails automáticos desligados: convites e liberações não avisam por e-mail. ", el("a", { href: "#/config" }, "Ligar em Ajustes →")) : null,
     el("p", { class: "subtitulo" }, "Link do app: ", el("a", { href: location.origin, target: "_blank", rel: "noopener" }, location.origin)),

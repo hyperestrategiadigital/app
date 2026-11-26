@@ -2,7 +2,7 @@
 // Aparecem no calendário separados dos posts e podem ir para a sua Google Agenda pessoal.
 import { el, formulario, confirmar, avisar, hojeISO, fecharModais } from "./ui.js";
 import { ehAdmin } from "./permissoes.js";
-import { dados, criar, atualizar, excluir, porId, opcoesClientes, salvarComId, desfazerExclusao } from "./db.js";
+import { dados, criar, atualizar, excluir, porId, opcoesClientes, desfazerExclusao } from "./db.js";
 import { sincronizar, linkGoogleAgenda, agendaConectada, configEquipe, emailsParticipantes } from "./agenda.js";
 
 export const TIPOS_COMPROMISSO = ["Reunião", "Gravação externa", "Visita", "Evento", "Call", "Pessoal", "Outro"];

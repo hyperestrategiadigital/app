@@ -6,6 +6,7 @@ import {
   getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch, getDocs, getDoc, query, where
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+
 import { eu, definirEu, colecoesPermitidas, pode, ehAdmin, clientesRestritos, ehCliente, marcasRestritas } from "./permissoes.js";
 import { TIPO_CONTEUDO } from "./constantes.js";
 
@@ -30,7 +31,7 @@ function abrirBanco(id) {
 }
 
 const TODAS = [
-  "clientes", "marcas", "tarefas", "recorrencias", "compromissos", "membros",
+  "clientes", "marcas", "tarefas", "recorrencias", "compromissos", "membros", "campanhas",
   "financeiro", "orcamentos", "contratos", "contasAds", "manutencoes", "aprovacoes", "config"
 ];
 
@@ -108,8 +109,7 @@ async function escolherBanco() {
 /**
  * Entra no espaço. Resolve com o estado:
  *  - "ok": membro, dados carregando
- *  - "migrar": o espaço ainda não existe e esta conta tem dados antigos (conta da Hyper)
- *  - "sem-espaco": o espaço ainda não existe e esta conta não tem dados
+ *  - "sem-espaco": o espaço não foi encontrado (problema de conexão ou de banco)
  *  - "novo": o espaço existe, mas esta pessoa ainda não é membro (pedir acesso)
  *  - "pendente": pediu acesso e o administrador ainda não liberou
  */
@@ -119,10 +119,7 @@ export async function conectar(usuario, aoErro) {
   db = banco;
   bancoInfo.id = id;
   definirEu({ uid: usuario.uid, email: usuario.email, nome: usuario.displayName || usuario.email });
-  if (!espaco.exists()) {
-    const antigos = await comPrazo(getDocs(collection(db, "users", usuario.uid, "clientes")), 30).catch(() => null);
-    return antigos && !antigos.empty ? "migrar" : "sem-espaco";
-  }
+  if (!espaco.exists()) return "sem-espaco";
   espacoInfo.dono = espaco.data().dono;
   espacoInfo.emailUrl = espaco.data().emailUrl || "";
   const dono = espaco.data().dono === usuario.uid;
@@ -330,7 +327,7 @@ export const excluirAtividade = (tarefaId, id) => comPrazo(deleteDoc(doc(refAtiv
 
 /* ---------------- Lixeira (30 dias) ---------------- */
 // O que é excluído destas coleções vai antes para a lixeira, de onde o administrador pode restaurar.
-export const COM_LIXEIRA = new Set(["tarefas", "compromissos", "clientes", "marcas", "recorrencias", "financeiro", "orcamentos", "contasAds", "manutencoes"]);
+export const COM_LIXEIRA = new Set(["tarefas", "compromissos", "clientes", "marcas", "campanhas", "recorrencias", "financeiro", "orcamentos", "contasAds", "manutencoes"]);
 export const DIAS_LIXEIRA = 30;
 
 /** Exclui. Com lixeira (padrão nas coleções acima), guarda uma cópia por 30 dias. */
@@ -363,18 +360,35 @@ export async function desfazerExclusao(col, id, valores) {
   await comPrazo(deleteDoc(doc(ref("lixeira"), `${col}__${id}`))).catch(() => {});
 }
 export const excluirDaLixeira = (id) => comPrazo(deleteDoc(doc(ref("lixeira"), id)));
-/** Apaga de vez o que está na lixeira há mais de 30 dias, e erros antigos (administrador, ao entrar). */
+const apagarEmLote = async (refs) => {
+  for (let i = 0; i < refs.length; i += 400) {
+    const lote = writeBatch(db);
+    refs.slice(i, i + 400).forEach((r) => lote.delete(r));
+    await comPrazo(lote.commit());
+  }
+};
+/**
+ * Faxina do banco (administrador, ao entrar): lixeira com mais de 30 dias, erros antigos e links de aprovação
+ * vencidos há mais de 7 dias (com as imagens copiadas para eles, que ocupam espaço no plano gratuito).
+ */
 export async function limparAntigos() {
   const limite = Date.now() - DIAS_LIXEIRA * 86400000;
   for (const col of ["lixeira", "erros"]) {
     const snap = await comPrazo(getDocs(ref(col)), 30).catch(() => null);
-    const velhos = (snap?.docs || []).filter((d) => (d.data().excluidoEm || d.data().em || 0) < limite);
-    for (let i = 0; i < velhos.length; i += 400) {
-      const lote = writeBatch(db);
-      velhos.slice(i, i + 400).forEach((d) => lote.delete(d.ref));
-      await comPrazo(lote.commit());
-    }
+    await apagarEmLote((snap?.docs || []).filter((d) => (d.data().excluidoEm || d.data().em || 0) < limite).map((d) => d.ref));
   }
+  const vencidos = (dados.aprovacoes || []).filter((a) => (a.expiraEm || 0) < Date.now() - 7 * 86400000);
+  for (const a of vencidos) {
+    for (const sub of ["artes", "respostas"]) {
+      const snap = await comPrazo(getDocs(refSub(["aprovacoes", a.id, sub])), 30).catch(() => null);
+      await apagarEmLote((snap?.docs || []).map((d) => d.ref));
+    }
+    await comPrazo(deleteDoc(doc(ref("aprovacoes"), a.id))).catch(() => {});
+  }
+  // Chave da OpenAI, que saiu do app (uma vez por navegador)
+  try {
+    if (!localStorage.getItem("hyper-sem-openai")) { await comPrazo(deleteDoc(doc(ref("config"), "openai"))); localStorage.setItem("hyper-sem-openai", "1"); }
+  } catch {}
 }
 
 /* ---------------- Registro de erros ---------------- */
@@ -474,56 +488,6 @@ export function ouvirSub(caminho, aoMudar) {
 }
 export const excluirSub = (caminho, id) => comPrazo(deleteDoc(doc(refSub(caminho), id)));
 
-/* ---------------- Migração: dados antigos (users/{uid}) → espaço compartilhado ---------------- */
-const ANTIGAS = ["clientes", "tarefas", "recorrencias", "compromissos", "financeiro", "orcamentos", "contasAds", "manutencoes", "conteudos"];
-const CAMPOS_CONTRATO = ["mensalidade", "diaVencimento"];
-
-export async function migrarParaEspaco(usuario, aoProgredir = () => {}) {
-  const uid = usuario.uid;
-  const antigo = (...c) => collection(db, "users", uid, ...c);
-  // 1) Cria o espaço e o dono como administrador
-  await comPrazo(setDoc(doc(db, "espacos", ESPACO), { nome: "Hyper", dono: uid, criadoEm: Date.now(), migradoDe: uid }));
-  await comPrazo(setDoc(doc(ref("membros"), uid), {
-    nome: usuario.displayName || "Hyper", email: usuario.email, papel: "admin", permissoes: ["conteudo", "trafego", "financeiro"], status: "ativo", criadoEm: Date.now()
-  }));
-  definirEu({ uid, email: usuario.email, nome: usuario.displayName, papel: "admin", dono: true });
-  espacoInfo.dono = uid;
-  // 2) Copia as coleções
-  const contratos = [];
-  for (const col of ANTIGAS) {
-    aoProgredir(`Copiando ${col}…`);
-    const snap = await comPrazo(getDocs(antigo(col)), 120);
-    const itens = snap.docs.map((d) => {
-      const v = { id: d.id, ...d.data() };
-      if (col === "clientes") {
-        // Valores do contrato saem da ficha (todos veem) e vão para "contratos" (só financeiro vê)
-        const contrato = Object.fromEntries(CAMPOS_CONTRATO.filter((k) => v[k] != null && v[k] !== "").map((k) => [k, v[k]]));
-        if (Object.keys(contrato).length) contratos.push({ id: d.id, clienteId: d.id, ...contrato });
-        CAMPOS_CONTRATO.forEach((k) => delete v[k]);
-      }
-      return v;
-    });
-    if (itens.length) await gravarEmLote(col, itens);
-    if (col === "clientes") {
-      for (const c of itens) {
-        const artes = await comPrazo(getDocs(antigo("clientes", c.id, "artes")), 120).catch(() => null);
-        if (artes && !artes.empty) {
-          aoProgredir(`Copiando criativos de ${c.nome}…`);
-          for (const a of artes.docs) await salvarSub(["clientes", c.id, "artes"], a.data(), a.id);
-        }
-      }
-    }
-  }
-  if (contratos.length) await gravarEmLote("contratos", contratos);
-  // 3) Configurações
-  aoProgredir("Copiando configurações…");
-  const cfg = await comPrazo(getDocs(antigo("config")), 60).catch(() => null);
-  for (const d of cfg?.docs || []) {
-    if (d.id === "agenda") await comPrazo(setDoc(refPessoal("config", "agenda"), d.data()));
-    else await comPrazo(setDoc(doc(ref("config"), d.id), d.data()));
-  }
-}
-
 /* ---------------- Consultas de conveniência ---------------- */
 export const porId = (col, id) => dados[col].find((x) => x.id === id);
 export const nomeCliente = (id) => porId("clientes", id)?.nome || "Sem cliente";
@@ -535,14 +499,17 @@ export const opcoesClientes = (incluirVazio = true) => [
 ];
 /** Contrato do cliente (mensalidade, dia de vencimento). Só chega para quem tem acesso ao financeiro. */
 export const contrato = (clienteId) => porId("contratos", clienteId) || {};
+/** Campanhas do cliente (de uma marca: as dela e as do grupo inteiro), mais recentes primeiro. */
+export const campanhasDo = (clienteId, marcaId) => (dados.campanhas || [])
+  .filter((c) => c.clienteId === clienteId && (marcaId === undefined || !c.marcaId || c.marcaId === (marcaId || "")))
+  .sort((a, b) => (b.inicio || "").localeCompare(a.inicio || ""));
 
 /** Campos de identidade (aba Marca), que existem no cliente e em cada marca dele. */
-export const CAMPOS_IDENTIDADE = ["logo", "paleta", "cor", "fontes", "descricao", "tomDeVoz", "persona", "publico", "pilares", "palavrasChave", "evitar", "diretrizes", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva"];
+export const CAMPOS_IDENTIDADE = ["logo", "paleta", "cor", "fontes", "descricao", "tomDeVoz", "persona", "publico", "pilares", "palavrasChave", "evitar", "diretrizes", "datas", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva"];
 /** Marcas ativas do cliente; a marca principal (ex.: a que leva o nome do grupo) vem primeiro. */
 export const marcasDo = (clienteId) => (dados.marcas || []).filter((m) => m.clienteId === clienteId && m.ativo !== false)
   .sort((a, b) => (b.principal ? 1 : 0) - (a.principal ? 1 : 0) || (a.ordem ?? 99) - (b.ordem ?? 99) || (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
 /** Cliente com marcas funciona como grupo (guarda-chuva). */
-export const ehGrupo = (clienteId) => marcasDo(clienteId).length > 0;
 /**
  * Identidade usada no pedido de copy e no PDF: a da marca (quando o post é de uma marca),
  * completando o que faltar com a do cliente. `nome` vira o da marca e `clienteNome` guarda o do cliente.

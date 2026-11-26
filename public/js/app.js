@@ -3,19 +3,17 @@ import { auth } from "./firebase.js";
 import {
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-import { conectar, desconectar, aoMudar, migrarParaEspaco, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes, registrarErro, limparAntigos, porId, notificar } from "./db.js";
+
+import { conectar, desconectar, aoMudar, pedirAcesso, arquivarAntigas, dados, espacoInfo, atualizarMeuCadastro, sincronizarNomesClientes, registrarErro, limparAntigos, porId, notificar } from "./db.js";
 import { aplicarListas } from "./constantes.js";
 import { acompanharRespostas } from "./aprovacoes.js";
-import { sincronizar as sincronizarAgenda } from "./agenda.js";
 import { avisarAdmins, sincronizarAdmins } from "./emails.js";
 import { avatar, abrirTarefa } from "./views/componentes.js";
 import { el, avisar, hojeISO, quandoErro } from "./ui.js";
 import { eu, pode, ehAdmin, ehCliente, AREAS, AREAS_EQUIPE } from "./permissoes.js";
 import { gerarRecorrencias } from "./recorrencias.js";
-import { marcarArtesComMarca } from "./arquivos.js";
 import { abrirBusca, definirTelas, ativarAtalhoBusca } from "./busca.js";
-import { completarPostsSemFormato, migrarReunioes, migrarTipos, migrarFormatos, alinharStatusPosts, marcarCompromissosParaAgenda, reativarGruposSumidos } from "./migracoes.js";
-
+import { migrarTipos, migrarFormatos, alinharStatusPosts, atualizarListas } from "./migracoes.js";
 import * as hoje from "./views/hoje.js";
 import * as tarefas from "./views/tarefas.js";
 import * as clientes from "./views/clientes.js";
@@ -29,7 +27,6 @@ import * as relatorios from "./views/relatorios.js";
 import * as usuarios from "./views/usuarios.js";
 import * as conta from "./views/conta.js";
 import * as lixeira from "./views/lixeira.js";
-import * as creators from "./views/creators.js";
 import * as portal from "./views/portal.js";
 
 // `area`: quem não tem essa área não vê a tela ("admin" = só administradores)
@@ -40,7 +37,6 @@ const ROTAS = {
   tarefas: { titulo: "Tarefas", icone: "✓", view: tarefas, estado: "calendario", menu: false },
   calendario: { titulo: "Tarefas", icone: "✓", view: calendario, inclui: ["tarefas"] },
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
-  creators: { titulo: "Creators", icone: "★", view: creators, area: "conteudo", selo: "em breve" },
   trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego, area: "trafego" },
   financeiro: { titulo: "Financeiro", icone: "$", view: financeiro, area: "financeiro" },
   rotinas: { titulo: "Rotinas", icone: "↻", view: rotinas, area: "admin", grupo: "admin" },
@@ -83,7 +79,6 @@ function rotaAtual() {
   return { nome: R[nome] && liberada(R[nome]) ? nome : telaInicial(), params: resto.map(decodeURIComponent) };
 }
 
-export function irPara(caminho) { location.hash = "#/" + caminho; }
 
 let adminAberto = null; // grupo "Administração" aberto/fechado (lembra a escolha)
 function montarMenu() {
@@ -212,23 +207,6 @@ async function entrar(usuario) {
   const estado = await conectar(usuario, (e) => avisar("Erro ao carregar dados: " + e.message, "erro"));
   montarUsuario();
 
-  if (estado === "migrar") return telaCheia(
-    el("h1", {}, "Criar o espaço da Hyper"),
-    el("p", {}, "A partir de agora o app é compartilhado: cada pessoa entra com o próprio Google e vê o que tiver permissão. Esta conta tem os dados atuais (clientes, tarefas, posts, financeiro…) e vai virar a administradora do espaço."),
-    el("p", { class: "subtitulo" }, "Os dados são copiados para o espaço novo. A cópia antiga continua guardada como backup."),
-    (() => {
-      const status = el("p", { class: "subtitulo" });
-      const botao = el("button", { class: "destaque", onClick: async () => {
-        botao.disabled = true;
-        try {
-          await migrarParaEspaco(usuario, (msg) => (status.textContent = msg));
-          status.textContent = "Pronto!";
-          location.reload();
-        } catch (e) { avisar("Erro ao criar o espaço: " + e.message, "erro"); botao.disabled = false; }
-      } }, "Criar o espaço e copiar meus dados");
-      return el("div", {}, botao, status);
-    })());
-
   if (estado === "pendente") return telaCheia(
     el("h1", {}, "Pedido enviado ✓"),
     el("p", {}, `Olá, ${eu.nome || usuario.email}! Seu pedido de acesso foi para os administradores da Hyper.`),
@@ -280,8 +258,7 @@ async function entrar(usuario) {
   // Rotinas automáticas e ajustes de dados antigos: só o administrador roda
   if (ehAdmin()) {
     gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
-    marcarArtesComMarca().catch((e) => console.warn("Criativos:", e.message));
-    reativarGruposSumidos().then(completarPostsSemFormato).then(migrarReunioes).then(migrarTipos).then(migrarFormatos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).then(marcarCompromissosParaAgenda).then((n) => { if (n) sincronizarAgenda(); }).catch((e) => console.error("Migração:", e));
+    atualizarListas().then(migrarTipos).then(migrarFormatos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).catch((e) => console.error("Ajustes de dados:", e));
   }
 }
 

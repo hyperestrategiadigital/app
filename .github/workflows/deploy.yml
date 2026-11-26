@@ -52,3 +52,10 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
         run: npx -y firebase-tools@latest deploy --only hosting --project hyper-9e023 --non-interactive
+      # As regras do Firestore vão junto. A conta de serviço precisa do papel "Administrador do Firebase Rules"
+      # (ou "Editor do Firebase"); sem ele este passo falha, o site continua publicado e as regras ficam como estavam.
+      - name: Publicar regras do Firestore
+        continue-on-error: true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: npx -y firebase-tools@latest deploy --only firestore:rules --project hyper-9e023 --non-interactive

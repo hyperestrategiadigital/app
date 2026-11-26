@@ -156,8 +156,9 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
       entrada = el("input", { type: "checkbox", checked: !!v });
     } else if (c.tipo === "multi") {
       const sel = new Set(v || []);
-      entrada = el("div", { class: "multi" }, (c.opcoes || []).map((o) =>
-        el("label", { class: "chip-check" }, el("input", { type: "checkbox", value: o, checked: sel.has(o) }), o)));
+      // opções: textos ou pares [valor, rótulo]
+      entrada = el("div", { class: "multi" }, (c.opcoes || []).map((o) => { const [valor, rotulo] = Array.isArray(o) ? o : [o, o];
+        return el("label", { class: "chip-check" }, el("input", { type: "checkbox", value: valor, checked: sel.has(valor) }), rotulo); }));
       entrada.valor = () => [...entrada.querySelectorAll("input:checked")].map((i) => i.value);
     } else if (c.tipo === "botoes") {
       // Escolha única em botões (ex.: status): um clique muda, sem menu cascata

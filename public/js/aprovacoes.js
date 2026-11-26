@@ -8,7 +8,7 @@ import { dados, porId, salvarComId, salvarSub, listarSub, ouvirSub, excluirSub, 
 import { eu, pode } from "./permissoes.js";
 import { postsDoMes, dataPost, nomeMes } from "./exportacao.js";
 import { caminhoArtes } from "./arquivos.js";
-import { statusDaEtapa } from "./constantes.js";
+import { statusDaEtapa, rotuloObjetivo } from "./constantes.js";
 
 const DIAS_VALIDADE = 60;
 const LINK_BASE = location.origin + location.pathname.replace(/[^/]*$/, "");
@@ -36,7 +36,8 @@ export async function gerarLinkAprovacao(clienteId, mes, marcaId, { lista = null
       clienteId, marcaId: marcaId || "", mes, rotulo: rotulo || "", nome: marca.nome || "", cor: marca.cor || marca.paleta?.[0] || "",
       posts: posts.map((t) => ({
         id: t.id, titulo: t.titulo || "", formato: t.formato || "", rede: t.rede || "", data: dataPost(t), hora: t.hora || "",
-        objetivo: t.objetivo || "", roteiro: t.roteiro || "", copy: t.copy || "", linkCanva: t.linkCanva || ""
+        tema: (t.statusConteudo || "ideia") === "ideia", // ainda é ideia: o cliente aprova o tema antes da produção
+        objetivo: rotuloObjetivo(t.objetivo), roteiro: t.roteiro || "", copy: t.copy || "", linkCanva: t.linkCanva || ""
       })),
       postIds: posts.map((t) => t.id),
       emailUrl: espacoInfo.emailUrl || "",
@@ -57,20 +58,21 @@ export async function gerarLinkAprovacao(clienteId, mes, marcaId, { lista = null
       await excluirSub(["aprovacoes", token, "respostas"], r.id).catch(() => {});
       delete dados.respostasCliente[r.id];
     }
-    for (const t of posts) if (["ideia", "producao"].includes(t.statusConteudo || "ideia") || t.ajusteCliente) {
+    // Prontos vão para "Em aprovação"; ideias continuam ideias até o cliente aprovar o tema
+    for (const t of posts) if (t.statusConteudo === "producao" || (t.ajusteCliente && (t.statusConteudo || "ideia") !== "ideia")) {
       await atualizar("tarefas", t.id, { statusConteudo: "aprovacao", status: statusDaEtapa("aprovacao"), ajusteCliente: "", aprovacaoDesde: Date.now() });
     }
     fechar();
-    mostrarLink(token, marca.nome, mes, posts.length, rotulo);
+    mostrarLink(token, marca.nome, mes, posts.length, rotulo, posts.filter((t) => (t.statusConteudo || "ideia") === "ideia").length);
   } catch (e) { fechar(); avisar("Não consegui criar o link: " + e.message, "erro"); }
 }
 
-function mostrarLink(token, nome, mes, n, rotulo = "") {
+function mostrarLink(token, nome, mes, n, rotulo = "", temas = 0) {
   const link = linkAprovacao(token);
   const periodo = rotulo || nomeMes(mes);
   const texto = `Oi! Segue ${rotulo ? `o conteúdo da ${rotulo}` : `o planejamento de ${nomeMes(mes)}`} de ${nome} para você aprovar. É só abrir, ver cada post e clicar em Aprovar ou Pedir ajuste: ${link}`;
   abrirModal("Link de aprovação", el("div", {},
-    el("p", {}, `${n} post(s) de ${periodo}. O link vale ${DIAS_VALIDADE} dias e não pede login. Os posts foram para a etapa "Em aprovação".`),
+    el("p", {}, `${n} post(s) de ${periodo}. O link vale ${DIAS_VALIDADE} dias e não pede login. ${temas ? `${temas === n ? "Todos ainda são ideias: o cliente aprova o tema" : `${temas} ainda são ideias: o cliente aprova o tema; os outros foram para "Em aprovação"`}. Tema aprovado vai para "Em produção".` : "Os posts foram para a etapa \"Em aprovação\"."}`),
     el("input", { type: "text", value: link, readonly: true, onFocus: (e) => e.target.select() }),
     el("div", { class: "acoes" },
       el("button", { class: "destaque", onClick: async () => { await navigator.clipboard.writeText(texto).catch(() => {}); avisar("Mensagem com o link copiada."); } }, "Copiar mensagem"),
@@ -112,9 +114,16 @@ async function aplicarResposta(token, r) {
   try {
     await atualizarSub(["aprovacoes", token, "respostas"], r.id, { aplicadaEm: Date.now() });
     const quem = r.nome ? `${r.nome} (cliente)` : "O cliente";
-    if (r.status === "aprovado") {
-      if (["ideia", "producao", "aprovacao"].includes(t.statusConteudo || "ideia")) await atualizar("tarefas", t.id, { statusConteudo: "aprovado", status: statusDaEtapa("aprovado"), ajusteCliente: "" });
+    if (r.status === "aprovado" && (t.statusConteudo || "ideia") === "ideia") {
+      // Era o tema (validação do conceito): segue para a produção
+      await atualizar("tarefas", t.id, { statusConteudo: "producao", status: statusDaEtapa("producao"), ajusteCliente: "" });
+      registrarAtividade(t.id, { texto: `— ${quem} aprovou o tema pelo link${r.comentario ? `: "${r.comentario}"` : ""}` });
+    } else if (r.status === "aprovado") {
+      if (["producao", "aprovacao"].includes(t.statusConteudo)) await atualizar("tarefas", t.id, { statusConteudo: "aprovado", status: statusDaEtapa("aprovado"), ajusteCliente: "" });
       registrarAtividade(t.id, { texto: `— ${quem} aprovou pelo link${r.comentario ? `: "${r.comentario}"` : ""}` });
+    } else if ((t.statusConteudo || "ideia") === "ideia") {
+      await atualizar("tarefas", t.id, { ajusteCliente: r.comentario || "ajuste pedido" });
+      registrarAtividade(t.id, { tipo: "comentario", texto: `${quem} pediu ajuste no tema: ${r.comentario || "(sem comentário)"}` });
     } else {
       await atualizar("tarefas", t.id, { statusConteudo: "producao", status: statusDaEtapa("producao"), ajusteCliente: r.comentario || "ajuste pedido" });
       registrarAtividade(t.id, { tipo: "comentario", texto: `${quem} pediu ajuste: ${r.comentario || "(sem comentário)"}` });
