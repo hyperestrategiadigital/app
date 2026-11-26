@@ -1,14 +1,13 @@
 // Aba "Marca" da ficha do cliente. Um cliente pode ter várias marcas (ex.: um grupo com uma marca para cada
 // negócio), cada uma com identidade e linguagem próprias.
 // A "marca principal" é a identidade do próprio cliente; as demais ficam em `marcas` e, onde um campo
-// estiver vazio, usam o do cliente. Alimenta a copy, o prompt de imagem e o pedido de arte no Canva.
+// estiver vazio, usam o do cliente. Alimenta o pedido de copy para a IA (ia.js).
 import { el, avisar, linkExterno, campoCor, abrirModal, confirmar, formulario, fecharModais, normalizar } from "../ui.js";
 import { dados, atualizar, criar, excluir, porId, marcasDo, salvarComId, gravarEmLote, contrato, listarSub, salvarSub, excluirSub, identidade, carregarArquivo } from "../db.js";
-import { gerarTexto, temChave } from "../openai.js";
 import { ehAdmin, pode } from "../permissoes.js";
 import { caminhoArtes, comprimirImagem } from "../arquivos.js";
 import { CAMPOS_REDES } from "../constantes.js";
-import { kitParaIA, ajustesPedidos } from "../ia.js";
+import { ajustesPedidos } from "../ia.js";
 import { medidorMarca } from "./assistenteIA.js";
 
 // Texto digitado e ainda não salvo sobrevive às atualizações de tela
@@ -44,44 +43,7 @@ function editorCores(alvo) {
       demais));
 }
 
-/** Pede à IA uma versão melhorada do campo e mostra para você decidir. */
-async function sugerirMelhoria(alvo, campo, rotulo, textoAtual, aplicar) {
-  if (!temChave()) { avisar("Cadastre a chave da OpenAI em Ajustes para usar as sugestões.", "erro"); return; }
-  const fechar = abrirModal(`Sugestão de melhoria · ${rotulo}`, el("p", { class: "subtitulo" }, "Pensando…"));
-  const c = alvo.herda ? identidade(alvo.herda.id, alvo.id) : alvo.obj;
-  const contexto = [
-    alvo.herda ? `Marca: ${alvo.nome} (do cliente ${alvo.herda.nome}, que tem outras marcas com identidades diferentes)` : `Cliente: ${c.nome}`,
-    c.servicos?.length ? `Serviços contratados: ${c.servicos.join(", ")}` : "",
-    c.tomDeVoz && campo !== "tomDeVoz" ? `Tom de voz atual: ${c.tomDeVoz}` : "",
-    c.persona && campo !== "persona" ? `Persona atual: ${c.persona}` : "",
-    c.publico && campo !== "publico" ? `Público atual: ${c.publico}` : "",
-    c.estiloVisual && campo !== "estiloVisual" ? `Estilo de imagem atual: ${c.estiloVisual}` : "",
-    alvo.obj.descricao ? `Sobre a marca: ${alvo.obj.descricao}` : "",
-    c.observacoes ? `Observações: ${c.observacoes}` : ""
-  ].filter(Boolean).join("\n");
-  try {
-    const sugestao = await gerarTexto({
-      sistema: "Você é estrategista de marca e social media sênior da Hyper Estratégia Digital, agência brasileira de estratégia digital. Responda em português do Brasil, de forma prática e aplicável. Devolva SOMENTE o texto melhorado do campo pedido, pronto para colar, sem introdução nem comentários. Use tópicos curtos quando ajudar.",
-      pedido: `${contexto}\n\nCampo: ${rotulo}\nTexto atual: ${textoAtual || "(vazio)"}\n\nReescreva e melhore esse campo: deixe mais específico, útil para quem cria conteúdo e anúncios, com exemplos concretos (palavras e expressões a usar e a evitar, quando fizer sentido). Mantenha o que já está certo.`
-    });
-    fechar();
-    const area = el("textarea", { rows: 12 });
-    area.value = sugestao;
-    const f2 = abrirModal(`Sugestão de melhoria · ${rotulo}`, el("div", {},
-      el("p", { class: "subtitulo" }, "Edite se quiser e escolha o que fazer. Nada é salvo sem você clicar."),
-      area,
-      el("div", { class: "acoes" },
-        el("button", { class: "secundario", onClick: async () => { await navigator.clipboard.writeText(area.value).catch(() => {}); avisar("Copiado."); } }, "Copiar"),
-        el("span", { class: "espaco" }),
-        el("button", { class: "secundario", onClick: () => f2() }, "Descartar"),
-        el("button", { class: "confirmar", onClick: () => { aplicar(area.value); f2(); } }, "Usar no campo"))), { largo: true });
-  } catch (e) {
-    fechar();
-    avisar("Não consegui gerar a sugestão: " + e.message, "erro");
-  }
-}
-
-function campoTexto(alvo, campo, rotulo, dica, linhas = 4, { sugestao = false } = {}) {
+function campoTexto(alvo, campo, rotulo, dica, linhas = 4) {
   const chave = `${alvo.col}|${alvo.id}|${campo}`;
   const area = el("textarea", { rows: linhas, placeholder: herdado(alvo, campo, dica), id: `marca-${campo}` });
   area.value = rascunhos.has(chave) ? rascunhos.get(chave) : (alvo.obj[campo] || "");
@@ -94,9 +56,7 @@ function campoTexto(alvo, campo, rotulo, dica, linhas = 4, { sugestao = false } 
   area.addEventListener("input", marcar);
   return el("div", { class: "campo-marca" },
     el("div", { class: "com-acao" }, el("h3", {}, rotulo),
-      el("div", { class: "tela-acoes" },
-        sugestao ? el("button", { class: "secundario mini", onClick: () => sugerirMelhoria(alvo, campo, rotulo, area.value, (texto) => { area.value = texto; marcar(); }) }, "✨ Sugerir melhoria") : null,
-        botao)),
+      el("div", { class: "tela-acoes" }, botao)),
     area);
 }
 
@@ -307,23 +267,6 @@ export function marcaEscolhida(c, estado = {}) {
   return { marca, grupo };
 }
 
-/** Kit da marca para a IA: instruções para colar num Projeto do Claude ou num GPT personalizado. */
-function abrirKitIA(clienteId, marcaId) {
-  const texto = kitParaIA(clienteId, marcaId);
-  const copiar = async () => { try { await navigator.clipboard.writeText(texto); avisar("Kit copiado."); } catch { avisar("Não consegui copiar.", "erro"); } };
-  abrirModal("Kit da marca para a IA", el("div", { class: "kit-ia" },
-    el("p", {}, "Cole este texto uma vez na sua IA e ela passa a conhecer a marca. Depois, os pedidos do Hyper Studio saem ainda melhores."),
-    el("ol", {},
-      el("li", {}, el("strong", {}, "Claude: "), "Projetos → Novo projeto (nome da marca) → \"Instruções do projeto\" → cole o texto. Faça os pedidos dentro desse projeto."),
-      el("li", {}, el("strong", {}, "ChatGPT: "), "Explorar GPTs → Criar → Configurar → \"Instruções\" → cole o texto e salve. Use esse GPT para os pedidos da marca.")),
-    el("div", { class: "acoes" },
-      el("button", { class: "destaque", onClick: copiar }, "Copiar o kit"),
-      el("a", { class: "botao-link secundario", href: "https://claude.ai/projects", target: "_blank", rel: "noopener" }, "Abrir Projetos do Claude ↗"),
-      el("a", { class: "botao-link secundario", href: "https://chatgpt.com/gpts/editor", target: "_blank", rel: "noopener" }, "Criar GPT ↗")),
-    el("p", { class: "nota" }, "Quando você mudar a identidade da marca, copie o kit de novo e atualize lá."),
-    el("details", {}, el("summary", {}, "Ver o kit"), el("pre", { class: "pedido-ia" }, texto))), { largo: true });
-}
-
 /** Ajustes pedidos pelos clientes (link de aprovação ou portal) viram sugestões para "O que evitar". */
 function blocoAprendizados(c, marca, alvo) {
   const ajustes = ajustesPedidos(c.id, marca?.id || "").slice(0, 6);
@@ -373,30 +316,24 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
             location.hash = `#/clientes/${novo}`;
           } catch (erro) { console.error(erro); avisar("Parou no meio: " + erro.message + " Clique de novo para terminar.", "erro"); botao.disabled = false; }
         } }, "Separar em cliente próprio…") : null)) : null,
-    // Para a IA: quanto a ficha está completa, o kit para o Projeto/GPT e o que os clientes já pediram para ajustar
+    // Para a copy: quanto a ficha está completa e o que os clientes já pediram para ajustar
     el("div", { class: "bloco-ia-marca" },
       medidorMarca(c.id, marca?.id || ""),
-      el("div", { class: "acoes" },
-        el("button", { class: "secundario mini", onClick: () => abrirKitIA(c.id, marca?.id || "") }, "🤖 Kit da marca para a IA")),
       blocoAprendizados(c, marca, alvo)),
     campoLogo(alvo),
     campoLink(alvo, "linkDrive", "Pasta da marca no Drive",
-      "Logos, fontes, manual e criativos de referência ficam nesta pasta. O link vai junto no pedido de arte do Canva.",
+      "Logos, fontes, manual e criativos de referência ficam nesta pasta.",
       "https://drive.google.com/drive/folders/...", "Abrir pasta ↗"),
     campoLink(alvo, "linkCanva", "Brand kit / pasta no Canva", null, "https://www.canva.com/...", "Abrir no Canva ↗"),
     editorCores(alvo),
     campoTexto(alvo, "fontes", "Fontes", "Ex.: Títulos em Playfair Display Bold; textos em Montserrat. (Os arquivos ficam na pasta do Drive.)", 2),
-    campoTexto(alvo, "descricao", "Sobre a marca", "O que é, o que vende, para quem, diferenciais e posicionamento. Se for de um grupo, como se diferencia das outras marcas.", 5, { sugestao: true }),
-    campoTexto(alvo, "tomDeVoz", "Tom de voz", "Como a marca fala: próxima, técnica, bem-humorada... palavras que usa e que evita.", 4, { sugestao: true }),
-    campoTexto(alvo, "persona", "Persona", "Quem é o cliente ideal: nome fictício, idade, rotina, dores, desejos, objeções.", 5, { sugestao: true }),
-    campoTexto(alvo, "publico", "Público-alvo", "Ex.: mulheres 25-45, região de Sorocaba, classe B.", 3, { sugestao: true }),
+    campoTexto(alvo, "descricao", "Sobre a marca", "O que é, o que vende, para quem, diferenciais e posicionamento. Se for de um grupo, como se diferencia das outras marcas.", 5),
+    campoTexto(alvo, "tomDeVoz", "Tom de voz", "Como a marca fala: próxima, técnica, bem-humorada... palavras que usa e que evita.", 4),
+    campoTexto(alvo, "persona", "Persona", "Quem é o cliente ideal: nome fictício, idade, rotina, dores, desejos, objeções.", 5),
+    campoTexto(alvo, "publico", "Público-alvo", "Ex.: mulheres 25-45, região de Sorocaba, classe B.", 3),
     campoTexto(alvo, "palavrasChave", "Palavras e expressões da marca", "Termos que a marca usa e quer ver nos textos. Ex.: \"comunidade\", \"treino inteligente\", o nome dos planos.", 2),
     campoTexto(alvo, "evitar", "O que evitar", "Palavras, assuntos e jeitos de falar que a marca não usa. Ex.: gírias, \"barato\", promessas de resultado, comparar com concorrente.", 3),
     campoTexto(alvo, "pilares", "Pilares de conteúdo", "Um por linha. Ex.: Educativo, Bastidores, Prova social, Oferta. Cada post escolhe um pilar, e o calendário mostra se o mês está equilibrado.", 4),
     campoTexto(alvo, "diretrizes", "Diretrizes de conteúdo",
-      "Pilares e linha editorial, estrutura das legendas, CTAs, rodapé padrão, hashtags, emojis, séries fixas e o que nunca fazer. É o que a IA segue em cada post.", 8, { sugestao: true }),
-    campoTexto(alvo, "estiloVisual", "Estilo de imagem",
-      "Que tipo de imagem a marca usa? Ex.: fotos reais de pessoas treinando, luz natural, cores vibrantes. Evitar: banco de imagem genérico.", 4, { sugestao: true }),
-    campoTexto(alvo, "identidadeVisual", "Identidade visual (diagramação)",
-      "Ex.: títulos grandes em caixa alta, muito respiro, elementos geométricos, logo sempre no canto inferior.", 3, { sugestao: true }));
+      "Pilares e linha editorial, estrutura das legendas, CTAs, rodapé padrão, hashtags, emojis, séries fixas e o que nunca fazer. Vai junto no pedido de copy de cada post.", 8));
 }

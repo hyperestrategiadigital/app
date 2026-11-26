@@ -24,7 +24,7 @@ async function contarArtes(clienteId, tarefaId) {
   if (porId("tarefas", tarefaId)) await atualizar("tarefas", tarefaId, { qtdArtes: n });
 }
 
-/** origem: "gerada" (OpenAI) ou "final" (criativo pronto, ex.: exportado do Canva) */
+/** origem: "final" (criativo pronto, ex.: exportado do Canva). "gerada" só nos antigos, da geração de imagem que saiu. */
 export async function salvarArte(clienteId, tarefaId, dados, { origem = "final", nome = "" } = {}) {
   // marcaId do post: o cliente que vê só algumas marcas lê os criativos filtrados por ele
   await salvarSub(caminhoArtes(clienteId), { tarefaId, marcaId: porId("tarefas", tarefaId)?.marcaId || "", dados, origem, nome });

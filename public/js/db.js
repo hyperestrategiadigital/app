@@ -34,7 +34,7 @@ const TODAS = [
   "financeiro", "orcamentos", "contratos", "contasAds", "manutencoes", "aprovacoes", "config"
 ];
 
-/** Dados em memória: dados.clientes = [{ id, ...campos }]. `config` reúne documentos avulsos (openai, equipe, agenda). */
+/** Dados em memória: dados.clientes = [{ id, ...campos }]. `config` reúne documentos avulsos (equipe, agenda, manual…). */
 export const dados = Object.fromEntries(TODAS.map((c) => [c, []]));
 // Tarefas concluídas há mais de 90 dias ficam em `tarefasArquivo` e só são lidas quando preciso
 // (relatórios e PDFs de meses antigos). Assim o app abre rápido mesmo com anos de histórico.
@@ -255,7 +255,7 @@ function ouvirTudo(aoErro) {
     }, (erro) => { aoErro?.(traduzirErro(erro)); if (primeira) { primeira = false; pronto(); } }));
   }));
   // Documentos de configuração (lidos um a um, porque cada um tem uma regra)
-  const docs = ehCliente() ? ["meta", "listas", "manual"] : ["equipe", "agendaHyper", "clientes", "meta", "modelos", "listas", "manual", ...(pode("conteudo") ? ["openai"] : []), ...(pode("financeiro") && !clientesRestritos() ? ["comercial"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
+  const docs = ehCliente() ? ["meta", "listas", "manual"] : ["equipe", "agendaHyper", "clientes", "meta", "modelos", "listas", "manual", ...(pode("financeiro") && !clientesRestritos() ? ["comercial"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
     let primeira = true;
     cancelamentos.push(onSnapshot(docConfig(id), (snap) => {
       dados.config = [...dados.config.filter((c) => c.id !== id), ...(snap.exists() ? [{ id, ...snap.data() }] : [])];
@@ -544,7 +544,7 @@ export const marcasDo = (clienteId) => (dados.marcas || []).filter((m) => m.clie
 /** Cliente com marcas funciona como grupo (guarda-chuva). */
 export const ehGrupo = (clienteId) => marcasDo(clienteId).length > 0;
 /**
- * Identidade usada na copy, na imagem e no pedido do Canva: a da marca (quando o post é de uma marca),
+ * Identidade usada no pedido de copy e no PDF: a da marca (quando o post é de uma marca),
  * completando o que faltar com a do cliente. `nome` vira o da marca e `clienteNome` guarda o do cliente.
  */
 export function identidade(clienteId, marcaId) {

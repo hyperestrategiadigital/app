@@ -1,15 +1,14 @@
 // Peças reutilizadas entre telas: cartão e formulário de tarefa, selo de cliente.
 import { pode, eu, ehAdmin } from "../permissoes.js";
-import { abrirCriarArte } from "./criar.js";
 import { seloResposta, gerarLinkAprovacao } from "../aprovacoes.js";
 import { avisarMencao } from "../emails.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, normalizar, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
 import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, salvarComId, marcasDo, desfazerExclusao, listarAtividade, registrarAtividade, excluirAtividade } from "../db.js";
 import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, FORMATO_PADRAO, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa, MODELOS_PADRAO, comAtual, prazoDoPost } from "../constantes.js";
-import { pilaresDe } from "../prompts.js";
+import { pilaresDe } from "../ia.js";
 import { identidade } from "../db.js";
-import { abrirAssistenteIA, tipoDoFormato } from "./assistenteIA.js";
+import { abrirAssistenteIA } from "./assistenteIA.js";
 import { camposDaResposta } from "../ia.js";
 import { producaoDoPost, postsDaProducao, roteirosDaProducao, postsAtrasando } from "../producao.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
@@ -105,7 +104,7 @@ export function abrirTarefa(tarefa = {}) {
       opcoesDe: (v) => [["", "—"], ...comAtual(pilaresDaConta(v), tarefa.pilar).map((p) => [p, p])], mostrarSe: (v) => conteudo(v) && (pilaresDaConta(v).length > 0 || !!tarefa.pilar) },
     { nome: "roteiro", rotulo: "Briefing (a ideia do post)", tipo: "textarea", linhas: 3, dica: "O que o post precisa dizer: assunto, oferta, dados, referências…", mostrarSe: conteudo },
     { nome: "textoArte", rotulo: "Roteiro / texto da arte", tipo: "textarea", linhas: 4, dica: "Roteiro do vídeo, lâminas do carrossel, telas dos stories ou o texto da arte", mostrarSe: conteudo },
-    { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 5, dica: "Clique em \"✨ Criar com IA\" ou escreva aqui", mostrarSe: conteudo },
+    { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 5, dica: "Clique em \"✨ Criar copy\" ou escreva aqui", mostrarSe: conteudo },
     { nome: "extra", rotulo: "Post extra: aparece solto nas tarefas, fora do \"Produzir semana\"", tipo: "checkbox", mostrarSe: conteudo },
 
     { tipo: "secao", rotulo: "Tarefa" },
@@ -205,17 +204,15 @@ export function abrirTarefa(tarefa = {}) {
 }
 
 /**
- * "✨ Criar com IA": abre o assistente (views/assistenteIA.js) com o pedido completo para a IA da pessoa e,
- * ao colar a resposta, preenche a copy e o roteiro / texto da arte.
+ * "✨ Criar copy": abre o assistente (views/assistenteIA.js) com o pedido completo para a IA da pessoa
+ * (jeito Hyper de escrever + marca + briefing do post) e, ao colar a resposta, preenche a copy e o roteiro / texto da arte.
  */
 function botaoCriarComIA(form, tarefa) {
-  return el("button", { type: "button", class: "destaque mini so-conteudo", title: "Monta o pedido com o jeito Hyper de escrever, a marca e este post", onClick: () => {
+  return el("button", { type: "button", class: "destaque mini so-conteudo", title: "Monta o pedido com o jeito Hyper de escrever, a marca e o briefing deste post", onClick: () => {
     const v = { ...form.lerValores(), id: tarefa.id };
     if (!v.clienteId) { avisar("Escolha o cliente primeiro.", "erro"); return; }
-    const principal = tipoDoFormato(v.formato);
-    const tipos = [...new Set([principal, "copy", "adaptar", "anuncio", "imagem"])];
     abrirAssistenteIA({
-      ctx: { clienteId: v.clienteId, marcaId: v.marcaId || "", post: v }, tipos,
+      ctx: { clienteId: v.clienteId, marcaId: v.marcaId || "", post: v },
       aoUsar: (resp) => {
         const { copy, textoArte } = camposDaResposta(resp);
         const preencher = (sel, valor) => { const c = form.querySelector(sel); if (c && valor) { c.value = valor; c.dispatchEvent(new Event("input", { bubbles: true })); } };
@@ -224,7 +221,7 @@ function botaoCriarComIA(form, tarefa) {
         avisar(copy || textoArte ? "Resposta colocada no post. Revise e salve." : "Não encontrei os blocos na resposta: confira se colou tudo.", copy || textoArte ? "ok" : "erro");
       }
     });
-  } }, "✨ Criar com IA");
+  } }, "✨ Criar copy");
 }
 
 /** "Montar briefing": 4 perguntas que viram o briefing do post (somam ao que já estiver escrito). */
@@ -408,7 +405,7 @@ function secaoCriativos(tarefa) {
       const artes = await listarArtesTarefa(tarefa.clienteId, tarefa.id);
       lista.replaceChildren(...(artes.length ? artes.map((a) => el("figure", { class: "criativo" },
         el("a", { href: a.dados, download: `${tarefa.titulo}.jpg`, title: "Baixar" }, el("img", { src: a.dados, alt: a.nome || "Criativo" })),
-        el("figcaption", {}, a.origem === "gerada" ? "Imagem gerada" : "Criativo final"),
+        el("figcaption", {}, "Criativo final"),
         el("button", { type: "button", class: "icone", "aria-label": "Remover criativo", onClick: async () => {
           if (await confirmar("Remover este criativo do post?")) { await excluirArte(tarefa.clienteId, tarefa.id, a.id); carregar(); }
         } }, "✕")))
@@ -426,8 +423,7 @@ function secaoCriativos(tarefa) {
   });
   carregar();
   caixa.append(lista, el("div", { class: "acoes-criativos" },
-    el("label", { class: "botao-link secundario mini" }, "📎 Anexar criativo final", entrada),
-    el("button", { type: "button", class: "secundario mini", onClick: () => { fecharModais(); abrirCriarArte(porId("tarefas", tarefa.id) || tarefa); } }, "✦ Criar arte (imagem + Canva)")));
+    el("label", { class: "botao-link secundario mini" }, "📎 Anexar criativo final", entrada)));
   return caixa;
 }
 

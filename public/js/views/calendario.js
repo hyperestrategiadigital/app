@@ -4,7 +4,7 @@ import * as planejamento from "./planejamento.js";
 import { gerarLinkAprovacao, seloResposta } from "../aprovacoes.js";
 import { el, hojeISO, addDias, fmtData, vazio, formulario, dataDe, avisar, normalizar } from "../ui.js";
 import { dados, marcasDo, porId, opcoesClientes, nomeCliente, atualizar, registrarAtividade, identidade } from "../db.js";
-import { pilaresDe } from "../prompts.js";
+import { pilaresDe } from "../ia.js";
 import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca, mudarEtapa, proximaEtapa, visoesTarefas, seletorResponsavel, atrasada } from "./componentes.js";
 import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost, exportarPDF, nomeMes } from "../exportacao.js";

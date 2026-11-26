@@ -1,6 +1,6 @@
 // Service worker do Hyper Studio: permite instalar o app e abrir sem internet.
 // Estratégia "rede primeiro": sempre busca a versão nova; sem internet, usa a última cópia guardada.
-const CACHE = "hyper-studio-v2";
+const CACHE = "hyper-studio-v3";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(
@@ -14,7 +14,7 @@ self.addEventListener("fetch", (e) => {
   const mesmoSite = url.origin === self.location.origin;
   const sdkFirebase = url.hostname === "www.gstatic.com" && url.pathname.startsWith("/firebasejs/");
   const fontes = url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com";
-  if (!mesmoSite && !sdkFirebase && !fontes) return; // dados do Firestore, Google, OpenAI: nunca passam por aqui
+  if (!mesmoSite && !sdkFirebase && !fontes) return; // dados do Firestore e do Google: nunca passam por aqui
   if (mesmoSite && url.pathname.startsWith("/__/")) return; // rotas internas do Firebase Hosting
   e.respondWith(
     fetch(req).then((resp) => {

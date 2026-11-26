@@ -1,10 +1,9 @@
-// Ajustes (só administradores): e-mails automáticos, Meta, OpenAI, importação dos arquivos do Claude e backup.
+// Ajustes (só administradores): e-mails automáticos, Meta, importação dos arquivos do Claude e backup.
 import { el, formulario, confirmar, avisar, abrirModal, hojeISO, addDias, vazio, normalizar, baixar } from "../ui.js";
 import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes, nomeCliente, clientesAtivos } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { previaPlanejamento } from "./importarPlanejamento.js";
 import { previaImportacao } from "./comercial.js";
-import { configOpenAI, salvarConfigOpenAI, MODELO_PADRAO, MODELO_TEXTO_PADRAO } from "../openai.js";
 import { salvarComId, carregarArquivo, listarErros, excluirErro } from "../db.js";
 import { ehAdmin } from "../permissoes.js";
 import { configMeta } from "../meta.js";
@@ -21,7 +20,7 @@ async function baixarBackup() {
 
 export function render() {
   return el("div", { class: "tela" },
-    cabecalho("Ajustes", "E-mails automáticos, OpenAI, importação e backup. Sua Google Agenda fica em Minha conta (clique no seu nome)."),
+    cabecalho("Ajustes", "E-mails automáticos, importação e backup. Sua Google Agenda fica em Minha conta (clique no seu nome)."),
 
     blocoEmail(),
     blocoMeta(),
@@ -29,7 +28,6 @@ export function render() {
     ehAdmin() ? blocoListas() : null,
     blocoModelos(),
     blocoErros(),
-    ehAdmin() ? blocoOpenAI() : null,
 
     ehAdmin() ? blocoImportar() : null,
 
@@ -39,38 +37,8 @@ export function render() {
       el("button", { class: "secundario", onClick: baixarBackup }, "Baixar backup (.json)")) : null);
 }
 
-function blocoOpenAI() {
-  const cfg = configOpenAI();
-  const chave = el("input", { id: "openai-chave", type: "password", placeholder: cfg.chave ? "•••••••• (já cadastrada — cole outra para trocar)" : "sk-...", autocomplete: "off" });
-  const modelo = el("input", { id: "openai-modelo", type: "text", value: cfg.modelo || MODELO_PADRAO });
-  const modeloTexto = el("input", { id: "openai-modelo-texto", type: "text", value: cfg.modeloTexto || MODELO_TEXTO_PADRAO });
-  return el("section", { class: "bloco" },
-    el("h2", {}, "OpenAI (imagens e sugestões de melhoria)"),
-    el("p", {}, cfg.chave ? `✓ Chave cadastrada (termina em ${cfg.chave.slice(-4)}).` : "Cole a chave da API da OpenAI para gerar imagens no menu Criar."),
-    el("ol", { class: "passos" },
-      el("li", {}, "Acesse platform.openai.com → API keys → Create new secret key."),
-      el("li", {}, "Adicione saldo em Billing (cada imagem custa alguns centavos de dólar)."),
-      el("li", {}, "Cole a chave aqui e salve.")),
-    el("div", { class: "form-grade" },
-      el("label", { class: "campo metade", for: "openai-chave" }, el("span", {}, "Chave da API"), chave),
-      el("label", { class: "campo metade", for: "openai-modelo" }, el("span", {}, "Modelo de imagem"), modelo),
-      el("label", { class: "campo metade", for: "openai-modelo-texto" }, el("span", {}, "Modelo de texto (sugestões de melhoria)"), modeloTexto)),
-    el("p", { class: "subtitulo" }, "A chave fica guardada só na sua conta, protegida pelas regras do banco. Não compartilhe prints desta tela com a chave aparecendo."),
-    el("div", { class: "acoes" },
-      el("button", { onClick: async () => {
-        const nova = chave.value.trim() || cfg.chave;
-        if (!nova) { avisar("Cole a chave.", "erro"); return; }
-        await salvarConfigOpenAI({ chave: nova, modelo: modelo.value, modeloTexto: modeloTexto.value });
-        avisar("Configuração da OpenAI salva.");
-      } }, "Salvar"),
-      cfg.chave ? el("button", { class: "perigo-texto", onClick: async () => {
-        if (await confirmar("Remover a chave da OpenAI?")) { await salvarConfigOpenAI({ chave: "", modelo: modelo.value, modeloTexto: modeloTexto.value }); avisar("Chave removida."); }
-      } }, "Remover chave") : null));
-}
-
-
-const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "pilares", "diretrizes", "estiloVisual", "identidadeVisual", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];
-const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", pilares: "pilares", diretrizes: "diretrizes de conteúdo", estiloVisual: "estilo de imagem", identidadeVisual: "diagramação", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
+const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "palavrasChave", "evitar", "pilares", "diretrizes", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];
+const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", pilares: "pilares", diretrizes: "diretrizes de conteúdo", palavrasChave: "palavras e expressões", evitar: "o que evitar", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
 const preenchido = (x) => (Array.isArray(x) ? x.filter(Boolean).length : String(x ?? "").trim());
 const chaveNome = (s) => normalizar(s || "").replace(/[^a-z0-9]/g, "");
 /** Cliente pelo nome, aceitando pequenas diferenças ("Domo" acha "Domo Empório"; "Jocelene" acha "Jocelene Fernandes"). */
@@ -177,17 +145,25 @@ function blocoImportar() {
     const arquivo = entrada.files[0];
     entrada.value = "";
     if (!arquivo) return;
+    importarTexto(await arquivo.text());
+  });
+  // O mesmo, colando o texto do .json direto (a resposta da IA), sem precisar salvar arquivo
+  const colado = el("textarea", { id: "importar-texto", rows: 5, placeholder: "Cole aqui o JSON que a IA respondeu" });
+  function importarTexto(texto) {
     let j;
-    try { j = JSON.parse(await arquivo.text()); } catch { avisar("Esse arquivo não é um .json válido.", "erro"); return; }
+    const bloco = String(texto).match(/```(?:json)?\s*([\s\S]*?)```/)?.[1] || texto;
+    try { j = JSON.parse(bloco); } catch { avisar("Esse texto não é um JSON válido. Copie a resposta inteira da IA (só o bloco do JSON).", "erro"); return; }
     if (j.tipo === "planejamento-hyper") previaPlanejamento(j);
     else if (j.tipo === "financeiro-hyper") previaImportacao(j);
     else if (Array.isArray(j) || j.tipo === "marcas-hyper" || j.marcas || j.clientes) previaMarcas(Array.isArray(j) ? j : j.marcas || j.clientes || []);
     else avisar("Não reconheci esse arquivo. Use um .json que o Claude preparou.", "erro");
-  });
+  }
   return el("section", { class: "bloco" },
     el("h2", {}, "Importar arquivo do Claude"),
     el("p", {}, "Para os arquivos .json que o Claude prepara: planejamento de posts (a partir de prints ou planilhas), definições de marca (tom de voz, persona, cores) e financeiro (contratos, despesas fixas, preços). O app reconhece o tipo e mostra tudo antes de aplicar. Importar de novo não duplica."),
-    el("label", { class: "botao-link secundario", for: "importar-arquivo" }, "Escolher arquivo .json", entrada));
+    el("label", { class: "botao-link secundario", for: "importar-arquivo" }, "Escolher arquivo .json", entrada),
+    el("details", {}, el("summary", {}, "Ou colar o texto"), colado,
+      el("div", { class: "acoes" }, el("button", { class: "secundario", onClick: () => { if (colado.value.trim()) importarTexto(colado.value); } }, "Importar texto colado"))));
 }
 
 /** E-mails e automações pelo Google Apps Script da conta da Hyper (docs/email). */
@@ -273,7 +249,7 @@ function blocoManual() {
   const area = el("textarea", { rows: 18, id: "manual-hyper", readOnly: !ehAdmin() }, salvo || MANUAL_PADRAO);
   return el("section", { class: "bloco" },
     el("h2", {}, "Manual de escrita da Hyper"),
-    el("p", {}, "O jeito Hyper de escrever. Vai junto em todos os pedidos de texto para a IA (copy, roteiro, carrossel, stories, ideias, planejamento), para qualquer marca. As diretrizes de cada marca valem mais do que ele."),
+    el("p", {}, "O jeito Hyper de escrever. Vai junto em todos os pedidos de copy para a IA (legenda, roteiro, carrossel, stories), para qualquer marca. As diretrizes de cada marca valem mais do que ele."),
     el("details", {}, el("summary", {}, ehAdmin() ? "Ver e editar o manual" : "Ver o manual"),
       area,
       ehAdmin() ? el("div", { class: "acoes" },

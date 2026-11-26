@@ -120,16 +120,16 @@ export function sugerirPost() {
     { nome: "dataPublicacao", rotulo: "Quando publicar (se tiver data)", tipo: "date", largura: "metade" },
     { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, padrao: FORMATO_PADRAO, largura: "metade" },
     { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: REDES, padrao: "Instagram", largura: "metade" },
-    { nome: "copy", rotulo: "Legenda (opcional)", tipo: "textarea", linhas: 5, dica: "Escreva aqui ou use o botão para o Claude escrever no tom de voz da marca." },
+    { nome: "copy", rotulo: "Legenda (opcional)", tipo: "textarea", linhas: 5, dica: "Escreva aqui ou use \"✨ Criar copy\" para levar o pedido à sua IA, já no tom de voz da marca." },
     { nome: "notas", rotulo: "Observações para a Hyper", tipo: "textarea", linhas: 3 }
   ].filter(Boolean), { conta: contas[0].chave }, {
     rotuloSalvar: "Enviar sugestão",
     extras: [el("button", { type: "button", class: "destaque mini", onClick: () => {
       const v = ultimoForm()?.lerValores?.() || {};
       const k = contaDe(v.conta);
-      abrirAssistenteIA({ ctx: { clienteId: k.clienteId, marcaId: k.marcaId, post: { ...v, roteiro: v.notas } }, tipos: ["copy"],
+      abrirAssistenteIA({ ctx: { clienteId: k.clienteId, marcaId: k.marcaId, post: { ...v, roteiro: v.notas } },
         aoUsar: (resp) => { const campo = ultimoForm()?.querySelector("#f-copy"); if (campo && resp.LEGENDA) campo.value = resp.LEGENDA; } });
-    } }, "✨ Legenda com IA")],
+    } }, "✨ Criar copy")],
     aoSalvar: async (v) => {
       await criarSugestao(contaDe(v.conta), v);
       avisar("Sugestão enviada para a Hyper.");
@@ -149,8 +149,7 @@ export const inicio = {
     const nome = (eu.nome || "").split(" ")[0];
     return el("div", { class: "tela tela-portal" },
       cabecalho(`Olá${nome ? `, ${nome}` : ""}!`, contasDoPortal().map((k) => k.nome).join(" · ") || "Bem-vindo ao Hyper Studio",
-        el("button", { class: "secundario", onClick: sugerirPost }, "+ Sugerir um post"),
-        el("a", { class: "botao-link destaque", href: "#/studio" }, "✦ Abrir o Studio")),
+        el("button", { class: "destaque", onClick: sugerirPost }, "+ Sugerir um post")),
       el("h2", {}, `Para aprovar (${paraAprovar.length})`),
       paraAprovar.length ? el("div", { class: "portal-lista" }, paraAprovar.map((t) => cartaoPost(t, { completo: true })))
         : vazio("Nada esperando a sua aprovação. Quando a Hyper mandar posts, eles aparecem aqui."),
@@ -215,7 +214,6 @@ export const marca = {
       texto("Público-alvo", id.publico),
       texto("Persona", id.persona),
       texto("Diretrizes de conteúdo", id.diretrizes),
-      texto("Estilo de imagem", id.estiloVisual),
       el("p", { class: "nota" }, "Quer mudar algo da identidade? Fale com a Hyper: ela atualiza aqui e os próximos posts já seguem."));
   }
 };

@@ -42,11 +42,6 @@ export const FORMATO_ANTIGO = {
   "Anúncio em vídeo": "Vídeo", "Sequência de stories": "Story", "Stories": "Story"
 };
 export const formatoAtual = (f) => FORMATO_ANTIGO[f] || f || "";
-// Proporção da arte por formato (largura x altura) usada no menu Criar
-export const PROPORCAO_FORMATO = {
-  "Estático": [1080, 1350], "Carrossel": [1080, 1350], "Vídeo": [1080, 1920], "Story": [1080, 1920],
-  "Blog": [1600, 900], "Artigo": [1600, 900], "E-mail marketing": [1200, 628], "WhatsApp": [1080, 1080], "Outro": [1080, 1080]
-};
 export const REDES = ["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn", "WhatsApp", "E-mail", "Site"];
 
 /* Listas dos menus (tipos de tarefa, formatos, redes): o administrador muda em Ajustes → Menus e listas
