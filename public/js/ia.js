@@ -174,6 +174,7 @@ function camadaCampanha(ctx) {
     c.objetivo ? `- Objetivo da campanha: ${c.objetivo}` : null,
     c.mensagem ? `- Mensagem central: ${c.mensagem}` : null,
     c.condicoes ? `- Condições comerciais (use exatamente estas, não invente outras): ${c.condicoes}` : null,
+    c.chamada ? `- Chamada e link da campanha (use nesta peça): ${c.chamada}` : null,
     c.briefing ? `- Briefing da campanha:\n${c.briefing}` : null,
     pecas.length ? `- Outras peças da campanha (cada uma tem uma função; não repita): ${pecas.map((t) => `${t.titulo} (${t.formato || t.tipo})`).join("; ")}` : null
   ].filter((l) => l !== null).join("\n");
@@ -194,7 +195,9 @@ function camadaConteudo(ctx) {
     datas.length ? `- Datas comemorativas perto: ${datas.map((d) => d.data ? `${d.nome} (${d.data.slice(8)}/${d.data.slice(5, 7)})` : `${d.nome} (o mês todo)`).join(", ")}. Use só se tiver relação real com a marca e o tema (veja o manual).` : null,
     p.pilar ? `- Pilar: ${p.pilar}` : null,
     p.objetivo ? `- Objetivo: ${rotuloObjetivo(p.objetivo)}${rotuloObjetivo(p.objetivo) !== p.objetivo ? " (etapa do funil; veja o manual, seção 12)" : ""}` : null,
-    p.roteiro ? `- Briefing:\n${p.roteiro}` : "- Briefing: não informado. Use o tema e a marca, e marque com [CONFIRMAR] o que precisar de informação.",
+    p.roteiro ? `- Briefing${p.campanhaId ? " deste post (o que é específico dele, dentro da campanha acima)" : ""}:\n${p.roteiro}`
+      : p.campanhaId && porId("campanhas", p.campanhaId) ? "- Briefing deste post: sem detalhe próprio. Siga o briefing da campanha acima, pelo tema, com um ângulo que as outras peças ainda não usaram."
+      : "- Briefing: não informado. Use o tema e a marca, e marque com [CONFIRMAR] o que precisar de informação.",
     p.videoGravado && p.transcricao ? `- Transcrição do vídeo já gravado (use só o que foi dito; não invente falas nem argumentos):\n${corta(p.transcricao, 5000)}` : null,
     vizinhos.length ? `- Outros posts perto desta data (dê continuidade sem repetir argumentos, frases ou estruturas): ${vizinhos.map((t) => t.titulo).join("; ")}` : null
   ].filter((l) => l !== null).join("\n");

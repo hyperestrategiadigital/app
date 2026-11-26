@@ -986,11 +986,18 @@ test("campanha: agrupa peças na ficha, aparece no post e entra no pedido de cop
   await page.fill("#f-nome", "Natal da Loja");
   await page.fill("#f-mensagem", "O presente certo está aqui");
   await page.fill("#f-condicoes", "10% no Pix até 24/12");
+  await page.fill("#f-chamada", "Peça pelo WhatsApp da bio");
   await page.click(".modal button[type=submit]");
   await expect(page.locator(".aba-campanhas .campanha-cartao")).toContainText("Natal da Loja");
   await page.locator(".aba-campanhas .campanha-cartao").getByRole("button", { name: "+ Post" }).click();
   await expect(page.locator("#f-campanhaId")).toHaveValue(/.+/);
+  // O post avisa que o briefing da campanha já vai junto; e a janela da IA não pede briefing de novo
+  await expect(page.locator(".modal .form-nota")).toContainText("O briefing da campanha");
   await page.fill("#f-titulo", "Cestas de Natal");
+  await page.getByRole("button", { name: "✨ Criar copy" }).click();
+  await expect(page.locator(".modal").last().locator(".faixa-info")).toContainText('Vai junto o briefing da campanha "Natal da Loja"');
+  await expect(page.locator(".modal").last().locator(".faixa-alerta", { hasText: "Sem briefing" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await page.click(".modal button[type=submit]");
   await expect(page.locator(".aba-campanhas .campanha-cartao")).toContainText("Cestas de Natal");
   await expect(page.locator(".aba-campanhas .campanha-cartao")).toContainText("0 de 1 peça(s) prontas");
@@ -1001,6 +1008,9 @@ test("campanha: agrupa peças na ficha, aparece no post e entra no pedido de cop
   });
   expect(pedido).toContain("## A campanha deste conteúdo");
   expect(pedido).toContain("10% no Pix até 24/12");
+  expect(pedido).toContain("Peça pelo WhatsApp da bio");
+  expect(pedido).toContain("Siga o briefing da campanha acima");
+  expect(pedido).not.toContain("Briefing: não informado");
   expect(erros).toEqual([]);
 });
 

@@ -104,6 +104,8 @@ export function abrirTarefa(tarefa = {}) {
       opcoes: [["", "—"], ...OBJETIVOS, ...(tarefa.objetivo && !OBJETIVOS.some(([v]) => v === tarefa.objetivo) ? [[tarefa.objetivo, tarefa.objetivo]] : [])] },
     { nome: "pilar", rotulo: "Pilar de conteúdo", tipo: "select", largura: "metade",
       opcoesDe: (v) => [["", "—"], ...comAtual(pilaresDaConta(v), tarefa.pilar).map((p) => [p, p])], mostrarSe: (v) => conteudo(v) && (pilaresDaConta(v).length > 0 || !!tarefa.pilar) },
+    { nome: "avisoCampanha", tipo: "nota", rotulo: "◆ O briefing da campanha (objetivo, mensagem, condições, chamada e briefing) já vai no pedido da copy. Aqui embaixo, escreva só o que é deste post: o ângulo, o produto, o detalhe.",
+      mostrarSe: (v) => conteudo(v) && !!v.campanhaId },
     { nome: "roteiro", rotulo: "Briefing (a ideia do post)", tipo: "textarea", linhas: 3, dica: "O que o post precisa dizer: assunto, oferta, dados, referências…", mostrarSe: conteudo },
     { nome: "videoGravado", rotulo: "O vídeo já foi gravado (a copy sai da transcrição, sem roteiro)", tipo: "checkbox", mostrarSe: (v) => conteudo(v) && v.formato === FORMATO_VIDEO },
     { nome: "transcricao", rotulo: "Transcrição do vídeo", tipo: "textarea", linhas: 4, dica: "Cole o que foi falado no vídeo", mostrarSe: (v) => conteudo(v) && v.formato === FORMATO_VIDEO && v.videoGravado },

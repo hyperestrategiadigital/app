@@ -138,8 +138,8 @@ export function formulario(titulo, campos, valores = {}, { aoSalvar, extras = []
   const dinamicos = []; // selects com c.opcoesDe(valores): opções mudam conforme outros campos
   const grade = el("div", { class: "form-grade" });
   for (const c of campos) {
-    if (c.tipo === "secao") {
-      const h = el("h3", { class: "form-secao" }, c.rotulo);
+    if (c.tipo === "secao" || c.tipo === "nota") {
+      const h = c.tipo === "secao" ? el("h3", { class: "form-secao" }, c.rotulo) : el("p", { class: "form-nota" }, c.rotulo);
       grade.append(h);
       if (c.mostrarSe) condicionais.push({ c, elemento: h });
       continue;
