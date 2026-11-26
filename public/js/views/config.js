@@ -1,6 +1,6 @@
 // Ajustes (só administradores): e-mails automáticos, Meta, importação dos arquivos do Claude e backup.
 import { el, formulario, confirmar, avisar, abrirModal, hojeISO, addDias, vazio, normalizar, baixar } from "../ui.js";
-import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes, nomeCliente, clientesAtivos } from "../db.js";
+import { dados, criar, atualizar, excluir, gravarEmLote, novoId, opcoesClientes, nomeCliente, clientesAtivos, marcasDo } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { previaPlanejamento } from "./importarPlanejamento.js";
 import { previaImportacao } from "./comercial.js";
@@ -66,7 +66,7 @@ function previaMarcas(lista) {
   const nomesCli = [...new Set(lista.map((m) => m.cliente || m.nome || "").filter(Boolean))];
   const seletores = new Map(nomesCli.map((n) => {
     const achado = acharClientePorNome(n);
-    return [n, el("select", { "aria-label": `Cliente para ${n}`, onChange: () => desenhar() },
+    return [n, el("select", { "aria-label": `Cliente para ${n}`, onChange: () => { lista.forEach((m, i) => { if ((m.cliente || m.nome || "") === n) escolhas.delete(i); }); desenhar(); } },
       el("option", { value: "" }, "— não importar —"),
       el("option", { value: NOVO }, `+ Criar cliente "${n}"`),
       dados.clientes.filter((c) => c.ativo !== false).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
@@ -75,30 +75,51 @@ function previaMarcas(lista) {
   const sobrescrever = el("input", { type: "checkbox", id: "marcas-sobrescrever", checked: true });
   const lista_ = el("ul", { class: "lista-importar-marcas" });
   const status = el("p", { class: "subtitulo" });
-  /** Para onde vai cada item com o cliente escolhido agora. */
-  const destino = (m) => {
+  const GERAL = "__geral", NOVA = "__nova";
+  const escolhas = new Map(); // índice do bloco -> GERAL | NOVA | id da marca (escolhido na prévia)
+  const clienteDe = (m) => {
     const nomeCli = m.cliente || m.nome || "";
     const clienteId = seletores.get(nomeCli)?.value || "";
-    const cliente = clienteId && clienteId !== NOVO ? dados.clientes.find((c) => c.id === clienteId) : null;
-    let marca = null, criarMarca = "";
-    if (m.marca) {
-      marca = cliente ? acharMarca(cliente.id, m.marca) : null;
-      // marca com o nome do próprio cliente e cliente sem marcas: vai para o cliente
-      if (!marca && !(chaveNome(m.marca) === chaveNome(cliente?.nome || nomeCli) && !(cliente && (dados.marcas || []).some((x) => x.clienteId === cliente.id)))) criarMarca = m.marca;
-    }
-    return { nomeCli, clienteId, cliente, marca, criarMarca, campos: CAMPOS_MARCA.filter((k) => preenchido(m[k])) };
+    return { nomeCli, clienteId, cliente: clienteId && clienteId !== NOVO ? dados.clientes.find((c) => c.id === clienteId) : null };
+  };
+  /** Sugestão pelo nome: a marca do grupo com esse nome, uma marca nova ou o geral (o próprio cliente). */
+  const sugerida = (m, cliente, nomeCli) => {
+    if (!m.marca) return GERAL;
+    const achada = cliente ? acharMarca(cliente.id, m.marca) : null;
+    if (achada) return achada.id;
+    const temMarcas = cliente && (dados.marcas || []).some((x) => x.clienteId === cliente.id);
+    return chaveNome(m.marca) === chaveNome(cliente?.nome || nomeCli) && !temMarcas ? GERAL : NOVA;
+  };
+  /** Para onde vai cada item com o cliente e a marca escolhidos agora. */
+  const destino = (m, i) => {
+    const { nomeCli, clienteId, cliente } = clienteDe(m);
+    const escolha = escolhas.get(i) ?? sugerida(m, cliente, nomeCli);
+    const marca = escolha !== GERAL && escolha !== NOVA ? (dados.marcas || []).find((x) => x.id === escolha) || null : null;
+    const criarMarca = escolha === NOVA ? (m.marca || "") : "";
+    return { nomeCli, clienteId, cliente, marca, criarMarca, escolha, campos: CAMPOS_MARCA.filter((k) => preenchido(m[k])) };
+  };
+  /** Escolha da marca de um bloco: o geral do grupo (ou o próprio cliente), cada marca do cliente ou uma marca nova. */
+  const seletorMarca = (m, i, d) => {
+    const marcas = d.cliente ? marcasDo(d.cliente.id) : [];
+    if (!marcas.length && !m.marca) return null;
+    return el("select", { class: "seletor-marca-importar", "aria-label": `Marca para ${m.marca || d.nomeCli}`, onChange: (e) => { escolhas.set(i, e.target.value); desenhar(); } },
+      el("option", { value: GERAL, selected: d.escolha === GERAL }, marcas.length ? "Geral do grupo (institucional)" : "O próprio cliente (marca única)"),
+      marcas.map((x) => el("option", { value: x.id, selected: d.escolha === x.id }, x.nome)),
+      m.marca && !marcas.some((x) => chaveNome(x.nome) === chaveNome(m.marca)) ? el("option", { value: NOVA, selected: d.escolha === NOVA }, `+ Nova marca "${m.marca}"`) : null);
   };
   function desenhar() {
-    lista_.replaceChildren(...lista.map((m) => {
-      const d = destino(m);
+    lista_.replaceChildren(...lista.map((m, i) => {
+      const d = destino(m, i);
       const onde = !d.clienteId ? "não importar"
-        : `${d.cliente ? d.cliente.nome : `${d.nomeCli} (cliente novo)`}${d.marca ? ` › ${d.marca.nome}` : d.criarMarca ? ` › ${d.criarMarca} (marca nova)` : ""}`;
-      return el("li", { class: d.clienteId ? "" : "apagado" }, el("strong", {}, onde), ": ", d.campos.map((k) => ROTULO_CAMPO[k]).join(", ") || "nada para importar");
+        : `${d.cliente ? d.cliente.nome : `${d.nomeCli} (cliente novo)`}${d.marca ? ` › ${d.marca.nome}` : d.criarMarca ? ` › ${d.criarMarca} (marca nova)` : d.cliente && marcasDo(d.cliente.id).length ? " › geral do grupo" : ""}`;
+      return el("li", { class: d.clienteId ? "" : "apagado" },
+        el("div", { class: "linha-importar" }, el("strong", {}, m.marca ? `${m.marca}: ` : `${d.nomeCli}: `), d.clienteId ? seletorMarca(m, i, d) : null),
+        el("span", {}, `${onde} · `, d.campos.map((k) => ROTULO_CAMPO[k]).join(", ") || "nada para importar"));
     }));
   }
   desenhar();
   const fechar = abrirModal("Importar definições de marca", el("div", { class: "importacao-previa" },
-    el("p", {}, "Confira de qual cliente é cada bloco. O app já sugere pelo nome."),
+    el("p", {}, "Confira de qual cliente e de qual marca é cada bloco. O app já sugere pelo nome; num grupo, escolha a marca (ou o geral do grupo)."),
     el("div", { class: "lista" }, nomesCli.map((n) => el("div", { class: "linha-importar" }, el("strong", {}, n), seletores.get(n)))),
     el("h3", { class: "form-secao" }, "O que vai ser preenchido"),
     lista_,
@@ -112,8 +133,8 @@ function previaMarcas(lista) {
         let n = 0;
         const criados = {};
         try {
-          for (const m of lista) {
-            const d = destino(m);
+          for (const [i, m] of lista.entries()) {
+            const d = destino(m, i);
             if (!d.clienteId || !d.campos.length) continue;
             status.textContent = `${d.nomeCli}${m.marca ? ` › ${m.marca}` : ""}…`;
             let clienteId = d.cliente?.id || criados[d.nomeCli];

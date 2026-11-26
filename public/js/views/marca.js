@@ -299,7 +299,7 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
   return el("div", { class: "aba-marca" },
     seletor,
     !grupo ? el("p", { class: "subtitulo" }, "Este cliente tem uma marca só: a identidade é configurada aqui. Se ele tiver outras marcas com identidades diferentes (ex.: uma loja on-line com nome próprio), crie cada uma em \"+ Marca\" e ele vira um grupo: aí cada marca tem a sua identidade.") : null,
-    grupo && !marca ? el("p", { class: "faixa-aviso" }, `${c.nome} é um grupo: a identidade de cada marca fica na própria marca. Esta aqui só vale para os posts institucionais do grupo (sem marca) e completa o que estiver vazio nas marcas.`) : null,
+    grupo && !marca ? el("p", { class: "faixa-aviso" }, `${c.nome} é um grupo: a identidade de cada marca fica na própria marca. Esta aqui vale para os posts institucionais do grupo (sem marca) e completa o que estiver vazio nas marcas. Preenchida, ela representa o grupo como um todo; o que ficar vazio (sobre, tom de voz, público, persona) o pedido de copy monta com a combinação das marcas.`) : null,
     marca ? el("div", { class: "marca-cabeca" },
       el("div", {},
         el("h3", {}, `${c.nome} · ${marca.nome}`),
