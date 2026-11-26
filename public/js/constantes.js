@@ -143,7 +143,7 @@ export const MODELOS_PADRAO = {
 export const CAMPOS_REDES = [
   ["instagram", "Instagram", "@perfil", "perfil"],
   ["facebook", "Facebook", "https://facebook.com/pagina", "link"],
-  ["facebookPageId", "ID da página do Facebook", "Para agendar e ver os resultados (dá para escolher na aba Resultados)", "id"],
+  ["facebookPageId", "ID da página do Facebook", "Para agendar e ver os resultados (dá para escolher em Relatórios, com o cliente)", "id"],
   ["tiktok", "TikTok", "@perfil", "perfil"],
   ["youtube", "YouTube", "https://youtube.com/@canal", "link"],
   ["linkedin", "LinkedIn", "https://linkedin.com/company/...", "link"],

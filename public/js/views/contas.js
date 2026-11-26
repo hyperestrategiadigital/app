@@ -28,6 +28,14 @@ function exibir(campo, tipo, valor) {
   return [semProtocolo(valor), comHttp(valor)];
 }
 
+/** Link do perfil da rede de um post (ex.: rede "Instagram" → https://instagram.com/perfil); "" se não tiver. */
+export function linkDaRede(conta, rede) {
+  const n = normalizarRede(rede);
+  const campo = CAMPOS_REDES.find(([k, rotulo, , tipo]) => tipo !== "id" && (normalizarRede(rotulo).startsWith(n) || normalizarRede(k) === n));
+  return campo ? exibir(campo[0], campo[3], conta?.[campo[0]])[1] : "";
+}
+const normalizarRede = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[^a-z]/g, "");
+
 /** Redes de um post/tarefa: as da marca, se tiver; senão as do cliente. Rede não passa do grupo para a marca. */
 export function redesDe(clienteId, marcaId) {
   return (marcaId && porId("marcas", marcaId)) || porId("clientes", clienteId) || {};

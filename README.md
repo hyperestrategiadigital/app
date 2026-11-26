@@ -4,7 +4,7 @@ O Hyper Studio é a central de trabalho da Hyper Estratégia Digital, e no futur
 
 ## Telas
 
-Menu: **Hoje, Tarefas (com Calendário), Clientes, Tráfego pago, Financeiro, Relatórios** e o grupo **Administração** (Rotinas, Usuários e equipe, Lixeira, Ajustes). Em Tarefas, a barra tem só Buscar e **Filtros** (cliente, marca, responsável, o que mostrar e formato do post). **Ctrl+K** (⌘K no Mac) abre a busca rápida: clientes, marcas, posts, tarefas, compromissos e telas.
+Menu: **Hoje, Tarefas (com Calendário), Clientes, Tráfego pago, Financeiro, Relatórios** e o grupo **Administração** (Rotinas, Usuários e equipe, Lixeira, Ajustes). Em Tarefas, a barra tem só Buscar e **Filtros** (cliente, marca, responsável, o que mostrar e formato do post); cada filtro ligado vira uma etiqueta com ✕. **Ctrl+K** (⌘K no Mac) abre a busca rápida: clientes, marcas, posts, tarefas, compromissos e telas.
 
 | Tela | O que faz |
 |---|---|

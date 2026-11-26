@@ -6,6 +6,7 @@ import { cabecalho, abas, corCliente } from "./componentes.js";
 import { pode } from "../permissoes.js";
 import { abaResultados } from "./resultados.js";
 import { GRUPO } from "./marca.js";
+import { numerosAnuncios } from "./trafego.js";
 import { TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
 import { compromissosEntre } from "../agenda.js";
@@ -86,7 +87,11 @@ export function render({ params, estado, renderizar }) {
       fin && r.aReceber ? numero("A receber", fmtMoeda(r.aReceber), "alerta") : null,
       fin && !estado.cliente ? numero("Despesas pagas", fmtMoeda(r.despesas)) : null),
 
-    // Resultados do Instagram e Facebook do cliente escolhido (antes na aba Resultados da ficha)
+    // Resultados do Instagram e Facebook do cliente escolhido 
+    cliente && tp ? (() => {
+      const nums = numerosAnuncios(dados.contasAds.filter((x) => x.clienteId === cliente.id), de, ate, renderizar);
+      return nums ? el("section", { class: "bloco" }, el("h2", {}, `Anúncios da Meta · ${cliente.nome}`), nums) : null;
+    })() : null,
     cliente ? blocoResultados(cliente, (estado.resultados ??= {})[cliente.id] ??= {}, renderizar) : null,
 
     el("div", { class: "colunas-hoje" },

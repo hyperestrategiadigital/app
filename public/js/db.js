@@ -479,6 +479,11 @@ export async function salvarSub(caminho, valores, id) {
   await comPrazo(setDoc(r, { ...valores, criadoEm: Date.now() }, { merge: true }), 60);
   return r.id;
 }
+/** Lê um documento de subcoleção pelo id (null se não existe). */
+export async function lerSub(caminho, id) {
+  const d = await comPrazo(getDoc(doc(refSub(caminho), id)), 30);
+  return d.exists() ? { id: d.id, ...d.data() } : null;
+}
 /** Atualiza só os campos dados de um documento de subcoleção (sem mexer em criadoEm). */
 export const atualizarSub = (caminho, id, valores) => comPrazo(updateDoc(doc(refSub(caminho), id), valores));
 /** Ouve uma subcoleção (ex.: respostas de um link de aprovação). Devolve a função para parar. */

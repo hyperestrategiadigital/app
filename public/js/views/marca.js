@@ -328,6 +328,9 @@ function blocoAprendizados(c, marca, alvo) {
 const CAMPOS_CADASTRO = [["nome", "Nome do cliente"], ["segmento", "Segmento", "Ex.: clínica, academia, escola"], ["contato", "Pessoa de contato"],
   ["whatsapp", "WhatsApp", "(11) 99999-9999"], ["email", "E-mail"]];
 function blocoCadastro(c, podeEditar) {
+  return quadro("cadastro", "Cadastro e contato", preenchidos(c, ["nome", "segmento", "contato", "whatsapp", "email"]), conteudoCadastro(c, podeEditar));
+}
+function conteudoCadastro(c, podeEditar) {
   const chave = `cadastro|${c.id}`;
   const valores = rascunhos.get(chave) || Object.fromEntries([...CAMPOS_CADASTRO.map(([k]) => [k, c[k] || ""]), ["observacoes", c.observacoes || ""]]);
   const botao = el("button", { class: "mini", hidden: !rascunhos.has(chave), onClick: async () => {
@@ -342,12 +345,31 @@ function blocoCadastro(c, podeEditar) {
   const obs = el("textarea", { id: "cadastro-observacoes", rows: 2, disabled: !podeEditar, placeholder: "Quem tiver acesso de cliente também lê estas observações.", onInput: (e) => mudou("observacoes", e.target.value) });
   obs.value = valores.observacoes;
   return el("div", { class: "campo-marca cadastro-cliente" },
-    el("div", { class: "com-acao" }, el("h3", {}, "Cadastro e contato"),
+    el("div", { class: "com-acao" }, el("span", {}),
       el("div", { class: "tela-acoes" }, botao,
         podeEditar ? el("button", { class: "secundario mini", onClick: () => abrirCliente(c) }, pode("financeiro") ? "Contrato, status e excluir…" : "Status e excluir…") : null)),
     el("div", { class: "grade-cadastro" }, CAMPOS_CADASTRO.map(([k, r, d]) => entrada(k, r, d))),
     el("label", { class: "campo" }, el("span", {}, "Observações"), obs));
 }
+
+/**
+ * Quadros da aba Marca (abrem e fecham como os dos Ajustes). O título mostra quanto está preenchido;
+ * os abertos ficam lembrados neste navegador.
+ */
+const CHAVE_QUADROS = "hyper-marca-abertos";
+const quadrosAbertos = () => { try { return JSON.parse(localStorage.getItem(CHAVE_QUADROS) || "[\"cadastro\"]"); } catch { return ["cadastro"]; } };
+function quadro(chave, titulo, [feitos, total], ...conteudo) {
+  const caixa = el("details", { class: "quadro-marca", dataset: { quadro: chave }, open: quadrosAbertos().includes(chave) || null },
+    el("summary", {}, el("h3", {}, titulo),
+      total ? el("span", { class: `etiqueta ${feitos >= total ? "ok" : ""}` }, `${feitos} de ${total}`) : null),
+    ...conteudo);
+  caixa.addEventListener("toggle", () => {
+    const lista = quadrosAbertos().filter((n) => n !== chave);
+    try { localStorage.setItem(CHAVE_QUADROS, JSON.stringify(caixa.open ? [...lista, chave] : lista)); } catch { /* sem armazenamento */ }
+  });
+  return caixa;
+}
+const preenchidos = (obj, campos) => [campos.filter((k) => Array.isArray(obj[k]) ? obj[k].length : String(obj[k] || "").trim()).length, campos.length];
 
 export function abaMarca(c, estado = {}, renderizar = () => {}) {
   // Cliente com marcas = grupo (guarda-chuva): a identidade se configura em cada marca.
@@ -364,7 +386,6 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
   const podeEditar = ehAdmin() || pode("conteudo") || pode("trafego");
   if (!podeGerir) return el("div", { class: "aba-marca" }, !marca ? blocoCadastro(c, podeEditar) : el("p", { class: "nota" }, `Cadastro, contato e contrato ficam no geral do grupo ${c.nome}.`));
   return el("div", { class: "aba-marca" },
-    !marca ? blocoCadastro(c, podeEditar) : el("p", { class: "nota" }, `Cadastro, contato e contrato ficam no geral do grupo ${c.nome}.`),
     seletor,
     !grupo ? el("p", { class: "subtitulo" }, "Este cliente tem uma marca só: a identidade é configurada aqui. Se ele tiver outras marcas com identidades diferentes (ex.: uma loja on-line com nome próprio), crie cada uma em \"+ Marca\" e ele vira um grupo: aí cada marca tem a sua identidade.") : null,
     grupo && !marca ? el("p", { class: "faixa-aviso" }, `${c.nome} é um grupo: a identidade de cada marca fica na própria marca. Esta aqui vale para os posts institucionais do grupo (sem marca) e completa o que estiver vazio nas marcas. Preenchida, ela representa o grupo como um todo; o que ficar vazio (sobre, tom de voz, público, persona) o pedido de copy monta com a combinação das marcas.`) : null,
@@ -389,21 +410,25 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
       medidorMarca(c.id, marca?.id || ""),
       podeGerir ? el("div", { class: "acoes" }, el("button", { class: "secundario mini", onClick: () => abrirImportarBriefing(alvo, c) }, "Importar briefing (JSON)")) : null,
       blocoAprendizados(c, marca, alvo)),
-    campoLogo(alvo),
-    campoLink(alvo, "linkDrive", "Pasta da marca no Drive",
-      "Logos, fontes, manual e criativos de referência ficam nesta pasta.",
-      "https://drive.google.com/drive/folders/...", "Abrir pasta ↗"),
-    campoLink(alvo, "linkCanva", "Brand kit / pasta no Canva", null, "https://www.canva.com/...", "Abrir no Canva ↗"),
-    editorCores(alvo),
-    campoTexto(alvo, "fontes", "Fontes", "Ex.: Títulos em Playfair Display Bold; textos em Montserrat. (Os arquivos ficam na pasta do Drive.)", 2),
-    campoTexto(alvo, "descricao", "Sobre a marca", "O que é, o que vende, para quem, diferenciais e posicionamento. Se for de um grupo, como se diferencia das outras marcas.", 5),
-    campoTexto(alvo, "tomDeVoz", "Tom de voz", "Como a marca fala: próxima, técnica, bem-humorada... palavras que usa e que evita.", 4),
-    campoTexto(alvo, "persona", "Persona", "Quem é o cliente ideal: nome fictício, idade, rotina, dores, desejos, objeções.", 5),
-    campoTexto(alvo, "publico", "Público-alvo", "Ex.: mulheres 25-45, região de Sorocaba, classe B.", 3),
-    campoTexto(alvo, "palavrasChave", "Palavras e expressões da marca", "Termos que a marca usa e quer ver nos textos. Ex.: \"comunidade\", \"treino inteligente\", o nome dos planos.", 2),
-    campoTexto(alvo, "evitar", "O que evitar", "Palavras, assuntos e jeitos de falar que a marca não usa. Ex.: gírias, \"barato\", promessas de resultado, comparar com concorrente.", 3),
-    campoTexto(alvo, "pilares", "Pilares de conteúdo", "Um por linha. Ex.: Educativo, Bastidores, Prova social, Oferta. Cada post escolhe um pilar, e o calendário mostra se o mês está equilibrado.", 4),
-    campoDatas(alvo),
-    campoTexto(alvo, "diretrizes", "Diretrizes de conteúdo",
-      "Linha editorial de cada pilar, estrutura das legendas, CTAs, rodapé padrão, hashtags, emojis e séries fixas. Uma regra que vale só para um formato começa com ele entre colchetes, ex.: \"[Vídeo] capa só com o título\" ou \"[E-mail marketing] assinar como equipe\": ela só vai no pedido desse formato.", 8));
+    !marca ? blocoCadastro(c, podeEditar) : el("p", { class: "nota" }, `Cadastro, contato e contrato ficam no geral do grupo ${c.nome}.`),
+    quadro("visual", "Visual", preenchidos(alvo.obj, ["logo", "linkDrive", "linkCanva", "paleta", "fontes"]),
+      campoLogo(alvo),
+      campoLink(alvo, "linkDrive", "Pasta da marca no Drive",
+        "Logos, fontes, manual e criativos de referência ficam nesta pasta.",
+        "https://drive.google.com/drive/folders/...", "Abrir pasta ↗"),
+      campoLink(alvo, "linkCanva", "Brand kit / pasta no Canva", null, "https://www.canva.com/...", "Abrir no Canva ↗"),
+      editorCores(alvo),
+      campoTexto(alvo, "fontes", "Fontes", "Ex.: Títulos em Playfair Display Bold; textos em Montserrat. (Os arquivos ficam na pasta do Drive.)", 2)),
+    quadro("ia", "Para a IA: quem é a marca e como fala", preenchidos(alvo.obj, ["descricao", "tomDeVoz", "persona", "publico", "palavrasChave", "evitar"]),
+      campoTexto(alvo, "descricao", "Sobre a marca", "O que é, o que vende, para quem, diferenciais e posicionamento. Se for de um grupo, como se diferencia das outras marcas.", 5),
+      campoTexto(alvo, "tomDeVoz", "Tom de voz", "Como a marca fala: próxima, técnica, bem-humorada... palavras que usa e que evita.", 4),
+      campoTexto(alvo, "persona", "Persona", "Quem é o cliente ideal: nome fictício, idade, rotina, dores, desejos, objeções.", 5),
+      campoTexto(alvo, "publico", "Público-alvo", "Ex.: mulheres 25-45, região de Sorocaba, classe B.", 3),
+      campoTexto(alvo, "palavrasChave", "Palavras e expressões da marca", "Termos que a marca usa e quer ver nos textos. Ex.: \"comunidade\", \"treino inteligente\", o nome dos planos.", 2),
+      campoTexto(alvo, "evitar", "O que evitar", "Palavras, assuntos e jeitos de falar que a marca não usa. Ex.: gírias, \"barato\", promessas de resultado, comparar com concorrente.", 3)),
+    quadro("pilares", "Pilares, datas e diretrizes", preenchidos(alvo.obj, ["pilares", "datas", "diretrizes"]),
+      campoTexto(alvo, "pilares", "Pilares de conteúdo", "Um por linha. Ex.: Educativo, Bastidores, Prova social, Oferta. Cada post escolhe um pilar, e o calendário mostra se o mês está equilibrado.", 4),
+      campoDatas(alvo),
+      campoTexto(alvo, "diretrizes", "Diretrizes de conteúdo",
+        "Linha editorial de cada pilar, estrutura das legendas, CTAs, rodapé padrão, hashtags, emojis e séries fixas. Uma regra que vale só para um formato começa com ele entre colchetes, ex.: \"[Vídeo] capa só com o título\" ou \"[E-mail marketing] assinar como equipe\": ela só vai no pedido desse formato.", 8)));
 }

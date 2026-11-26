@@ -12,20 +12,17 @@ O repositório é público: nada de nomes de clientes, valores ou dados internos
 3. **Cliente:** o que deixa o portal e a aprovação mais simples.
 4. **Novidade grande** (imagem, integrações) só com a base estável, e começando pelo menor pedaço útil.
 
-## Fila curta (da revisão de 26/11/2026)
+## Fila curta
 
-1. **Criativos: abrir um post baixa todas as imagens do cliente.** Hoje `listarArtesCliente` lê a subcoleção `clientes/{id}/artes` inteira para mostrar as de um post (na equipe e no portal). Gasta leitura e banda do plano gratuito e fica lento. Ideia: o post guardar os ids das artes (`artes: [ids]`) e ler só esses documentos (`getDoc`), sem `where`. Precisa de uma migração que normalize os posts que já têm `qtdArtes`.
-2. **Importar o mesmo planejamento duas vezes duplica os posts.** Pular o post que já existe no mês com a mesma data e o mesmo título (normalizado) e avisar quantos foram pulados.
-3. **Aba Marca longa:** dividir em quadros recolhíveis como os Ajustes: Cadastro · Visual (logo, cores, fontes, Drive, Canva) · Para a IA (sobre, tom, persona, público, palavras, o que evitar) · Pilares, datas e diretrizes. O medidor da IA aponta o quadro que falta.
-4. **Filtros que ninguém vê:** em Tarefas, quem não é admin começa filtrado pelo próprio nome. Mostrar uma etiqueta com ✕ para cada filtro ligado (cliente, marca, responsável, mostrar, formato).
-5. **Portal sem imagem depois de 7 dias:** a faxina apaga a arte dos posts publicados. No Calendário do cliente, mostrar "arte publicada no Instagram" com o link do post em vez de um espaço vazio.
+(vazia: os 5 pontos da revisão de 26/11/2026 foram feitos, ver "Feito")
 
 ## Tráfego pago (em Beta)
 
-O que tira do Beta:
-- Puxar os números de anúncios da Meta (investimento, alcance, leads, custo por lead) pela Graph API, como os resultados orgânicos (`meta.js`, token só no navegador).
-- Esses números entram nos Relatórios do cliente e no PDF.
-- Manutenção atrasada (mais de 7 dias) vira aviso no Hoje de quem cuida do tráfego.
+Feito em 26/11/2026: números dos anúncios da Meta (investido, leads, custo por lead, conversas, alcance, cliques) no cartão do cliente e nos Relatórios; aviso de manutenção atrasada no Hoje.
+Para tirar o Beta:
+- Matheus acrescentar `ads_read` na configuração do Login para Empresas do app da Meta e conferir os números com o Gerenciador de Anúncios.
+- Levar os números dos anúncios para o PDF do relatório.
+- Escolher o período nos cartões (hoje fixo em 30 dias) e ver por campanha.
 - Depois: Google Ads (API exige conta de desenvolvedor aprovada; ver custo e prazo antes).
 
 ## Ideias que saíram e podem voltar (só quando o Matheus pedir)
@@ -55,4 +52,5 @@ Saíram em 11/2026 para o app ficar enxuto. Não trazer de volta sem pedido.
 ## Feito
 
 - 11/2026: IA só para copy; datas comemorativas por marca; campanhas; escopo; importação de briefing na marca.
+- 26/11/2026 (PR #45, revisão): criativos lidos por id do post (sem baixar as imagens do cliente inteiro); importação do planejamento sem duplicar; aba Marca em quadros; etiqueta com ✕ para cada filtro; aviso no portal no lugar da arte apagada; números de anúncios da Meta e aviso de manutenção atrasada.
 - 26/11/2026 (PR #45): importação de planejamento; Ajustes recolhíveis; faxina das imagens de posts publicados (7 dias); + Novo no Hoje e no celular; filtros de Tarefas; cadastro na aba Marca; ficha enxuta; Relatórios no menu com resultados da Meta; Tráfego pago em Beta.

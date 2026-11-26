@@ -1,8 +1,8 @@
 // Exportação do conteúdo do mês de um cliente: PDF visual para o cliente aprovar.
-import { dados, porId, listarSub, todasTarefas, garantirArquivo, carregarArquivo, limiteArquivo, identidade } from "./db.js";
+import { dados, porId, todasTarefas, garantirArquivo, carregarArquivo, limiteArquivo, identidade } from "./db.js";
 import { fmtData, fmtDiaSemana, avisar, esc } from "./ui.js";
 import { TIPO_CONTEUDO, rotuloObjetivo } from "./constantes.js";
-import { caminhoArtes } from "./arquivos.js";
+import { artePrincipal } from "./arquivos.js";
 
 export const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 export const nomeMes = (mes) => { const [a, m] = mes.split("-").map(Number); return `${MESES[m - 1]} ${a}`; };
@@ -53,12 +53,8 @@ export async function exportarPDF(clienteId, mes, marcaId) {
   if (!janela) { avisar("O navegador bloqueou a nova janela. Permita pop-ups para este site.", "erro"); return; }
   janela.document.write("<p style='font-family:sans-serif;padding:40px'>Montando o PDF…</p>");
 
-  let artes = [];
-  try { artes = await listarSub(caminhoArtes(clienteId)); } catch (e) { console.warn("Sem artes:", e); }
-  const artePorTarefa = {};
-  // Criativo final (anexado depois do Canva) tem preferência sobre a imagem gerada
-  artes.sort((a, b) => (a.origem === "final" ? 0 : 1) - (b.origem === "final" ? 0 : 1) || (b.criadoEm || 0) - (a.criadoEm || 0))
-    .forEach((a) => { artePorTarefa[a.tarefaId] ??= a.dados; });
+  // Só os criativos dos posts do PDF (o criativo final tem preferência)
+  const artePorTarefa = await artePrincipal(posts).catch((e) => { console.warn("Sem artes:", e); return {}; });
 
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
   const cards = posts.map((t) => `

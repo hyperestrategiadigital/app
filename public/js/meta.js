@@ -9,7 +9,8 @@ import { dados } from "./db.js";
 
 const VERSAO = "v23.0";
 const API = `https://graph.facebook.com/${VERSAO}`;
-const PERMISSOES = "pages_show_list,pages_read_engagement,read_insights,instagram_basic,instagram_manage_insights,business_management";
+// ads_read: números dos anúncios (Tráfego pago). No app do tipo Negócio, inclua ads_read também na configuração do login.
+const PERMISSOES = "pages_show_list,pages_read_engagement,read_insights,instagram_basic,instagram_manage_insights,business_management,ads_read";
 const CHAVE = "hyper-meta";
 
 export const configMeta = () => dados.config.find((c) => c.id === "meta") || {};
@@ -150,4 +151,46 @@ async function postsInstagram(igId, de, ate, token) {
     }
     return { ...m, data: m.timestamp?.slice(0, 10), numeros };
   }));
+}
+
+/* ---------------- Anúncios (Tráfego pago) ---------------- */
+
+// Tipos de ação que contam como lead e como conversa iniciada (WhatsApp, Messenger, Direct)
+const TIPOS_LEAD = ["lead", "onsite_conversion.lead_grouped", "offsite_conversion.fb_pixel_lead", "leadgen_grouped"];
+const TIPO_CONVERSA = "onsite_conversion.messaging_conversation_started_7d";
+const cacheAnuncios = new Map();
+
+/**
+ * Números de uma conta de anúncio da Meta num período (de/ate em AAAA-MM-DD): investimento, alcance, impressões,
+ * cliques, leads, conversas e custo por lead/conversa. Cada campo é pedido separado (a Meta muda campos com frequência).
+ * Precisa da permissão ads_read; o Facebook conectado precisa ter acesso à conta de anúncio.
+ */
+export async function anuncios(idConta, de, ate) {
+  const id = String(idConta || "").replace(/\D/g, "");
+  if (!id) throw new Error("Conta de anúncio sem ID. Preencha o ID (act_…) na conta, em Tráfego pago.");
+  const chave = `${id}|${de}|${ate}`;
+  if (!cacheAnuncios.has(chave)) {
+    const params = { level: "account", time_range: JSON.stringify({ since: de, until: ate }) };
+    const campo = async (nome) => {
+      try { return (await chamar(`act_${id}/insights`, { fields: nome, ...params })).data?.[0]?.[nome]; }
+      catch (e) { if (e.codigo === 190 || e.codigo === 200 || e.codigo === 10) throw e; return undefined; } // sem acesso: erro para a tela
+    };
+    const pedido = Promise.all(["spend", "reach", "impressions", "clicks", "actions"].map(campo)).then(([spend, reach, impressions, clicks, actions]) => {
+      const acao = (tipo) => Number((actions || []).find((a) => a.action_type === tipo)?.value || 0);
+      const leads = acao("lead") || TIPOS_LEAD.slice(1).reduce((s, t) => s + acao(t), 0);
+      const conversas = acao(TIPO_CONVERSA);
+      const investido = Number(spend || 0);
+      return { investido, alcance: Number(reach || 0), impressoes: Number(impressions || 0), cliques: Number(clicks || 0), leads, conversas,
+        custoLead: leads ? investido / leads : null, custoConversa: conversas ? investido / conversas : null };
+    });
+    cacheAnuncios.set(chave, pedido.catch((e) => { cacheAnuncios.delete(chave); throw e; }));
+  }
+  return cacheAnuncios.get(chave);
+}
+
+/** Soma os números de várias contas (ex.: todas as contas Meta de um cliente). */
+export function somarAnuncios(lista) {
+  const t = lista.reduce((s, x) => { for (const k of ["investido", "alcance", "impressoes", "cliques", "leads", "conversas"]) s[k] += x[k] || 0; return s; },
+    { investido: 0, alcance: 0, impressoes: 0, cliques: 0, leads: 0, conversas: 0 });
+  return { ...t, custoLead: t.leads ? t.investido / t.leads : null, custoConversa: t.conversas ? t.investido / t.conversas : null };
 }

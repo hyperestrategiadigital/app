@@ -12,6 +12,7 @@ import { abrirAssistenteIA } from "./assistenteIA.js";
 import { cabecalho, corCliente } from "./componentes.js";
 import { abaResultados } from "./resultados.js";
 import { GRUPO } from "./marca.js";
+import { linkDaRede, redesDe } from "./contas.js";
 
 /** Contas que a pessoa vê: as marcas liberadas, ou cada cliente (e as marcas dele, se for grupo). */
 export function contasDoPortal() {
@@ -65,10 +66,19 @@ function botoesAprovacao(t, depois = () => {}) {
     el("button", { class: "negar", onClick: () => { depois(); pedirAjuste(t); } }, "Pedir ajuste"));
 }
 
-/** Criativos do post (carregam depois). */
+/**
+ * Criativos do post (carregam depois). Posts publicados ficam sem a imagem depois de 7 dias (faxina do espaço):
+ * no lugar, um aviso com o link do perfil, para não parecer que quebrou.
+ */
 function galeria(t) {
   const caixa = el("div", { class: "portal-artes" });
-  if (!t.qtdArtes) return null;
+  if (!t.qtdArtes) {
+    if (t.statusConteudo !== "publicado") return null;
+    const rede = t.rede || "Instagram";
+    const link = linkDaRede(redesDe(t.clienteId, t.marcaId), rede);
+    return el("p", { class: "arte-publicada" }, `🖼 A arte deste post já está publicada no ${rede}. `,
+      link ? linkExterno(link, `Ver no ${rede} ↗`) : null);
+  }
   listarArtesTarefa(t.clienteId, t.id)
     .then((artes) => caixa.replaceChildren(...artes.map((a) => el("img", { src: a.dados, alt: a.nome || "Criativo do post", loading: "lazy" }))))
     .catch(() => caixa.replaceChildren(el("p", { class: "subtitulo" }, "Não consegui carregar as imagens.")));

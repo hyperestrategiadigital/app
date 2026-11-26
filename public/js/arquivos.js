@@ -1,41 +1,74 @@
 // Criativos (imagens) anexados aos posts, guardados dentro do Firestore (sem Firebase Storage).
 // Cada imagem é um documento em espacos/hyper/clientes/{clienteId}/artes, comprimida para caber no limite de 1 MB.
 // Os arquivos da marca (logos, fontes, referências) ficam na pasta do Drive do cliente, não aqui.
-import { listarSub, salvarSub, excluirSub, atualizar, porId, dados } from "./db.js";
+import { listarSub, lerSub, salvarSub, excluirSub, atualizar, porId, dados } from "./db.js";
 import { eu, marcasRestritas } from "./permissoes.js";
 
 export const LIMITE_BYTES = 700 * 1024; // ~930 KB depois do base64
 
 export const caminhoArtes = (clienteId) => ["clientes", clienteId || "sem-cliente", "artes"];
 
-const cache = new Map(); // clienteId -> Promise<lista de artes>
-export function listarArtesCliente(clienteId, { recarregar = false } = {}) {
-  if (recarregar || !cache.has(clienteId)) {
-    cache.set(clienteId, listarSub(caminhoArtes(clienteId), { marcas: marcasRestritas() ? eu.marcas : null }).catch((e) => { cache.delete(clienteId); throw e; }));
+// O post guarda os ids dos criativos dele (`artes: [ids]`): abrir um post lê só esses documentos,
+// sem baixar as imagens do cliente inteiro. Posts antigos sem `artes` caem na leitura da subcoleção
+// (e `indexarArtes()` grava os ids neles na primeira vez que um administrador entra).
+const cache = new Map(); // tarefaId -> Promise<lista de artes>
+const maisNovas = (a, b) => (a.origem === "final" ? 0 : 1) - (b.origem === "final" ? 0 : 1) || (b.criadoEm || 0) - (a.criadoEm || 0);
+
+/** Todos os criativos de um cliente (só para mover entre clientes e para posts antigos sem `artes`). */
+export const listarArtesCliente = (clienteId) => listarSub(caminhoArtes(clienteId), { marcas: marcasRestritas() ? eu.marcas : null });
+
+export function listarArtesTarefa(clienteId, tarefaId, { recarregar = false } = {}) {
+  if (recarregar || !cache.has(tarefaId)) {
+    const post = porId("tarefas", tarefaId);
+    const ler = Array.isArray(post?.artes)
+      ? Promise.all(post.artes.map((id) => lerSub(caminhoArtes(clienteId), id).catch(() => null))).then((l) => l.filter(Boolean))
+      : listarArtesCliente(clienteId).then((l) => l.filter((a) => a.tarefaId === tarefaId));
+    cache.set(tarefaId, ler.then((l) => l.sort(maisNovas)).catch((e) => { cache.delete(tarefaId); throw e; }));
   }
-  return cache.get(clienteId);
-}
-export async function listarArtesTarefa(clienteId, tarefaId) {
-  return (await listarArtesCliente(clienteId)).filter((a) => a.tarefaId === tarefaId).sort((a, b) => (b.criadoEm || 0) - (a.criadoEm || 0));
+  return cache.get(tarefaId);
 }
 
-async function contarArtes(clienteId, tarefaId) {
-  const n = (await listarArtesTarefa(clienteId, tarefaId)).length;
-  if (porId("tarefas", tarefaId)) await atualizar("tarefas", tarefaId, { qtdArtes: n });
+/** Criativo principal de cada post da lista (PDF e link de aprovação): { tarefaId: dataURL }. */
+export async function artePrincipal(posts) {
+  const pares = await Promise.all(posts.filter((t) => t.qtdArtes > 0)
+    .map(async (t) => [t.id, (await listarArtesTarefa(t.clienteId, t.id).catch(() => []))[0]?.dados]));
+  return Object.fromEntries(pares.filter(([, d]) => d));
+}
+
+/** Grava no post os ids e a quantidade de criativos. */
+async function gravarIds(tarefaId, ids) {
+  if (porId("tarefas", tarefaId)) await atualizar("tarefas", tarefaId, { artes: ids, qtdArtes: ids.length });
 }
 
 /** origem: "final" (criativo pronto, ex.: exportado do Canva). "gerada" só nos antigos, da geração de imagem que saiu. */
 export async function salvarArte(clienteId, tarefaId, dados, { origem = "final", nome = "" } = {}) {
+  const antes = (await listarArtesTarefa(clienteId, tarefaId).catch(() => [])).map((a) => a.id);
   // marcaId do post: o cliente que vê só algumas marcas lê os criativos filtrados por ele
-  await salvarSub(caminhoArtes(clienteId), { tarefaId, marcaId: porId("tarefas", tarefaId)?.marcaId || "", dados, origem, nome });
-  cache.delete(clienteId);
-  await contarArtes(clienteId, tarefaId);
+  const id = await salvarSub(caminhoArtes(clienteId), { tarefaId, marcaId: porId("tarefas", tarefaId)?.marcaId || "", dados, origem, nome });
+  cache.delete(tarefaId);
+  await gravarIds(tarefaId, [...antes, id]);
 }
 
 export async function excluirArte(clienteId, tarefaId, id) {
+  const antes = (await listarArtesTarefa(clienteId, tarefaId).catch(() => [])).map((a) => a.id);
   await excluirSub(caminhoArtes(clienteId), id);
-  cache.delete(clienteId);
-  await contarArtes(clienteId, tarefaId);
+  cache.delete(tarefaId);
+  await gravarIds(tarefaId, antes.filter((x) => x !== id));
+}
+
+/**
+ * Posts antigos com criativos e sem `artes` (admin, ao entrar): lê a subcoleção do cliente uma vez e grava os ids.
+ * Depois disso nenhum post precisa mais da leitura do cliente inteiro.
+ */
+export async function indexarArtes() {
+  const semIds = dados.tarefas.filter((t) => t.qtdArtes > 0 && !Array.isArray(t.artes));
+  for (const clienteId of new Set(semIds.map((t) => t.clienteId || ""))) {
+    const artes = await listarSub(caminhoArtes(clienteId)).catch(() => null);
+    if (!artes) continue;
+    for (const t of semIds.filter((x) => (x.clienteId || "") === clienteId)) {
+      await gravarIds(t.id, artes.filter((a) => a.tarefaId === t.id).sort(maisNovas).map((a) => a.id)).catch(() => {});
+    }
+  }
 }
 
 /** Dias que os criativos de um post publicado ficam guardados depois da data de publicação (o texto do post fica). */
@@ -51,12 +84,11 @@ export async function limparCriativosPublicados(hoje = new Date()) {
   const limite = new Date(hoje.getTime() - DIAS_CRIATIVOS * 86400000).toISOString().slice(0, 10);
   const posts = dados.tarefas.filter((t) => t.qtdArtes > 0 && t.statusConteudo === "publicado" && (t.dataPublicacao || t.prazo || "") && (t.dataPublicacao || t.prazo) < limite);
   let apagados = 0;
-  for (const clienteId of new Set(posts.map((t) => t.clienteId || ""))) {
-    const ids = new Set(posts.filter((t) => (t.clienteId || "") === clienteId).map((t) => t.id));
-    const artes = (await listarArtesCliente(clienteId, { recarregar: true }).catch(() => [])).filter((a) => ids.has(a.tarefaId));
-    for (const a of artes) { await excluirSub(caminhoArtes(clienteId), a.id).catch(() => {}); apagados++; }
-    cache.delete(clienteId);
-    for (const id of ids) if (porId("tarefas", id)) await atualizar("tarefas", id, { qtdArtes: 0 }).catch(() => {});
+  for (const t of posts) {
+    const artes = await listarArtesTarefa(t.clienteId, t.id, { recarregar: true }).catch(() => []);
+    for (const a of artes) { await excluirSub(caminhoArtes(t.clienteId), a.id).catch(() => {}); apagados++; }
+    cache.delete(t.id);
+    await gravarIds(t.id, []).catch(() => {});
   }
   try { localStorage.setItem("hyper-faxina-criativos", dia); } catch {}
   return apagados;

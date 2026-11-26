@@ -7,7 +7,7 @@ import { el, avisar, abrirModal, fmtData } from "./ui.js";
 import { dados, porId, salvarComId, salvarSub, listarSub, ouvirSub, excluirSub, atualizarSub, espacoInfo, identidade, atualizar, registrarAtividade } from "./db.js";
 import { eu, pode } from "./permissoes.js";
 import { postsDoMes, dataPost, nomeMes } from "./exportacao.js";
-import { caminhoArtes } from "./arquivos.js";
+import { artePrincipal } from "./arquivos.js";
 import { statusDaEtapa, rotuloObjetivo } from "./constantes.js";
 
 const DIAS_VALIDADE = 60;
@@ -45,13 +45,8 @@ export async function gerarLinkAprovacao(clienteId, mes, marcaId, { lista = null
       expiraEm: Date.now() + DIAS_VALIDADE * 86400000
     });
     // Uma imagem por post (o criativo final tem preferência sobre a imagem gerada)
-    const artes = await listarSub(caminhoArtes(clienteId)).catch(() => []);
-    artes.sort((a, b) => (a.origem === "final" ? 0 : 1) - (b.origem === "final" ? 0 : 1) || (b.criadoEm || 0) - (a.criadoEm || 0));
-    const usadas = new Set();
-    for (const a of artes) {
-      if (usadas.has(a.tarefaId) || !posts.some((t) => t.id === a.tarefaId)) continue;
-      usadas.add(a.tarefaId);
-      await salvarSub(["aprovacoes", token, "artes"], { dados: a.dados }, a.tarefaId);
+    for (const [tarefaId, dadosArte] of Object.entries(await artePrincipal(posts))) {
+      await salvarSub(["aprovacoes", token, "artes"], { dados: dadosArte }, tarefaId);
     }
     // Link refeito: as respostas antigas saem (o cliente responde de novo sobre a versão atual)
     if (atual) for (const r of await listarSub(["aprovacoes", token, "respostas"]).catch(() => [])) {

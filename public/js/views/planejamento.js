@@ -127,7 +127,14 @@ export function render({ params, estado, renderizar }) {
       const posts = Array.isArray(j) ? j : j.posts || [];
       const foraDoMes = posts.filter((p) => !String(p.data || "").startsWith(mes));
       const semMarca = new Set();
+      // Já no planejamento (salvo ou no rascunho) com a mesma data e o mesmo título: não duplica
+      const chaveDe = (data, titulo) => `${data}|${normalizar(titulo || "")}`;
+      const existentes = new Set(estado.linhas.map((l) => chaveDe(l.dataPublicacao, l.titulo)));
+      let repetidos = 0;
       for (const p of posts.filter((x) => String(x.data || "").startsWith(mes) && (x.titulo || x.tema))) {
+        const chave = chaveDe(p.data, String(p.titulo || p.tema).trim());
+        if (existentes.has(chave)) { repetidos++; continue; }
+        existentes.add(chave);
         let marcaId = marcas.length ? marcaDe(p.marca) : "";
         if (marcaId === null) { semMarca.add(p.marca); marcaId = ""; }
         novos.push({ ...linhaNova(p.data, { formato: p.formato, rede: p.rede, hora: p.hora, marcaId }), titulo: String(p.titulo || p.tema).trim(),
@@ -138,6 +145,7 @@ export function render({ params, estado, renderizar }) {
       previa.replaceChildren(...[
         el("p", {}, el("strong", {}, `${novos.length} post(s) de ${nomeMes(mes)}`), " entram como rascunho em ", el("strong", {}, cliente.nome), "."),
         novos.length ? el("ul", { class: "lista-previa-briefing" }, novos.map((l) => el("li", {}, `${fmtData(l.dataPublicacao, true)} · ${l.formato} | ${l.titulo}${l.marcaId ? ` · ${porId("marcas", l.marcaId)?.nome}` : ""}`))) : null,
+        repetidos ? el("p", { class: "faixa-aviso" }, `${repetidos} post(s) já estão no planejamento (mesma data e título) e foram pulados.`) : null,
         foraDoMes.length ? el("p", { class: "faixa-aviso" }, `${foraDoMes.length} post(s) de outro mês ficam de fora: importe no mês deles.`) : null,
         semMarca.size ? el("p", { class: "faixa-aviso" }, `Marca não encontrada (${[...semMarca].join(", ")}): esses posts entram como institucionais do grupo.`) : null
       ].filter(Boolean));
