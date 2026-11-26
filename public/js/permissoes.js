@@ -1,9 +1,9 @@
 // Quem é o usuário logado no espaço da Hyper e o que ele pode ver.
-// A proteção de verdade dos dados sensíveis (financeiro, tráfego, chave da OpenAI) está nas regras
+// A proteção de verdade dos dados sensíveis (financeiro, tráfego, contratos) está nas regras
 // do Firestore (firestore.rules); aqui só escondemos o que a pessoa não usa.
 
 export const AREAS = [
-  ["conteudo", "Conteúdo", "Calendário de posts, planejamento, criar artes, marca dos clientes"],
+  ["conteudo", "Conteúdo", "Calendário de posts, planejamento, copy, marca dos clientes"],
   ["trafego", "Tráfego pago", "Contas de anúncio, verbas, manutenções e resultados"],
   ["financeiro", "Financeiro", "Mensalidades, cobranças, orçamentos e valores dos clientes"]
 ];

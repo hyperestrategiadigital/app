@@ -24,7 +24,6 @@ import * as financeiro from "./views/financeiro.js";
 import * as trafego from "./views/trafego.js";
 import * as config from "./views/config.js";
 import * as planejamento from "./views/planejamento.js";
-import * as criar from "./views/criar.js";
 import * as rotinas from "./views/rotinas.js";
 import * as relatorios from "./views/relatorios.js";
 import * as usuarios from "./views/usuarios.js";
@@ -32,7 +31,6 @@ import * as conta from "./views/conta.js";
 import * as lixeira from "./views/lixeira.js";
 import * as creators from "./views/creators.js";
 import * as portal from "./views/portal.js";
-import * as studio from "./views/studio.js";
 
 // `area`: quem não tem essa área não vê a tela ("admin" = só administradores)
 // `grupo: "admin"`: fica dentro de "Administração" no menu. `menu: false`: tela sem item no menu.
@@ -42,7 +40,6 @@ const ROTAS = {
   tarefas: { titulo: "Tarefas", icone: "✓", view: tarefas, estado: "calendario", menu: false },
   calendario: { titulo: "Tarefas", icone: "✓", view: calendario, inclui: ["tarefas"] },
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
-  studio: { titulo: "Studio", icone: "✦", view: studio, selo: "beta" },
   creators: { titulo: "Creators", icone: "★", view: creators, area: "conteudo", selo: "em breve" },
   trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego, area: "trafego" },
   financeiro: { titulo: "Financeiro", icone: "$", view: financeiro, area: "financeiro" },
@@ -59,9 +56,10 @@ const ROTAS = {
     return el("div");
   } } },
   // Abertas a partir do calendário e do post
-  // Endereços antigos: o planejamento agora é um modo do Calendário e o Criar abre dentro do post
+  // Endereços antigos: o planejamento agora é um modo do Calendário; o Criar e o Studio (imagem) saíram
   planejamento: { titulo: "Planejamento", icone: "☷", view: { render: planejamento.redirecionar }, area: "conteudo", menu: false },
-  criar: { titulo: "Criar", icone: "✦", view: { render: criar.redirecionar }, area: "conteudo", menu: false }
+  criar: { titulo: "Criar", icone: "✦", view: { render: () => { location.replace("#/calendario"); return el("div"); } }, menu: false },
+  studio: { titulo: "Studio", icone: "✦", view: { render: () => { location.replace("#/calendario"); return el("div"); } }, menu: false }
 };
 // Pessoa do cliente: o portal do cliente, com as telas dela
 const ROTAS_CLIENTE = {
@@ -69,8 +67,8 @@ const ROTAS_CLIENTE = {
   calendario: { titulo: "Calendário", icone: "▦", view: portal.calendario },
   marca: { titulo: "Marca", icone: "◉", view: portal.marca },
   resultados: { titulo: "Resultados", icone: "↗", view: portal.resultados },
-  studio: { titulo: "Studio", icone: "✦", view: studio },
-  conta: { titulo: "Minha conta", icone: "☺", view: conta, menu: false }
+  conta: { titulo: "Minha conta", icone: "☺", view: conta, menu: false },
+  studio: { titulo: "Studio", icone: "✦", menu: false, view: { render: () => { location.replace("#/inicio"); return el("div"); } } }
 };
 const rotas = () => (ehCliente() ? ROTAS_CLIENTE : ROTAS);
 const telaInicial = () => (ehCliente() ? "inicio" : "hoje");
@@ -116,7 +114,7 @@ function montarNavMovel(nome) {
   const item = (rota, icone, titulo, ativo = rota === nome) => el("a", { href: `#/${rota}`, class: ativo ? "ativo" : "" }, el("span", { "aria-hidden": "true" }, icone), titulo);
   if (ehCliente()) return $("nav-movel").replaceChildren(
     item("inicio", "☀\uFE0E", "Início"), item("calendario", "▦\uFE0E", "Calendário"),
-    el("a", { class: `nav-novo ${nome === "studio" ? "ativo" : ""}`, href: "#/studio" }, el("span", { "aria-hidden": "true" }, "✦\uFE0E"), "Studio"),
+    el("button", { class: "nav-novo", onClick: () => portal.sugerirPost() }, el("span", { "aria-hidden": "true" }, "+"), "Sugerir"),
     item("marca", "◉\uFE0E", "Marca"), item("resultados", "↗\uFE0E", "Resultados"));
   $("nav-movel").replaceChildren(
     item("hoje", "☀\uFE0E", "Hoje"), item(ultimaVisao(), "✓\uFE0E", "Tarefas", ["tarefas", "calendario"].includes(nome)),

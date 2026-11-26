@@ -3,7 +3,6 @@ import { el, hojeISO, addDias, fmtData, fmtDiaSemana, fmtMoeda, vazio } from "..
 import { dados, nomeCliente, marcasDo } from "../db.js";
 import { cartaoTarefa, atrasada, abrirTarefa, cabecalho, seloCliente, abas } from "./componentes.js";
 import { emailAtivo } from "../emails.js";
-import { configOpenAI } from "../openai.js";
 import { agendaConectada } from "../agenda.js";
 import { rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost } from "../exportacao.js";
@@ -33,7 +32,6 @@ function primeirosPassos(renderizar) {
   const comMarca = unidades.filter((u) => u.tomDeVoz && (u.paleta || []).length).length;
   const passos = [
     ["Ligar os e-mails automáticos (convites, avisos, resumo diário)", emailAtivo(), "#/config"],
-    ["Cadastrar a chave da OpenAI (imagens e sugestões)", !!configOpenAI().chave, "#/config"],
     ["Google Agenda automática funcionando (Ajustes → Testar agenda)", agendaConectada(), "#/config"],
     [`Preencher a identidade das marcas: tom de voz e cores (${comMarca} de ${unidades.length})`, unidades.length > 0 && comMarca >= unidades.length, "#/clientes"],
     ["Convidar a equipe", dados.membros.length > 1, "#/usuarios"],
