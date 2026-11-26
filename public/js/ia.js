@@ -2,7 +2,7 @@
 // na plataforma: o app não chama a IA, monta um pedido completo, em camadas, que a pessoa cola na IA dela, e depois
 // lê a resposta colada de volta (marcadores como [LEGENDA]). Camadas, sempre nesta ordem:
 //   papel → manual da Hyper → marca → exemplos aprovados → o conteúdo → regras do formato/rede → como responder → checklist.
-import { dados, porId, identidade } from "./db.js";
+import { dados, porId, identidade, marcasDo } from "./db.js";
 import { TIPO_CONTEUDO, FORMATO_VIDEO } from "./constantes.js";
 import { MANUAL_PADRAO } from "./manual.js";
 
@@ -105,8 +105,23 @@ function camadaMarca(clienteId, marcaId) {
     c.evitar ? `- O que evitar (nunca use): ${c.evitar}` : null,
     conta.instagram ? `- Instagram: ${conta.instagram}` : null,
     conta.site ? `- Site: ${conta.site}` : null,
-    c.diretrizes ? `\n### Diretrizes de conteúdo da marca (valem mais que o manual)\n${c.diretrizes}` : null
+    c.diretrizes ? `\n### Diretrizes de conteúdo da marca (valem mais que o manual)\n${c.diretrizes}` : null,
+    camadaMarcasDoGrupo(clienteId, marcaId, c)
   ].filter((l) => l !== null).join("\n");
+}
+
+const CAMPOS_GRUPO = [["descricao", "O que é"], ["tomDeVoz", "Tom de voz"], ["publico", "Público-alvo"], ["persona", "Persona"]];
+/**
+ * Post institucional de um grupo (sem marca): o que o grupo tem preenchido o representa como um todo;
+ * o que estiver vazio vem da combinação das marcas dele.
+ */
+function camadaMarcasDoGrupo(clienteId, marcaId, c) {
+  if (marcaId) return null;
+  const marcas = marcasDo(clienteId).filter((m) => m.ativo !== false);
+  const vazios = CAMPOS_GRUPO.filter(([k]) => !String(c[k] || "").trim());
+  if (!marcas.length || !vazios.length) return null;
+  return [`\n### Marcas do grupo (o grupo ainda não tem ${vazios.map(([, r]) => r.toLowerCase()).join(", ")} próprios: use a combinação das marcas abaixo, falando pelo grupo como um todo)`,
+    ...marcas.map((m) => [`- ${m.nome}`, ...vazios.filter(([k]) => String(m[k] || "").trim()).map(([k, r]) => `  - ${r}: ${corta(m[k], 300)}`)].join("\n"))].join("\n");
 }
 
 function camadaExemplos(clienteId, marcaId, formato, excluir) {

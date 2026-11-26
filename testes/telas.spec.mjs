@@ -579,15 +579,28 @@ test("importar marcas: acha o cliente por nome parecido e manda para a marca com
   const lista = [
     { cliente: "Grupo", marca: "Grupo Exemplo", tomDeVoz: "Próximo", diretrizes: "Pilares: A, B" },
     { cliente: "Grupo", marca: "Ride", persona: "Mariana, 33" },
-    { cliente: "Grupo", descricao: "O grupo em si" }
+    { cliente: "Grupo", descricao: "O grupo em si" },
+    { cliente: "Grupo", publico: "Ciclistas de Sorocaba" } // sem "marca": vem no geral, mas dá para escolher a marca
   ];
   await page.setInputFiles("#importar-arquivo", { name: "m.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(lista)) });
   await expect(page.locator(".modal select[aria-label='Cliente para Grupo']")).toHaveValue("grupo");
   await expect(page.locator(".modal .lista-importar-marcas")).toContainText("Grupo Exemplo › Grupo Exemplo");
+  const ultimo = page.locator(".modal .lista-importar-marcas li").nth(3);
+  await expect(ultimo.locator("select")).toHaveValue("__geral");
+  await expect(ultimo.locator("select option")).toHaveText(["Geral do grupo (institucional)", "Grupo Exemplo", "Ride Exemplo"]);
+  await ultimo.locator("select").selectOption({ label: "Ride Exemplo" });
+  await expect(page.locator(".modal .lista-importar-marcas li").nth(3)).toContainText("Grupo Exemplo › Ride Exemplo");
   await page.locator(".modal").getByRole("button", { name: "Importar definições" }).click();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/marcas"]["m-grupo"].diretrizes)).toBe("Pilares: A, B");
   const s = await page.evaluate(() => window.__store);
   expect(s["espacos/hyper/marcas"]["m-ride"].persona).toBe("Mariana, 33");
+  expect(s["espacos/hyper/marcas"]["m-ride"].publico).toBe("Ciclistas de Sorocaba");
+  expect(s["espacos/hyper/clientes"].grupo.publico || "").not.toBe("Ciclistas de Sorocaba");
+  // Post institucional do grupo: o que o grupo não tem vem da combinação das marcas
+  const pedido = await page.evaluate(async () => (await import("/js/ia.js")).montarPedido("copy", { clienteId: "grupo", marcaId: "", post: { titulo: "Natal do grupo" } }));
+  expect(pedido).toContain("### Marcas do grupo");
+  expect(pedido).toContain("- Ride Exemplo");
+  expect(pedido).toContain("Público-alvo: Ciclistas de Sorocaba");
   expect(s["espacos/hyper/clientes"].grupo.descricao).toBe("O grupo em si");
   expect(s["espacos/hyper/clientes"].grupo.tomDeVoz).not.toBe("Próximo");
   expect(Object.keys(s["espacos/hyper/clientes"])).toHaveLength(2);
