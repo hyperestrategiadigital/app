@@ -1041,3 +1041,7 @@ details.quadro-marca .cadastro-cliente { border-bottom: 0; margin-bottom: 0; pad
 .numero-anuncio strong { font-size: 16px; color: var(--cor-texto); }
 .numero-anuncio span { font-size: 11px; color: var(--cor-texto-suave); }
 .form-nota { grid-column: 1 / -1; margin: 0; padding: 10px 14px; border-radius: var(--raio-pequeno); font-size: 14px; background: var(--cor-primaria-clara); color: var(--hyper-roxo); }
+/* Aprovação: espaço da imagem enquanto ela carrega (os textos aparecem antes) */
+.aprov-imagem-espaco:empty { height: 240px; margin-bottom: 10px; border-radius: var(--raio-pequeno); background: linear-gradient(90deg, var(--cor-fundo), var(--cor-borda-suave), var(--cor-fundo)); background-size: 200% 100%; animation: aprov-carregando 1.2s ease-in-out infinite; }
+@keyframes aprov-carregando { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.aprov-ajuste textarea { width: 100%; }

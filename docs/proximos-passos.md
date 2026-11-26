@@ -14,7 +14,7 @@ O repositório é público: nada de nomes de clientes, valores ou dados internos
 
 ## Fila curta
 
-(vazia: os 5 pontos da revisão de 26/11/2026 foram feitos, ver "Feito")
+- **Portal do cliente (logado) igual ao link:** no link de aprovação a pessoa já edita a legenda na revisão (26/11/2026). No portal ("Início para aprovar") ainda é só "Pedir ajuste" com comentário. Para editar ali, a regra de `tarefas` do cliente precisa aceitar `copy` (com cuidado: só em post "Em aprovação") ou a resposta passar por um campo próprio, como no link.
 
 ## Tráfego pago (em Beta)
 

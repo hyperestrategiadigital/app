@@ -1,9 +1,13 @@
-// Página pública de aprovação (aprovar.html?t=<token>): o cliente vê os posts do mês e aprova ou pede ajuste.
+// Página pública de aprovação (aprovar.html?t=<token>): o cliente vê os posts e aprova ou pede revisão.
 // Não pede login. Só funciona com um link válido gerado no app (60 dias).
-import { app } from "./firebase.js";
-import { getFirestore, doc, getDoc, getDocs, setDoc, collection } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+// Para abrir rápido: sem o módulo de login, com o Firestore Lite (só leituras e gravações simples, sem conexão
+// "ao vivo") e os textos primeiro; cada imagem aparece quando chega.
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import { getFirestore, doc, getDoc, getDocs, setDoc, collection } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore-lite.js";
+import { firebaseConfig } from "./firebase-config.js";
 import { el, fmtData, fmtDiaSemana, avisar } from "./ui.js";
 
+const app = initializeApp(firebaseConfig);
 const token = new URLSearchParams(location.search).get("t") || "";
 const raiz = document.getElementById("aprovacao");
 const BANCOS = ["(default)", "default"];
@@ -32,18 +36,22 @@ async function iniciar() {
   if (!achado) return erro("Este link expirou ou não existe mais. Peça um novo link para a Hyper.");
   const { db, aprovacao } = achado;
   if (aprovacao.cor) document.documentElement.style.setProperty("--selo", aprovacao.cor);
-  const [artes, respostas] = await Promise.all([
-    getDocs(collection(db, ...caminho("artes"))).then((s) => Object.fromEntries(s.docs.map((d) => [d.id, d.data().dados]))).catch(() => ({})),
-    getDocs(collection(db, ...caminho("respostas"))).then((s) => Object.fromEntries(s.docs.map((d) => [d.id, d.data()]))).catch(() => ({}))
-  ]);
+  // Respostas são pequenas: vêm antes de mostrar. As imagens (pesadas) vêm depois, uma por post.
+  const respostas = await getDocs(collection(db, ...caminho("respostas")))
+    .then((s) => Object.fromEntries(s.docs.map((d) => [d.id, d.data()]))).catch(() => ({}));
+  const artes = {}; // postId -> dataURL (quando chegar)
+  const carregarArte = (postId) => (artes[postId] ??= getDoc(doc(db, ...caminho("artes", postId)))
+    .then((s) => (s.exists() ? s.data().dados : null)).catch(() => null));
+
   let nome = "";
   try { nome = localStorage.getItem(chaveNome) || ""; } catch {}
   const campoNome = el("input", { id: "aprov-nome", type: "text", value: nome, placeholder: "Seu nome", autocomplete: "name" });
   campoNome.addEventListener("input", () => { try { localStorage.setItem(chaveNome, campoNome.value.trim()); } catch {} });
 
-  const responder = async (post, status, comentario, cartao) => {
+  const responder = async (post, status, comentario, cartao, copyNova) => {
     if (!campoNome.value.trim()) { avisar("Escreva seu nome no topo antes de responder.", "erro"); campoNome.focus(); return false; }
     const r = { status, comentario: comentario || "", nome: campoNome.value.trim().slice(0, 80), em: Date.now() };
+    if (copyNova) r.copyNova = copyNova.slice(0, 5000);
     try {
       await setDoc(doc(db, ...caminho("respostas", post.id)), r);
       respostas[post.id] = r;
@@ -53,34 +61,55 @@ async function iniciar() {
     } catch (e) { avisar("Não consegui enviar. Confira a internet e tente de novo.", "erro"); return false; }
   };
 
-  const seloResposta = (r) => r ? el("span", { class: `etiqueta ${r.status === "aprovado" ? "ok" : "alerta"}` }, r.status === "aprovado" ? "✓ Aprovado" : "✎ Ajuste pedido") : null;
+  const seloResposta = (r) => !r ? null
+    : r.status === "aprovado" ? el("span", { class: "etiqueta ok" }, r.copyNova ? "✓ Aprovado com a sua legenda" : "✓ Aprovado")
+    : el("span", { class: "etiqueta alerta" }, "✎ Revisão pedida");
 
   function cartaoPost(post) {
     const r = respostas[post.id];
-    const comentario = el("textarea", { rows: 3, placeholder: "O que você quer mudar? (texto, imagem, data…)" });
-    const caixaAjuste = el("div", { class: "aprov-ajuste", hidden: true }, comentario,
+    const legendaAtual = r?.copyNova || post.copy || "";
+    // Revisão: a pessoa edita a legenda ela mesma e/ou escreve o que quer mudar
+    const legenda = post.copy ? el("textarea", { rows: Math.min(14, Math.max(5, Math.ceil(legendaAtual.length / 60))), "aria-label": "Legenda" }) : null;
+    if (legenda) legenda.value = legendaAtual;
+    const comentario = el("textarea", { rows: 3, placeholder: post.copy ? "Quer mudar mais alguma coisa? (imagem, data, outra ideia…) Opcional se você já editou a legenda." : "O que você quer mudar? (tema, ideia, data…)" });
+    if (r?.status === "ajuste" && r.comentario) comentario.value = r.comentario;
+    const caixaRevisao = el("div", { class: "aprov-ajuste", hidden: true },
+      legenda ? el("label", { class: "campo" }, el("span", {}, "Legenda (edite à vontade)"), legenda) : null,
+      el("label", { class: "campo" }, el("span", {}, post.copy ? "Pedido para a equipe" : "O que mudar"), comentario),
+      post.copy ? el("p", { class: "subtitulo" }, "Se você só editar a legenda, o post fica aprovado com o seu texto. Se escrever um pedido, a equipe ajusta e te mostra de novo.") : null,
       el("div", { class: "acoes" },
-        el("button", { class: "negar", onClick: () => (caixaAjuste.hidden = true) }, "Cancelar"),
+        el("button", { class: "negar", onClick: () => (caixaRevisao.hidden = true) }, "Cancelar"),
         el("button", { class: "confirmar", onClick: async (e) => {
-          if (!comentario.value.trim()) { avisar("Conte o que você quer mudar.", "erro"); return; }
+          const pedido = comentario.value.trim();
+          const editada = legenda && legenda.value.trim() && legenda.value.trim() !== (post.copy || "").trim() ? legenda.value.trim() : "";
+          if (!pedido && !editada) { avisar(post.copy ? "Edite a legenda ou conte o que você quer mudar." : "Conte o que você quer mudar.", "erro"); return; }
           e.currentTarget.disabled = true;
-          if (!(await responder(post, "ajuste", comentario.value.trim(), cartao))) e.currentTarget.disabled = false;
-        } }, "Enviar ajuste")));
+          const status = pedido ? "ajuste" : "aprovado";
+          if (!(await responder(post, status, pedido, cartao, editada))) e.currentTarget.disabled = false;
+        } }, "Enviar revisão")));
+
+    const imagem = el("div", { class: "aprov-imagem-espaco" });
+    if (post.temArte !== false) carregarArte(post.id).then((src) => {
+      if (src) imagem.replaceChildren(el("img", { class: "aprov-imagem", src, alt: post.titulo }));
+      else imagem.remove();
+    });
+    else imagem.remove();
+
     const cartao = el("article", { class: `bloco aprov-post ${r ? `respondido ${r.status}` : ""}` },
       el("div", { class: "aprov-data" },
         el("strong", {}, `${fmtDiaSemana(post.data)} · ${fmtData(post.data)}`), post.hora ? el("span", {}, ` às ${post.hora}`) : null,
         el("span", { class: "etiqueta" }, [post.formato, post.rede].filter(Boolean).join(" · ")),
         post.tema ? el("span", { class: "etiqueta alerta" }, "Tema para aprovar") : null, seloResposta(r)),
-      artes[post.id] ? el("img", { class: "aprov-imagem", src: artes[post.id], alt: post.titulo, loading: "lazy" }) : null,
+      imagem,
       el("h2", {}, post.titulo),
       post.objetivo ? el("p", { class: "subtitulo" }, `Objetivo: ${post.objetivo}`) : null,
-      post.copy ? el("div", { class: "aprov-copy" }, el("span", { class: "subtitulo" }, "Legenda"), el("p", {}, post.copy))
+      legendaAtual ? el("div", { class: "aprov-copy" }, el("span", { class: "subtitulo" }, r?.copyNova ? "Legenda (a sua versão)" : "Legenda"), el("p", {}, legendaAtual))
         : post.roteiro ? el("div", { class: "aprov-copy" }, el("span", { class: "subtitulo" }, "Ideia"), el("p", {}, post.roteiro)) : null,
-      r?.comentario ? el("p", { class: "faixa-aviso" }, `Seu comentário: ${r.comentario}`) : null,
+      r?.comentario ? el("p", { class: "faixa-aviso" }, `Seu pedido: ${r.comentario}`) : null,
       el("div", { class: "acoes" },
-        el("button", { class: r?.status === "aprovado" ? "secundario" : "confirmar", onClick: (e) => { e.currentTarget.disabled = true; responder(post, "aprovado", "", cartao); } }, r?.status === "aprovado" ? "Aprovado ✓" : post.tema ? "Aprovar tema" : "Aprovar"),
-        el("button", { class: "secundario", onClick: () => { caixaAjuste.hidden = false; comentario.focus(); } }, r?.status === "ajuste" ? "Mudar o pedido de ajuste" : "Pedir ajuste")),
-      caixaAjuste);
+        el("button", { class: r?.status === "aprovado" ? "secundario" : "confirmar", onClick: (e) => { e.currentTarget.disabled = true; responder(post, "aprovado", "", cartao, r?.copyNova || ""); } }, r?.status === "aprovado" ? "Aprovado ✓" : post.tema ? "Aprovar tema" : "Aprovar"),
+        el("button", { class: "secundario", onClick: () => { caixaRevisao.hidden = false; (legenda || comentario).focus(); } }, r ? "Mudar a revisão" : "Pedir revisão")),
+      caixaRevisao);
     cartao.dataset.post = post.id;
     return cartao;
   }
@@ -92,9 +121,10 @@ async function iniciar() {
     if (respondidos === n && aprovacao.emailUrl && !atualizarResumo.avisado) {
       atualizarResumo.avisado = true;
       const aprovados = aprovacao.posts.filter((p) => respostas[p.id]?.status === "aprovado").length;
+      const editadas = aprovacao.posts.filter((p) => respostas[p.id]?.copyNova).length;
       fetch(aprovacao.emailUrl, { method: "POST", body: JSON.stringify({
         tipo: "aviso-admins", nome: campoNome.value.trim(), email: aprovacao.nome,
-        detalhe: `Respondeu a aprovação de ${aprovacao.rotulo || nomeMes(aprovacao.mes)} de ${aprovacao.nome}: ${aprovados} aprovado(s), ${n - aprovados} com ajuste.`,
+        detalhe: `Respondeu a aprovação de ${aprovacao.rotulo || nomeMes(aprovacao.mes)} de ${aprovacao.nome}: ${aprovados} aprovado(s), ${n - aprovados} com revisão${editadas ? `, ${editadas} legenda(s) editada(s) pelo cliente` : ""}.`,
         link: location.origin + location.pathname.replace(/aprovar\.html$/, "") + "#/calendario"
       }) }).catch(() => {});
     }
@@ -106,7 +136,8 @@ async function iniciar() {
     el("header", { class: "tela-topo ficha-topo" },
       el("div", {}, el("h1", {}, aprovacao.nome || "Planejamento"), el("p", { class: "subtitulo" }, `Conteúdo ${aprovacao.rotulo ? `da ${aprovacao.rotulo}` : `de ${nomeMes(aprovacao.mes)}`} · ${posts.length} post(s)`))),
     el("section", { class: "bloco" },
-      el("p", {}, "Veja cada post e clique em ", el("strong", {}, "Aprovar"), " ou ", el("strong", {}, "Pedir ajuste"), ". Suas respostas vão direto para a equipe da Hyper."),
+      el("p", {}, "Veja cada post e clique em ", el("strong", {}, "Aprovar"), " ou ", el("strong", {}, "Pedir revisão"),
+        ". Na revisão você pode editar a legenda você mesma ou escrever o que quer mudar. Suas respostas vão direto para a equipe da Hyper."),
       el("label", { class: "campo", for: "aprov-nome" }, el("span", {}, "Seu nome"), campoNome),
       resumo,
       el("div", { class: "acoes" }, el("button", { class: "secundario", onClick: async (e) => {

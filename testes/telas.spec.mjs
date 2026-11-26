@@ -3,7 +3,7 @@
 import { test, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 
-const MOCKS = { "firebase-app.js": "firebase-app.js", "firebase-auth.js": "firebase-auth.js", "firebase-firestore.js": "firebase-firestore.js" };
+const MOCKS = { "firebase-app.js": "firebase-app.js", "firebase-auth.js": "firebase-auth.js", "firebase-firestore.js": "firebase-firestore.js", "firebase-firestore-lite.js": "firebase-firestore.js" };
 const pasta = fileURLToPath(new URL("./mocks/", import.meta.url));
 
 const hoje = new Date();
@@ -317,6 +317,47 @@ test("aprovação do cliente por link: o cliente aprova e o post muda de etapa",
   await expect(cliente.locator("article.aprov-post", { hasText: "Post para aprovar" })).toContainText("Aprovado");
   await page.reload();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].p2.statusConteudo), { timeout: 10000 }).toBe("aprovado");
+});
+
+test("aprovação por link: a pessoa edita a legenda na revisão e ela vira a copy do post; ou pede revisão", async ({ page, context }) => {
+  await abrir(page);
+  const hoje = new Date().toISOString().slice(0, 10);
+  await page.evaluate(async (hoje) => {
+    const db = await import("/js/db.js");
+    await db.salvarComId("tarefas", "pe", { titulo: "Post para editar", tipo: "Conteúdo", clienteId: "grupo", formato: "Estático", rede: "Instagram", dataPublicacao: hoje, statusConteudo: "producao", status: "andamento", copy: "Legenda da equipe", checklist: [] });
+    await db.salvarComId("tarefas", "pr", { titulo: "Post para revisar", tipo: "Conteúdo", clienteId: "grupo", formato: "Estático", rede: "Instagram", dataPublicacao: hoje, statusConteudo: "producao", status: "andamento", copy: "Outra legenda", checklist: [] });
+  }, hoje);
+  await page.evaluate(async () => { const a = await import("/js/aprovacoes.js"); await a.gerarLinkAprovacao("grupo", new Date().toISOString().slice(0, 7)); });
+  const link = await page.locator(".modal input[readonly]").inputValue();
+  // Sem imagem no post: a página nem busca (só quem tem temArte)
+  expect(await page.evaluate((t) => window.__store["espacos/hyper/aprovacoes"][t].posts.every((p) => p.temArte === false), link.split("t=")[1])).toBe(true);
+  const cliente = await context.newPage();
+  await rotearMocks(cliente);
+  await cliente.goto(link.replace(/^https?:\/\/[^/]+/, ""));
+  await cliente.fill("#aprov-nome", "Dona do Grupo");
+  // 1) Só edita a legenda: aprovado com o texto dela
+  const editar = cliente.locator("article.aprov-post", { hasText: "Post para editar" });
+  await editar.getByRole("button", { name: "Pedir revisão" }).click();
+  await expect(editar.getByLabel("Legenda")).toHaveValue("Legenda da equipe");
+  await editar.getByLabel("Legenda").fill("Legenda do jeito da cliente");
+  await editar.getByRole("button", { name: "Enviar revisão" }).click();
+  await expect(editar).toContainText("Aprovado com a sua legenda");
+  await expect(editar).toContainText("Legenda do jeito da cliente");
+  // 2) Sem editar nem escrever: pede um dos dois
+  const revisar = cliente.locator("article.aprov-post", { hasText: "Post para revisar" });
+  await revisar.getByRole("button", { name: "Pedir revisão" }).click();
+  await revisar.getByRole("button", { name: "Enviar revisão" }).click();
+  await expect(cliente.locator(".aviso")).toContainText("Edite a legenda ou conte o que você quer mudar");
+  await revisar.getByPlaceholder(/Quer mudar mais alguma coisa/).fill("Trocar a foto por uma da fachada");
+  await revisar.getByRole("button", { name: "Enviar revisão" }).click();
+  await expect(revisar).toContainText("Revisão pedida");
+  // No app: a legenda dela virou a copy (a antiga fica no histórico) e o outro voltou para a produção com o pedido
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.copy), { timeout: 10000 }).toBe("Legenda do jeito da cliente");
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.statusConteudo)).toBe("aprovado");
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pr.ajusteCliente)).toBe("Trocar a foto por uma da fachada");
+  const historico = await page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas/pe/atividade"] || {}).map((a) => a.texto).join("\n"));
+  expect(historico).toContain("Legenda anterior:\nLegenda da equipe");
 });
 
 test("resultados sem a Meta ligada mostram o caminho (em Relatórios, com o cliente)", async ({ page }) => {
