@@ -3,7 +3,7 @@ import { quitarCobranca } from "../recorrencias.js";
 import { el, hojeISO, addDias, normalizar, vazio, fmtData } from "../ui.js";
 import { dados, atualizar, registrarAtividade } from "../db.js";
 import { cartaoTarefa, atrasada, abrirTarefa, opcoesResponsaveis, seloCliente } from "./componentes.js";
-import { topoTarefas, bateBusca } from "./calendario.js";
+import { topoTarefas, bateBusca, bateFormato } from "./calendario.js";
 import { tarefaVisivel } from "../permissoes.js";
 import { STATUS_TAREFA, TIPO_CONTEUDO, etapaDoStatus } from "../constantes.js";
 import { compromissosEntre } from "../agenda.js";
@@ -27,7 +27,7 @@ export function render({ params = [], estado, renderizar }) {
   const filtradas = dados.tarefas.filter((t) => tarefaVisivel(t) && daCamada(t) &&
     (!f.cliente || t.clienteId === f.cliente) &&
     (f.marca == null || (t.marcaId || "") === f.marca) &&
-    (!f.responsavel || (t.responsavel || "") === f.responsavel) && bateBusca(t, busca));
+    (!f.responsavel || (t.responsavel || "") === f.responsavel) && bateFormato(t, f.formato) && bateBusca(t, busca));
 
   const limiteConcluidas = f.periodoConcluidas === "tudo" ? "" : addDias(hojeISO(), -Number(f.periodoConcluidas));
   const ordenarPrazo = (a, b) => (a.prazo || "9999").localeCompare(b.prazo || "9999");

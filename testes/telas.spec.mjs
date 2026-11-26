@@ -577,7 +577,9 @@ test("grupo: escolhe a marca antes e a ficha fica igual à de um cliente comum",
   // Tarefas da marca: abre Tarefas filtrado pelo cliente e pela marca
   await page.getByRole("link", { name: /Tarefas \(/ }).click();
   await expect(page).toHaveURL(/#\/tarefas\/grupo\/ma/);
-  await expect(page.locator(".filtros-tarefas select[aria-label=Marca]")).toHaveValue("ma");
+  await expect(page.locator(".botao-filtros")).toHaveText("Filtros (2) ▾");
+  await page.locator(".botao-filtros").click();
+  await expect(page.locator(".painel-filtros select[aria-label=Marca]")).toHaveValue("ma");
 
   // Geral do grupo: tem tráfego e financeiro
   await page.goto("/#/clientes/grupo/marca/grupo");
@@ -695,9 +697,14 @@ test("Produzir semana: posts planejados viram checklist dentro da tarefa; extras
   await expect(page.locator(".cartao-tarefa", { hasText: "Post planejado A" })).toHaveCount(0);
   await expect(page.locator(".cartao-tarefa", { hasText: "Post extra X" })).toHaveCount(1);
   // Na aba Posts aparecem todos
-  await page.locator(".filtros-tarefas").getByRole("tab", { name: "Posts" }).click();
+  await expect(page.locator(".filtros-tarefas select")).toHaveCount(0); // barra limpa: busca + Filtros
+  await page.locator(".botao-filtros").click();
+  await page.locator(".painel-filtros").getByRole("tab", { name: "Posts" }).click();
   await expect(page.locator(".cartao-tarefa", { hasText: "Post planejado A" })).toHaveCount(1);
-  await page.locator(".filtros-tarefas").getByRole("tab", { name: "Tudo" }).click();
+  await page.locator(".painel-filtros select[aria-label=Formato]").selectOption("Vídeo");
+  await expect(page.locator(".cartao-tarefa", { hasText: "Post planejado A" })).toHaveCount(0);
+  await page.locator(".painel-filtros").getByRole("button", { name: "Limpar filtros" }).click();
+  await expect(page.locator(".botao-filtros")).toHaveText("Filtros ▾");
 
   await page.locator(".cartao-tarefa", { hasText: "Produzir semana" }).click();
   await expect(page.locator(".checklist-producao li")).toHaveCount(2);
