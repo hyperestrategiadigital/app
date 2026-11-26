@@ -330,18 +330,24 @@ export const COM_LIXEIRA = new Set(["tarefas", "compromissos", "clientes", "marc
 export const DIAS_LIXEIRA = 30;
 
 /** Exclui. Com lixeira (padrão nas coleções acima), guarda uma cópia por 30 dias. */
+// Cada exclusão tem a própria cópia na lixeira (nome único). Com um nome fixo por item, um item recriado com o
+// mesmo id (rotinas, importações antigas) esbarrava na cópia antiga: gravar por cima é "alterar" a lixeira, que as
+// regras não deixam, e a exclusão inteira falhava sem apagar nada.
+const ultimaCopia = new Map(); // "col/id" -> id da cópia na lixeira (para o Desfazer)
 export async function excluir(col, id, { lixeira = true } = {}) {
   const item = porId(col, id);
   if (!lixeira || !COM_LIXEIRA.has(col) || !item) return comPrazo(deleteDoc(doc(ref(col), id)));
   const { id: _, ...valores } = item;
+  const copia = `${col}__${id}__${Date.now()}`;
   const lote = writeBatch(db);
-  lote.set(doc(ref("lixeira"), `${col}__${id}`), {
+  lote.set(doc(ref("lixeira"), copia), {
     colecao: col, idOriginal: id, dados: valores, clienteId: col === "clientes" ? id : (valores.clienteId || ""),
     titulo: valores.titulo || valores.nome || valores.descricao || valores.plataforma || "(sem título)",
     excluidoEm: Date.now(), excluidoPor: eu.nome || eu.email || "", excluidoPorUid: eu.uid
   });
   lote.delete(doc(ref(col), id));
   await comPrazo(lote.commit());
+  ultimaCopia.set(`${col}/${id}`, copia);
 }
 
 /** Lista a lixeira (só administrador). */
@@ -356,7 +362,9 @@ export async function restaurarDaLixeira(item) {
 /** "Desfazer" logo depois de excluir: devolve o item e tira da lixeira. */
 export async function desfazerExclusao(col, id, valores) {
   await salvarComId(col, id, valores);
-  await comPrazo(deleteDoc(doc(ref("lixeira"), `${col}__${id}`))).catch(() => {});
+  const copia = ultimaCopia.get(`${col}/${id}`) || `${col}__${id}`;
+  ultimaCopia.delete(`${col}/${id}`);
+  await comPrazo(deleteDoc(doc(ref("lixeira"), copia))).catch(() => {});
 }
 export const excluirDaLixeira = (id) => comPrazo(deleteDoc(doc(ref("lixeira"), id)));
 const apagarEmLote = async (refs) => {

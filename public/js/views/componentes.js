@@ -145,7 +145,7 @@ export function abrirTarefa(tarefa = {}) {
       onClick: async () => {
         if (await confirmar(`Excluir "${tarefa.titulo}"?`)) {
           const { id, ...copia } = porId("tarefas", tarefa.id) || tarefa;
-          await excluir("tarefas", id);
+          try { await excluir("tarefas", id); } catch (e) { avisar(`Não consegui excluir: ${e.message}`, "erro"); return; }
           fecharModais();
           avisar("Tarefa excluída.", "ok", { desfazer: () => desfazerExclusao("tarefas", id, copia) });
         }

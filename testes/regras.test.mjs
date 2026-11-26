@@ -245,6 +245,16 @@ test("lixeira: quem exclui guarda a cópia; só o administrador vê", async () =
   await assertSucceeds(deleteDoc(doc(como("basico"), `${E}/lixeira/tarefas__t1`)));
 });
 
+test("lixeira: excluir de novo um item recriado com o mesmo id (cópia com nome único)", async () => {
+  const item = { colecao: "tarefas", idOriginal: "t2", dados: { titulo: "Post" }, clienteId: "c1", titulo: "Post", excluidoEm: 1, excluidoPor: "A", excluidoPorUid: "admin" };
+  await assertSucceeds(setDoc(doc(como("admin"), `${E}/lixeira/tarefas__t2__1`), item));
+  // O jeito antigo (nome fixo): a segunda exclusão grava por cima da cópia, e as regras barram
+  await assertSucceeds(setDoc(doc(como("admin"), `${E}/lixeira/tarefas__t2`), item));
+  await assertFails(setDoc(doc(como("admin"), `${E}/lixeira/tarefas__t2`), { ...item, excluidoEm: 2 }));
+  // O jeito novo: cada exclusão tem a própria cópia
+  await assertSucceeds(setDoc(doc(como("admin"), `${E}/lixeira/tarefas__t2__2`), { ...item, excluidoEm: 2 }));
+});
+
 test("registro de erros: grava o próprio, só o administrador lê", async () => {
   const erro = { msg: "Falhou", detalhe: "pilha", rota: "#/hoje", uid: "pendente", email: "p@x.com", navegador: "Chrome", em: 1 };
   await assertSucceeds(setDoc(doc(como("pendente"), `${E}/erros/e1`), erro));
