@@ -11,29 +11,41 @@ export const TIPO_CONTEUDO = "Conteúdo";
 // 8 tipos + "Reunião", que não vira tarefa: abre como compromisso
 export const TIPO_FINANCEIRO = "Financeiro / Comercial";
 export const TIPOS_TAREFA = [
-  "Conteúdo", "Produção", "Vídeo / Roteiro", "Tráfego pago", TIPO_FINANCEIRO, "Planejamento", "Organização", "Reunião", "Outro"
+  "Conteúdo", "Produção", "Projeto", "Tráfego pago", TIPO_FINANCEIRO, "Planejamento", "Organização", "Reunião", "Outro"
 ];
 /** Tipos que não podem sair da lista: Conteúdo vira post; Reunião vira compromisso. */
 export const TIPOS_FIXOS = [TIPO_CONTEUDO, "Reunião"];
 /** Tipos antigos → novos (aplicado uma vez nas tarefas existentes). */
 export const TIPO_ANTIGO = {
-  "Roteiro": "Vídeo / Roteiro", "Vídeo": "Vídeo / Roteiro", "Financeiro": TIPO_FINANCEIRO, "Comercial": TIPO_FINANCEIRO,
-  "Aprovação": "Produção", "Institucional": "Outro", "Site / LP": "Outro"
+  "Roteiro": "Produção", "Vídeo": "Produção", "Vídeo / Roteiro": "Produção", "Financeiro": TIPO_FINANCEIRO, "Comercial": TIPO_FINANCEIRO,
+  "Aprovação": "Produção", "Institucional": "Outro", "Site / LP": "Projeto"
 };
 export const ehConteudo = (t) => t?.tipo === TIPO_CONTEUDO;
 
-export const SERVICOS = ["Social media", "Meta Ads", "Google Ads", "Vídeo", "Site / LP", "Consultoria"];
+export const SERVICOS = ["Planejamento", "Social media", "Copy", "Design", "Vídeo", "Meta Ads", "Google Ads", "E-mail marketing", "Site / LP", "Consultoria"];
 
 // Formato = o tipo de peça (a rede é outro campo). Vídeo vale para Reels, TikTok, Shorts e YouTube.
-export const FORMATOS = ["Estático", "Carrossel", "Vídeo", "Story", "Artigo", "E-mail marketing", "WhatsApp", "Blog", "Outro"];
+export const FORMATOS = ["Estático", "Carrossel", "Vídeo", "Story", "Anúncio", "Artigo", "E-mail marketing", "WhatsApp", "Blog", "Outro"];
 export const FORMATO_PADRAO = "Estático";
+/** Objetivo do post: as etapas do funil do manual (seção 12). Posts antigos com texto livre continuam valendo. */
+export const OBJETIVOS = [["reconhecimento", "Reconhecimento"], ["consideracao", "Consideração"], ["conversao", "Conversão"], ["relacionamento", "Relacionamento"]];
+export const rotuloObjetivo = (v) => OBJETIVOS.find(([k]) => k === v)?.[1] || v || "";
+/** Texto de um arquivo importado ("conversão", "Alcance"…) → a etapa do funil, quando der para reconhecer. */
+export function objetivoDe(texto = "") {
+  const n = String(texto).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/alcance|reconhec|awareness|topo/.test(n)) return "reconhecimento";
+  if (/consider|autoridade|meio/.test(n)) return "consideracao";
+  if (/convers|venda|lead|fundo/.test(n)) return "conversao";
+  if (/relacion|fideliz|retenc/.test(n)) return "relacionamento";
+  return String(texto).trim();
+}
 /** Formato que precisa de roteiro uma semana antes da produção (entra no "Produzir semana" da semana anterior). */
 export const FORMATO_VIDEO = "Vídeo";
 /**
  * Dias entre o prazo de produção e a publicação, por formato (o prazo do post sai daqui).
  * O administrador muda em Ajustes → Menus e listas.
  */
-export const ANTECEDENCIA = { "Vídeo": 3, "Carrossel": 2 };
+export const ANTECEDENCIA = { "Vídeo": 3, "Carrossel": 2, "Anúncio": 2 };
 export const antecedenciaDe = (formato) => Number(ANTECEDENCIA[formato] ?? 1);
 /** Formatos antigos → novos (aplicado uma vez nos posts e nos modelos de checklist). */
 export const FORMATO_ANTIGO = {
@@ -113,15 +125,16 @@ export const DIAS_SEMANA = [
 // Modelos de checklist: tarefa ou post novo sem checklist já nasce com estes passos.
 // O administrador muda em Ajustes → Modelos de checklist (config/modelos).
 export const MODELOS_PADRAO = {
-  "Estático": ["Briefing", "Copy", "Arte no Canva", "Aprovação do cliente", "Agendar"],
-  "Carrossel": ["Roteiro das lâminas", "Copy", "Arte no Canva", "Aprovação do cliente", "Agendar"],
-  "Vídeo": ["Roteiro", "Gravação", "Edição", "Capa", "Legenda", "Aprovação do cliente", "Agendar"],
+  "Estático": ["Briefing", "Copy", "Arte no Canva", "Revisão", "Aprovação do cliente", "Agendar"],
+  "Carrossel": ["Roteiro das lâminas", "Copy", "Arte no Canva", "Revisão", "Aprovação do cliente", "Agendar"],
+  "Vídeo": ["Roteiro", "Gravação", "Edição", "Capa", "Legenda", "Revisão", "Aprovação do cliente", "Agendar"],
   "Story": ["Roteiro", "Arte ou gravação", "Publicar"],
+  "Anúncio": ["Copy", "Criativo", "Revisão", "Aprovação do cliente", "Subir no gerenciador"],
   "Artigo": ["Pauta com o autor", "Texto", "Revisão", "Imagem de capa", "Aprovação do cliente", "Publicar"],
-  "E-mail marketing": ["Texto", "Layout do e-mail", "Lista de envio", "Aprovação do cliente", "Agendar envio"],
+  "E-mail marketing": ["Texto", "Layout do e-mail", "Revisão", "Lista de envio", "Aprovação do cliente", "Agendar envio"],
   "Tráfego pago": ["Conferir resultados", "Ajustar orçamentos", "Pausar o que não performa", "Registrar manutenção"],
   "Planejamento": ["Planejar os posts no calendário", "Enviar link de aprovação ao cliente", "Ajustar com o retorno"],
-  "Vídeo / Roteiro": ["Roteiro", "Gravação", "Edição", "Revisão"]
+  "Projeto": ["Briefing e escopo", "Estrutura validada com o cliente", "Produção", "Revisão", "Entrega"]
 };
 /**
  * Redes sociais e canais de cada conta (cliente sem marcas ou cada marca de um grupo), na aba Contas.

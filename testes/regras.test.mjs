@@ -54,6 +54,8 @@ beforeEach(async () => {
     await setDoc(doc(db, `${E}/manutencoes/x1`), { acoes: "ajuste" });
     await setDoc(doc(db, `${E}/config/openai`), { chave: "sk-teste" });
     await setDoc(doc(db, `${E}/config/equipe`), { pessoas: [] });
+    await setDoc(doc(db, `${E}/config/datas`), { lista: [] });
+    await setDoc(doc(db, `${E}/campanhas/k1`), { nome: "Natal", clienteId: "c1", condicoes: "10% no Pix" });
     await setDoc(doc(db, `${E}/config/comercial`), { reserva: 30, despesasFixas: [{ descricao: "Canva", valor: 35 }] });
     await setDoc(doc(db, `${E}/recorrencias/r1`), { modelo: "livre" });
     await setDoc(doc(db, `${E}/clientes/c1/artes/a1`), { dados: "data:" });
@@ -299,6 +301,8 @@ test("cliente: vê só os posts, a marca e o cadastro dele; nada da equipe", asy
   await assertSucceeds(ler("cli", `${E}/config/meta`));
   await assertSucceeds(ler("cli", `${E}/config/listas`));
   await assertSucceeds(ler("cli", `${E}/config/manual`));
+  await assertSucceeds(ler("cli", `${E}/config/datas`));
+  await assertFails(ler("cli", `${E}/campanhas/k1`)); // campanha pode ter condições internas
   await assertFails(gravar("cli", `${E}/clientes/c1`, { nome: "Mudei" }));
   await assertFails(gravar("cli", `${E}/marcas/m1`, { tomDeVoz: "Mudei" }));
 });
@@ -331,4 +335,12 @@ test("cliente com uma marca só: não vê as outras marcas do grupo", async () =
   await assertSucceeds(getDocs(query(collection(db, `${E}/clientes/c1/artes`), where("marcaId", "in", ["m1"]))));
   await assertFails(ler("clim", `${E}/clientes/c1/artes/a1`)); // criativo sem marca
   await assertFails(updateDoc(doc(db, `${E}/tarefas/pc2`), { statusConteudo: "aprovado", status: "andamento", atualizadoEm: 1 }));
+});
+
+test("campanhas: a equipe lê; conteúdo e tráfego criam; básico não grava", async () => {
+  await assertSucceeds(ler("basico", `${E}/campanhas/k1`));
+  await assertFails(gravar("basico", `${E}/campanhas/k2`, { nome: "X", clienteId: "c1" }));
+  await assertSucceeds(gravar("conteudo", `${E}/campanhas/k2`, { nome: "X", clienteId: "c1" }));
+  await assertSucceeds(gravar("trafego", `${E}/campanhas/k3`, { nome: "Y", clienteId: "c1" }));
+  await assertFails(ler("pendente", `${E}/campanhas/k1`));
 });

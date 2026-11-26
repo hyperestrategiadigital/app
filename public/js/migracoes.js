@@ -45,3 +45,18 @@ export async function alinharStatusPosts() {
   if (itens.length) await gravarEmLote("tarefas", itens);
   return itens.length;
 }
+
+/**
+ * Menus salvos em Ajustes → Menus e listas antes da versão 2: entram o formato Anúncio e o tipo Projeto,
+ * e sai o tipo "Vídeo / Roteiro" (as tarefas dele viram Produção em migrarTipos). Roda uma vez.
+ */
+export async function atualizarListas() {
+  const cfg = dados.config.find((c) => c.id === "listas");
+  if (!cfg || (cfg.versao || 1) >= 2) return 0;
+  const antesDoOutro = (lista, item) => (lista.includes(item) ? lista : lista.includes("Outro") ? [...lista.slice(0, lista.indexOf("Outro")), item, "Outro"] : [...lista, item]);
+  const formatos = Array.isArray(cfg.formatos) && cfg.formatos.length ? antesDoOutro(cfg.formatos, "Anúncio") : cfg.formatos;
+  const tipos = Array.isArray(cfg.tipos) && cfg.tipos.length ? antesDoOutro(cfg.tipos.filter((t) => t !== "Vídeo / Roteiro"), "Projeto") : cfg.tipos;
+  const antecedencia = cfg.antecedencia && typeof cfg.antecedencia === "object" ? { "Anúncio": 2, ...cfg.antecedencia } : cfg.antecedencia;
+  await atualizar("config", "listas", { ...(formatos ? { formatos } : {}), ...(tipos ? { tipos } : {}), ...(antecedencia ? { antecedencia } : {}), versao: 2 });
+  return 1;
+}

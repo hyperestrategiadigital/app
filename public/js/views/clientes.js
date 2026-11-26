@@ -4,10 +4,11 @@ import { el, formulario, confirmar, avisar, fmtMoeda, fmtData, linkExterno, vazi
 import { dados, criar, atualizar, excluir, porId, contrato, salvarComId, marcasDo } from "../db.js";
 import { pode, ehAdmin, tarefaVisivel } from "../permissoes.js";
 import { atrasada, cabecalho, abas, corCliente } from "./componentes.js";
-import { SERVICOS } from "../constantes.js";
 import { abrirConta, abrirManutencao } from "./trafego.js";
 import { abaMarca, abrirMarca, juntarClientes, GRUPO } from "./marca.js";
 import { abaResultados } from "./resultados.js";
+import { abaCampanhas } from "./campanhas.js";
+import { abaEscopo } from "./escopo.js";
 import { abaContas, linkGoogleAds, linkGerenciadorMeta } from "./contas.js";
 
 const podeEditar = () => ehAdmin() || pode("conteudo") || pode("trafego");
@@ -22,7 +23,6 @@ export function abrirCliente(cliente = {}) {
   return formulario(editando ? `Editar ${cliente.nome}` : "Novo cliente", [
     { nome: "nome", rotulo: "Nome do cliente", obrigatorio: true, largura: "metade" },
     { nome: "segmento", rotulo: "Segmento", dica: "Ex.: clínica, academia, escola", largura: "metade" },
-    { nome: "servicos", rotulo: "Serviços contratados", tipo: "multi", opcoes: SERVICOS },
     { tipo: "secao", rotulo: "Contato" },
     { nome: "contato", rotulo: "Pessoa de contato", largura: "metade" },
     { nome: "whatsapp", rotulo: "WhatsApp", dica: "(11) 99999-9999", largura: "metade" },
@@ -142,6 +142,8 @@ function ficha(id, estado, renderizar, resto = []) {
   // A ficha é a configuração do cliente. Tarefas e posts ficam na tela Tarefas (filtrada pelo cliente/marca).
   const abasPermitidas = [
     ...(pode("conteudo") ? [["marca", "Marca"]] : []),
+    ...(pode("conteudo") || pode("trafego") ? [["campanhas", "Campanhas"]] : []),
+    ...(geral ? [["escopo", "Escopo"]] : []),
     ...(pode("conteudo") || pode("trafego") ? [["contas", "Contas"]] : []),
     ...(pode("conteudo") || pode("trafego") ? [["resultados", "Resultados"]] : []),
     ...(pode("trafego") ? [["trafego", "Tráfego pago"]] : []),
@@ -162,6 +164,8 @@ function ficha(id, estado, renderizar, resto = []) {
   const conteudoAba = {
     marca: () => abaMarca(c, estado, renderizar),
     contas: () => abaContas(c, estado),
+    campanhas: () => abaCampanhas(c, escolhida),
+    escopo: () => abaEscopo(c),
     resultados: () => abaResultados(c, estado, renderizar),
     trafego: () => [
       el("div", { class: "com-acao" }, el("h2", {}, "Contas de anúncio"),

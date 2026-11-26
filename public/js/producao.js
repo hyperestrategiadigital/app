@@ -40,7 +40,7 @@ export function postsDaProducao(producao) {
 /** Vídeos da semana SEGUINTE à da produção: o roteiro deles é feito agora (campo `roteiroPronto` no post). */
 export function roteirosDaProducao(producao) {
   const seguinte = { ...producao, semanaInicio: addDias(producao.semanaInicio, 7) };
-  return dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && t.formato === FORMATO_VIDEO && !ehAvulso(t) && cobre(seguinte, t))
+  return dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && t.formato === FORMATO_VIDEO && !t.videoGravado && !ehAvulso(t) && cobre(seguinte, t))
     .sort((a, b) => dataDoPost(a).localeCompare(dataDoPost(b)));
 }
 

@@ -4,7 +4,7 @@ import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal
 import { porId, criar, atualizar, excluir, clientesAtivos, marcasDo } from "../db.js";
 import { cabecalho, abas, modeloChecklist } from "./componentes.js";
 import { responsavelPadrao } from "../agenda.js";
-import { FORMATOS, formatoAtual, prazoDoPost, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa } from "../constantes.js";
+import { FORMATOS, formatoAtual, prazoDoPost, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa, OBJETIVOS, rotuloObjetivo } from "../constantes.js";
 import { postsDoMes, dataPost, exportarPDF, nomeMes, temPrefixo } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
 import { gerarLinkAprovacao } from "../aprovacoes.js";
@@ -275,7 +275,7 @@ function editarLinha(l, estado, marcar) {
     { nome: "hora", rotulo: "Horário", tipo: "time", largura: "metade" },
     { nome: "formato", rotulo: "Formato", tipo: "select", opcoes: FORMATOS, largura: "metade" },
     { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: REDES, largura: "metade" },
-    { nome: "objetivo", rotulo: "Objetivo" },
+    { nome: "objetivo", rotulo: "Objetivo (etapa do funil)", tipo: "select", opcoes: [["", "—"], ...OBJETIVOS, ...(l.objetivo && !OBJETIVOS.some(([v]) => v === l.objetivo) ? [[l.objetivo, l.objetivo]] : [])] },
     { nome: "roteiro", rotulo: "Briefing / ideia", tipo: "textarea", linhas: 3 },
     { nome: "prazo", rotulo: "Prazo de produção", tipo: "date", largura: "metade" },
     { nome: "statusConteudo", rotulo: "Etapa", tipo: "select", opcoes: STATUS_CONTEUDO, largura: "metade" }
@@ -336,7 +336,7 @@ function calendarioPlano({ estado, mes, cliente, renderizar, marcar }) {
       const chip = el("button", {
         class: `plano-post st-${l.statusConteudo || "ideia"} ${l.id ? "" : "novo"}`, draggable: "true",
         style: marcaL ? { "--marca": corCliente(marcaL) } : undefined,
-        title: `${marcaL ? marcaL.nome + " · " : ""}${l.formato} · ${rotuloStatusConteudo(l.statusConteudo || "ideia")}${l.objetivo ? " · " + l.objetivo : ""}`,
+        title: `${marcaL ? marcaL.nome + " · " : ""}${l.formato} · ${rotuloStatusConteudo(l.statusConteudo || "ideia")}${l.objetivo ? " · " + rotuloObjetivo(l.objetivo) : ""}`,
         onClick: () => editarLinha(l, estado, marcar)
       }, marcaL ? el("span", { class: "plano-marca" }, marcaL.nome) : null,
         temPrefixo(l.titulo) ? l.titulo : [el("strong", {}, l.formato), ` | ${l.titulo || "(sem tema)"}`], l.hora ? el("small", {}, ` ${l.hora}`) : null);

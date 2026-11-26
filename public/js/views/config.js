@@ -1,16 +1,17 @@
 // Ajustes (só administradores): e-mails automáticos, Meta, importação dos arquivos do Claude e backup.
-import { el, confirmar, avisar, abrirModal, hojeISO, vazio, normalizar, baixar } from "../ui.js";
+import { el, formulario, confirmar, avisar, abrirModal, hojeISO, vazio, normalizar, baixar } from "../ui.js";
 import { dados, criar, atualizar, marcasDo } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { previaPlanejamento } from "./importarPlanejamento.js";
 import { previaImportacao } from "./comercial.js";
-import { salvarComId, carregarArquivo, listarErros, excluirErro, bancoInfo, listarSub, excluirSub, todasTarefas } from "../db.js";
+import { salvarComId, carregarArquivo, listarErros, excluirErro, bancoInfo, listarSub, excluirSub, todasTarefas, notificar } from "../db.js";
 import { caminhoArtes, excluirArte } from "../arquivos.js";
 import { dataPost } from "../exportacao.js";
 import { ehAdmin } from "../permissoes.js";
 import { configMeta } from "../meta.js";
 import { configAgenda, agendaConectada, testarAgenda } from "../agenda.js";
 import { MANUAL_PADRAO } from "../manual.js";
+import { datasDaHyper } from "../ia.js";
 import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO, REDES, TIPOS_FIXOS, ANTECEDENCIA, LISTAS_PADRAO, antecedenciaDe } from "../constantes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
 
@@ -27,6 +28,7 @@ export function render() {
     blocoMeta(),
     blocoManual(),
     ehAdmin() ? blocoListas() : null,
+    ehAdmin() ? blocoDatas() : null,
     blocoModelos(),
     blocoErros(),
 
@@ -45,11 +47,12 @@ export function render() {
  * Espaço dos criativos: as imagens ficam dentro do Firestore (plano gratuito, 1 GB no total). Mostra quanto ocupam
  * e apaga as de posts publicados há mais de 6 meses e as que ficaram sem post.
  */
+// Resultado da última contagem (fica fora da tela: a tela é redesenhada quando os dados mudam)
+const criativos = { texto: "", apagar: [], ocupado: false };
 function blocoCriativos() {
-  const status = el("p", { class: "subtitulo" });
-  const acoes = el("div", { class: "acoes" });
-  const analisar = async (botao) => {
-    botao.disabled = true; status.textContent = "Contando…";
+  const mb = (n) => `${(n / 1048576).toFixed(1)} MB`;
+  const analisar = async () => {
+    criativos.ocupado = true; criativos.texto = "Contando…"; notificar();
     await carregarArquivo().catch(() => {});
     const limite = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
     const posts = new Map(todasTarefas().map((t) => [t.id, t]));
@@ -63,23 +66,28 @@ function blocoCriativos() {
         if (!p || (p.statusConteudo === "publicado" && dataPost(p) < limite)) apagar.push({ clienteId: c.id, id: a.id, tarefaId: p ? a.tarefaId : "", tam: (a.dados || "").length });
       }
     }
-    const mb = (n) => `${(n / 1048576).toFixed(1)} MB`;
-    status.textContent = `${total} criativo(s), cerca de ${mb(bytes)} de 1.024 MB do plano gratuito. ${apagar.length} são de posts publicados há mais de 6 meses ou sem post (${mb(apagar.reduce((s, a) => s + a.tam, 0))}).`;
-    botao.disabled = false;
-    acoes.replaceChildren(botao, apagar.length ? el("button", { class: "perigo-texto", onClick: async (e) => {
-      if (!(await confirmar(`Apagar de vez ${apagar.length} criativo(s)? Os posts continuam; só a imagem anexada sai. Os originais seguem no Canva e no Drive.`))) return;
-      e.currentTarget.disabled = true;
-      for (const [i, a] of apagar.entries()) { status.textContent = `Apagando ${i + 1} de ${apagar.length}…`; await (a.tarefaId && dados.tarefas.some((t) => t.id === a.tarefaId) ? excluirArte(a.clienteId, a.tarefaId, a.id) : excluirSub(caminhoArtes(a.clienteId), a.id)).catch(() => {}); }
-      avisar(`${apagar.length} criativo(s) apagados.`);
-      analisar(botao);
-    } }, `Apagar ${apagar.length} criativo(s) antigos`) : null);
+    Object.assign(criativos, { ocupado: false, apagar,
+      texto: `${total} criativo(s), cerca de ${mb(bytes)} de 1.024 MB do plano gratuito. ${apagar.length} são de posts publicados há mais de 6 meses ou sem post (${mb(apagar.reduce((s, a) => s + a.tam, 0))}).` });
+    notificar();
   };
-  const botao = el("button", { class: "secundario", onClick: () => analisar(botao) }, "Ver o espaço dos criativos");
-  acoes.append(botao);
+  const apagarAntigos = async () => {
+    const lista = criativos.apagar;
+    if (!(await confirmar(`Apagar de vez ${lista.length} criativo(s)? Os posts continuam; só a imagem anexada sai. Os originais seguem no Canva e no Drive.`))) return;
+    criativos.ocupado = true;
+    for (const [i, a] of lista.entries()) {
+      criativos.texto = `Apagando ${i + 1} de ${lista.length}…`; notificar();
+      await (a.tarefaId && dados.tarefas.some((t) => t.id === a.tarefaId) ? excluirArte(a.clienteId, a.tarefaId, a.id) : excluirSub(caminhoArtes(a.clienteId), a.id)).catch(() => {});
+    }
+    avisar(`${lista.length} criativo(s) apagados.`);
+    analisar();
+  };
   return el("section", { class: "bloco" },
     el("h2", {}, "Espaço dos criativos"),
     el("p", {}, "Os criativos anexados aos posts ficam no banco. Links de aprovação vencidos há mais de 7 dias já são apagados sozinhos, com as imagens deles."),
-    acoes, status);
+    el("div", { class: "acoes" },
+      el("button", { class: "secundario", disabled: criativos.ocupado, onClick: analisar }, "Ver o espaço dos criativos"),
+      criativos.apagar.length && !criativos.ocupado ? el("button", { class: "perigo-texto", onClick: apagarAntigos }, `Apagar ${criativos.apagar.length} criativo(s) antigos`) : null),
+    criativos.texto ? el("p", { class: "subtitulo" }, criativos.texto) : null);
 }
 
 const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "palavrasChave", "evitar", "pilares", "diretrizes", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];
@@ -232,6 +240,53 @@ function blocoImportar() {
       el("div", { class: "acoes" }, el("button", { class: "secundario", onClick: () => { if (colado.value.trim()) importarTexto(colado.value); } }, "Importar texto colado"))));
 }
 
+/**
+ * Datas comemorativas da Hyper (config/datas), além das nacionais que o app já conhece. Cada uma vale para todas as
+ * marcas ou só para as escolhidas, e entra no pedido de copy dos posts perto dela.
+ */
+function blocoDatas() {
+  const contas = dados.clientes.filter((c) => c.ativo !== false).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+    .flatMap((c) => marcasDo(c.id).length ? marcasDo(c.id).map((m) => [m.id, m.nome]) : [[c.id, c.nome]]);
+  const nomeDe = (id) => contas.find(([v]) => v === id)?.[1] || "?";
+  const salvar = (lista) => salvarComId("config", "datas", { lista, atualizadoEm: Date.now() });
+  const editar = async (i) => {
+    const lista = [...datasDaHyper()];
+    const atual = i >= 0 ? lista[i] : { contas: [] };
+    const v = await formulario(i >= 0 ? "Editar data" : "Nova data comemorativa", [
+      { nome: "nome", rotulo: "Nome", obrigatorio: true, dica: "Ex.: Dia do Queijo, Aniversário da Body Ride, Semana da Segurança" },
+      { nome: "quando", rotulo: "Quando", obrigatorio: true, dica: "DD/MM (todo ano), MM (o mês todo) ou DD/MM/AAAA (só esse ano)" },
+      { nome: "contas", rotulo: "Para quais marcas (nenhuma marcada = todas)", tipo: "multi", opcoes: contas }
+    ], { ...atual, quando: paraTela(atual.quando) }, { largo: true });
+    if (!v) return;
+    const quando = doTexto(v.quando);
+    if (!quando) { avisar("Use DD/MM, MM ou DD/MM/AAAA.", "erro"); return; }
+    const item = { nome: v.nome, quando, contas: v.contas || [] };
+    if (i >= 0) lista[i] = item; else lista.push(item);
+    await salvar(lista);
+    avisar("Data salva.");
+  };
+  // Guardado como MM-DD, MM ou AAAA-MM-DD; mostrado como DD/MM, MM ou DD/MM/AAAA
+  const paraTela = (q = "") => /^\d{2}-\d{2}$/.test(q) ? `${q.slice(3)}/${q.slice(0, 2)}` : /^\d{4}-\d{2}-\d{2}$/.test(q) ? `${q.slice(8)}/${q.slice(5, 7)}/${q.slice(0, 4)}` : q;
+  const doTexto = (t = "") => {
+    const s = t.trim(); let m;
+    if ((m = s.match(/^(\d{1,2})$/)) && +m[1] >= 1 && +m[1] <= 12) return m[1].padStart(2, "0");
+    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})$/))) return `${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    return "";
+  };
+  const lista = datasDaHyper();
+  return el("section", { class: "bloco" },
+    el("h2", {}, "Datas comemorativas"),
+    el("p", {}, "O app já conhece as nacionais (Dia das Mães, Black Friday, Natal…) e as campanhas do mês (Janeiro Branco, Abril Verde, Setembro Amarelo, Outubro Rosa…). Aqui entram as da Hyper e de cada segmento. Elas vão no pedido de copy dos posts até 3 dias antes; a IA usa só quando tiver relação com o tema."),
+    lista.length ? el("ul", { class: "lista-editavel" }, lista.map((d, i) => el("li", {},
+      el("span", { class: "lista-editavel-nome" }, el("strong", {}, d.nome), ` · ${paraTela(d.quando)}${/^\d{2}$/.test(d.quando) ? " (o mês todo)" : ""}`,
+        el("small", { class: "subtitulo" }, ` · ${(d.contas || []).length ? d.contas.map(nomeDe).join(", ") : "todas as marcas"}`)),
+      el("button", { class: "link", onClick: () => editar(i) }, "Editar"),
+      el("button", { class: "icone", "aria-label": `Tirar ${d.nome}`, onClick: async () => { await salvar(lista.filter((_, j) => j !== i)); avisar("Data tirada."); } }, "✕"))))
+      : el("p", { class: "subtitulo" }, "Nenhuma data própria ainda."),
+    el("button", { class: "secundario", onClick: () => editar(-1) }, "+ Data"));
+}
+
 /** E-mails e automações pelo Google Apps Script da conta da Hyper (docs/email). */
 function blocoEmail() {
   const cfg = configEmail();
@@ -315,7 +370,7 @@ function blocoManual() {
   const area = el("textarea", { rows: 18, id: "manual-hyper", readOnly: !ehAdmin() }, salvo || MANUAL_PADRAO);
   return el("section", { class: "bloco" },
     el("h2", {}, "Manual de escrita da Hyper"),
-    el("p", {}, "O jeito Hyper de escrever. Vai junto em todos os pedidos de copy para a IA (legenda, roteiro, carrossel, stories), para qualquer marca. As diretrizes de cada marca valem mais do que ele."),
+    el("p", {}, "O jeito Hyper de escrever. Vai junto em todos os pedidos de copy e de texto para a IA, de qualquer formato e de qualquer marca. As diretrizes de cada marca valem mais do que ele."),
     el("details", {}, el("summary", {}, ehAdmin() ? "Ver e editar o manual" : "Ver o manual"),
       area,
       ehAdmin() ? el("div", { class: "acoes" },
@@ -374,7 +429,7 @@ function blocoListas() {
         el("span", { class: "espaco" }),
         el("button", { class: "confirmar", onClick: async () => {
           if (!formatos.ler().length || !redes.ler().length) { avisar("Deixe pelo menos um formato e uma rede.", "erro"); return; }
-          await salvarComId("config", "listas", { tipos: tipos.ler(), formatos: formatos.ler(), redes: redes.ler(), antecedencia: formatos.lerDias(), atualizadoEm: Date.now() });
+          await salvarComId("config", "listas", { tipos: tipos.ler(), formatos: formatos.ler(), redes: redes.ler(), antecedencia: formatos.lerDias(), versao: 2, atualizadoEm: Date.now() });
           avisar("Menus salvos.");
         } }, "Salvar menus"))));
 }

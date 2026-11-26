@@ -3,7 +3,7 @@
 // lê a resposta colada de volta (marcadores como [LEGENDA]). Camadas, sempre nesta ordem:
 //   papel → manual da Hyper → marca → exemplos aprovados → o conteúdo → regras do formato/rede → como responder → checklist.
 import { dados, porId, identidade, marcasDo } from "./db.js";
-import { TIPO_CONTEUDO } from "./constantes.js";
+import { TIPO_CONTEUDO, rotuloObjetivo } from "./constantes.js";
 import { MANUAL_PADRAO } from "./manual.js";
 
 /* ---------------- Básicos ---------------- */
@@ -33,8 +33,9 @@ const nDomingo = (ano, mes, n) => { const d = new Date(ano, mes - 1, 1); const p
 /** Datas comemorativas comuns no marketing brasileiro. */
 export function datasComemorativas(ano) {
   const fixas = { "01-01": "Ano Novo", "03-08": "Dia Internacional da Mulher", "03-15": "Dia do Consumidor", "04-07": "Dia Mundial da Saúde",
-    "05-01": "Dia do Trabalhador", "06-12": "Dia dos Namorados", "06-24": "São João", "09-07": "Independência do Brasil", "09-15": "Dia do Cliente",
-    "10-12": "Dia das Crianças", "10-15": "Dia do Professor", "11-20": "Dia da Consciência Negra", "12-25": "Natal", "12-31": "Réveillon" };
+    "04-28": "Dia Mundial da Segurança e Saúde no Trabalho", "05-01": "Dia do Trabalhador", "06-12": "Dia dos Namorados", "06-24": "São João",
+    "09-07": "Independência do Brasil", "09-15": "Dia do Cliente", "10-12": "Dia das Crianças", "10-15": "Dia do Professor",
+    "10-18": "Dia Mundial da Menopausa", "11-20": "Dia da Consciência Negra", "12-25": "Natal", "12-31": "Réveillon" };
   const r = Object.fromEntries(Object.entries(fixas).map(([md, nome]) => [`${ano}-${md}`, nome]));
   const p = pascoa(ano);
   r[p] = "Páscoa"; r[somar(p, -47)] = "Carnaval";
@@ -43,22 +44,59 @@ export function datasComemorativas(ano) {
   r[iso(new Date(ano, 10, quinta + 1))] = "Black Friday";
   return r;
 }
-/** Datas comemorativas de `data` até `dias` depois. */
-export function datasPerto(data, dias = 3) {
+/** Campanhas que duram o mês todo (valem para qualquer post do mês). */
+const MESES_TEMA = { "01": "Janeiro Branco (saúde mental)", "04": "Abril Verde (segurança no trabalho)", "05": "Maio, mês das noivas",
+  "09": "Setembro Amarelo (prevenção do suicídio)", "10": "Outubro Rosa", "11": "Novembro Azul e Black November" };
+
+/**
+ * Datas de Ajustes → Datas comemorativas (config/datas): { quando: "MM-DD" | "MM" (o mês todo) | "AAAA-MM-DD", nome, contas: [ids] }.
+ * Sem contas = vale para todas as marcas; com contas = só para essas (id do cliente ou da marca).
+ */
+export const datasDaHyper = () => (dados.config.find((c) => c.id === "datas")?.lista || []).filter((d) => d?.nome && d?.quando);
+const valeParaConta = (d, clienteId, marcaId) => !(d.contas || []).length || d.contas.includes(marcaId || clienteId) || d.contas.includes(clienteId);
+
+/** Datas comemorativas de `data` até `dias` depois, mais as do mês todo; as de Ajustes só para as marcas escolhidas. */
+export function datasPerto(data, dias = 3, clienteId = "", marcaId = "") {
   if (!data) return [];
   const ano = Number(data.slice(0, 4));
   const todas = { ...datasComemorativas(ano), ...datasComemorativas(ano + 1) };
-  return Object.entries(todas).filter(([d]) => d >= data && d <= somar(data, dias)).sort().map(([d, nome]) => ({ data: d, nome }));
+  const r = Object.entries(todas).filter(([d]) => d >= data && d <= somar(data, dias)).map(([d, nome]) => ({ data: d, nome }));
+  const mes = data.slice(5, 7);
+  if (MESES_TEMA[mes]) r.push({ data: "", nome: MESES_TEMA[mes] });
+  for (const d of datasDaHyper()) {
+    if (!valeParaConta(d, clienteId, marcaId)) continue;
+    const q = String(d.quando).trim();
+    if (/^\d{2}$/.test(q)) { if (q === mes) r.push({ data: "", nome: d.nome }); continue; }
+    const dia = /^\d{2}-\d{2}$/.test(q) ? [`${ano}-${q}`, `${ano + 1}-${q}`] : [q];
+    for (const x of dia) if (x >= data && x <= somar(data, dias)) r.push({ data: x, nome: d.nome });
+  }
+  return r.sort((a, b) => (a.data || "0").localeCompare(b.data || "0"));
 }
 
 /* ---------------- Exemplos e completude ---------------- */
 
-/** Copies aprovadas da mesma marca (mesmo formato primeiro): a IA aprende o estilo com elas. */
+/**
+ * Exemplos para a IA aprender o estilo da marca: os posts marcados com "★ Usar como exemplo" pela equipe; enquanto
+ * não houver nenhum, as copies aprovadas mais recentes. Mesmo formato primeiro.
+ */
 export function exemplosDaMarca(clienteId, marcaId = "", { formato = "", excluir = "", max = 3 } = {}) {
-  const aprovadas = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && t.clienteId === clienteId && (t.marcaId || "") === (marcaId || "")
-    && t.id !== excluir && (t.copy || "").trim().length > 40 && ["aprovado", "agendado", "publicado"].includes(t.statusConteudo))
-    .sort((a, b) => ((b.formato === formato) - (a.formato === formato)) || (b.dataPublicacao || "").localeCompare(a.dataPublicacao || ""));
-  return aprovadas.slice(0, max);
+  const daMarca = dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && t.clienteId === clienteId && (t.marcaId || "") === (marcaId || "")
+    && t.id !== excluir && (t.copy || "").trim().length > 40);
+  const marcados = daMarca.filter((t) => t.exemplo);
+  const lista = marcados.length ? marcados : daMarca.filter((t) => ["aprovado", "agendado", "publicado"].includes(t.statusConteudo));
+  return lista.sort((a, b) => ((b.formato === formato) - (a.formato === formato)) || (b.dataPublicacao || "").localeCompare(a.dataPublicacao || "")).slice(0, max);
+}
+
+/**
+ * Diretrizes da marca para um formato: as linhas que começam com [Formato] (ex.: "[Vídeo] capa sem subtítulo")
+ * só valem para esse formato; as outras valem sempre.
+ */
+export function diretrizesPara(texto = "", formato = "") {
+  const norm = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return String(texto).split("\n").filter((l) => {
+    const m = l.match(/^\s*[-•*]?\s*\[([^\]]+)\]/);
+    return !m || m[1].split(/[,/]/).some((f) => norm(f) === norm(formato));
+  }).map((l) => l.replace(/^(\s*[-•*]?\s*)\[[^\]]+\]\s*/, "$1")).join("\n").trim();
 }
 
 const ITENS_COMPLETUDE = [
@@ -84,10 +122,24 @@ const PAPEIS = {
   copy: "Você é copywriter sênior da Hyper Estratégia Digital, agência de marketing digital, e escreve como a marca abaixo.",
   roteiro: "Você é roteirista de vídeos curtos (Reels, TikTok, Shorts) da Hyper Estratégia Digital e escreve como a marca abaixo.",
   carrossel: "Você é redator e editor de carrosséis da Hyper Estratégia Digital e escreve como a marca abaixo.",
-  stories: "Você é estrategista de stories da Hyper Estratégia Digital e escreve como a marca abaixo."
+  stories: "Você é estrategista de stories da Hyper Estratégia Digital e escreve como a marca abaixo.",
+  videoGravado: "Você é copywriter sênior da Hyper Estratégia Digital e escreve como a marca abaixo.",
+  anuncio: "Você é copywriter de tráfego pago da Hyper Estratégia Digital e escreve anúncios para a marca abaixo.",
+  artigo: "Você é redator e editor da Hyper Estratégia Digital, com formação jornalística, e escreve como a marca abaixo.",
+  email: "Você é redator de e-mail marketing da Hyper Estratégia Digital e escreve como a marca abaixo.",
+  whatsapp: "Você é copywriter da Hyper Estratégia Digital e escreve mensagens de WhatsApp como uma pessoa da marca abaixo.",
+  texto: "Você é redator sênior da Hyper Estratégia Digital e escreve como a marca abaixo."
 };
 
-function camadaMarca(clienteId, marcaId) {
+/** Qual pedido usar para o post (pelo formato) ou para uma tarefa que não é post. */
+export function tipoDoPedido(post = {}) {
+  if (post.tipo && post.tipo !== TIPO_CONTEUDO) return "texto";
+  if (post.formato === "Vídeo") return post.videoGravado ? "videoGravado" : "roteiro";
+  return ({ "Carrossel": "carrossel", "Story": "stories", "Anúncio": "anuncio", "Artigo": "artigo", "Blog": "artigo",
+    "E-mail marketing": "email", "WhatsApp": "whatsapp" })[post.formato] || "copy";
+}
+
+function camadaMarca(clienteId, marcaId, formato = "") {
   const c = identidade(clienteId, marcaId || undefined);
   const pilares = pilaresDe(c);
   const conta = (marcaId && porId("marcas", marcaId)) || porId("clientes", clienteId) || {};
@@ -105,7 +157,7 @@ function camadaMarca(clienteId, marcaId) {
     c.evitar ? `- O que evitar (nunca use): ${c.evitar}` : null,
     conta.instagram ? `- Instagram: ${conta.instagram}` : null,
     conta.site ? `- Site: ${conta.site}` : null,
-    c.diretrizes ? `\n### Diretrizes de conteúdo da marca (valem mais que o manual)\n${c.diretrizes}` : null,
+    diretrizesPara(c.diretrizes, formato) ? `\n### Diretrizes de conteúdo da marca (valem mais que o manual)\n${diretrizesPara(c.diretrizes, formato)}` : null,
     camadaMarcasDoGrupo(clienteId, marcaId, c)
   ].filter((l) => l !== null).join("\n");
 }
@@ -139,7 +191,8 @@ const REGRAS_FORMATO = {
   "Artigo": "Artigo com título forte, introdução que entrega a promessa, intertítulos, parágrafos curtos e conclusão com chamada para ação.",
   "Blog": "Post de blog com título otimizado para busca, introdução direta, intertítulos com as palavras-chave, parágrafos curtos e chamada para ação.",
   "E-mail marketing": "E-mail com assunto (até 50 caracteres), pré-cabeçalho, abertura pessoal, um único assunto e um botão de chamada para ação.",
-  "WhatsApp": "Mensagem de WhatsApp curta, pessoal, com no máximo 3 parágrafos curtos e uma pergunta ou ação no final."
+  "WhatsApp": "Mensagem de WhatsApp curta, pessoal, com no máximo 3 parágrafos curtos e uma pergunta ou ação no final.",
+  "Anúncio": "Anúncio pago (Meta Ads, salvo indicação). Oferta, benefício, objeção e ação desejada claramente identificáveis. Texto principal: as primeiras ~125 caracteres aparecem antes do \"ver mais\". Título até 40 caracteres. Respeite as políticas de anúncios (sem promessas de resultado, sem urgência falsa, sem atributos pessoais do tipo \"você que está acima do peso\")."
 };
 const REGRAS_REDE = {
   "Instagram": "Instagram: a legenda aparece cortada depois de ~125 caracteres, então a abertura importa; limite de 2.200 caracteres. Hashtags conforme as diretrizes da marca (não há quantidade fixa).",
@@ -152,9 +205,26 @@ const REGRAS_REDE = {
   "Site": "Site: texto escaneável, com intertítulos e palavras-chave."
 };
 
+/** Campanha do post (Natal, Black Friday, lançamento…): o contexto comum a todas as peças dela. */
+function camadaCampanha(ctx) {
+  const c = ctx.post?.campanhaId && porId("campanhas", ctx.post.campanhaId);
+  if (!c) return null;
+  const pecas = dados.tarefas.filter((t) => t.campanhaId === c.id && t.id !== ctx.post.id).slice(0, 15);
+  return [
+    "## A campanha deste conteúdo",
+    `- Campanha: ${c.nome}${c.inicio || c.fim ? ` (${[c.inicio, c.fim].filter(Boolean).map((d) => `${d.slice(8)}/${d.slice(5, 7)}`).join(" a ")})` : ""}`,
+    c.objetivo ? `- Objetivo da campanha: ${c.objetivo}` : null,
+    c.mensagem ? `- Mensagem central: ${c.mensagem}` : null,
+    c.condicoes ? `- Condições comerciais (use exatamente estas, não invente outras): ${c.condicoes}` : null,
+    c.briefing ? `- Briefing da campanha:\n${c.briefing}` : null,
+    pecas.length ? `- Outras peças da campanha (cada uma tem uma função; não repita): ${pecas.map((t) => `${t.titulo} (${t.formato || t.tipo})`).join("; ")}` : null
+  ].filter((l) => l !== null).join("\n");
+}
+
+
 function camadaConteudo(ctx) {
   const p = ctx.post || {};
-  const datas = datasPerto(p.dataPublicacao, 3);
+  const datas = datasPerto(p.dataPublicacao, 3, ctx.clienteId, ctx.marcaId);
   const vizinhos = p.dataPublicacao ? dados.tarefas.filter((t) => t.tipo === TIPO_CONTEUDO && t.id !== p.id && t.clienteId === ctx.clienteId
     && (t.marcaId || "") === (ctx.marcaId || "") && t.dataPublicacao >= somar(p.dataPublicacao, -6) && t.dataPublicacao <= somar(p.dataPublicacao, 6)) : [];
   return [
@@ -163,10 +233,11 @@ function camadaConteudo(ctx) {
     p.formato ? `- Formato: ${p.formato}` : null,
     p.rede ? `- Rede: ${p.rede}` : null,
     p.dataPublicacao ? `- Publicação: ${dataLonga(p.dataPublicacao)}${p.hora ? ` às ${p.hora}` : ""}` : null,
-    datas.length ? `- Datas comemorativas perto: ${datas.map((d) => `${d.nome} (${d.data.slice(8)}/${d.data.slice(5, 7)})`).join(", ")}. Use só se tiver relação real com a marca e o tema (veja o manual).` : null,
+    datas.length ? `- Datas comemorativas perto: ${datas.map((d) => d.data ? `${d.nome} (${d.data.slice(8)}/${d.data.slice(5, 7)})` : `${d.nome} (o mês todo)`).join(", ")}. Use só se tiver relação real com a marca e o tema (veja o manual).` : null,
     p.pilar ? `- Pilar: ${p.pilar}` : null,
-    p.objetivo ? `- Objetivo: ${p.objetivo}` : null,
+    p.objetivo ? `- Objetivo: ${rotuloObjetivo(p.objetivo)}${rotuloObjetivo(p.objetivo) !== p.objetivo ? " (etapa do funil; veja o manual, seção 12)" : ""}` : null,
     p.roteiro ? `- Briefing:\n${p.roteiro}` : "- Briefing: não informado. Use o tema e a marca, e marque com [CONFIRMAR] o que precisar de informação.",
+    p.videoGravado && p.transcricao ? `- Transcrição do vídeo já gravado (use só o que foi dito; não invente falas nem argumentos):\n${corta(p.transcricao, 5000)}` : null,
     vizinhos.length ? `- Outros posts perto desta data (dê continuidade sem repetir argumentos, frases ou estruturas): ${vizinhos.map((t) => t.titulo).join("; ")}` : null
   ].filter((l) => l !== null).join("\n");
 }
@@ -182,26 +253,38 @@ const SAIDAS = {
   copy: ["[ABERTURAS]\n3 opções de abertura, uma por linha, com abordagens diferentes.", "[LEGENDA]\nA legenda completa, pronta para publicar, com a melhor abertura.", "[TEXTO DA ARTE]\nTítulo curto e, se precisar, subtítulo para a arte."],
   roteiro: ["[ROTEIRO]\nCena por cena: tempo (ex.: 0–3s), o que aparece, a fala e o texto na tela.", "[CAPA]\nTexto curto da capa do vídeo.", "[LEGENDA]\nA legenda do vídeo, pronta para publicar."],
   carrossel: ["[LÂMINAS]\nLâmina 1 (capa): …\nLâmina 2: …\n(uma linha por lâmina)", "[LEGENDA]\nA legenda do carrossel, pronta para publicar."],
-  stories: ["[SEQUÊNCIA]\nTela 1: texto + o que aparece + interação (se houver)\nTela 2: …", "[LEGENDA]\nSe for repostar no feed, a legenda; senão escreva \"—\"."]
+  stories: ["[SEQUÊNCIA]\nTela 1: texto + o que aparece + interação (se houver)\nTela 2: …", "[LEGENDA]\nSe for repostar no feed, a legenda; senão escreva \"—\"."],
+  videoGravado: ["[LEGENDA]\nA legenda do vídeo, pronta para publicar, a partir da transcrição.", "[CAPA]\nTexto curto da capa do vídeo, com palavras que estão na fala."],
+  anuncio: ["[TEXTO PRINCIPAL]\n3 variações completas, testando abordagens diferentes (dor, desejo, benefício, conceito), separadas por uma linha com ---.", "[TÍTULO]\n3 opções de título (até 40 caracteres), uma por linha.", "[DESCRIÇÃO]\nUma linha de descrição (até 30 caracteres), ou \"—\".", "[TEXTO DA ARTE]\nTítulo curto para o criativo."],
+  artigo: ["[TÍTULO]\n3 opções de título, uma por linha.", "[TEXTO]\nO texto completo, com intertítulos (## Intertítulo).", "[RESUMO]\n2 ou 3 linhas para divulgar o texto nas redes ou no e-mail."],
+  email: ["[ASSUNTO]\n3 opções de assunto (até 50 caracteres), uma por linha.", "[PRÉ-CABEÇALHO]\nO texto que aparece ao lado do assunto (até 90 caracteres).", "[TEXTO]\nO corpo do e-mail completo.", "[BOTÃO]\nO texto do botão de chamada para ação."],
+  whatsapp: ["[MENSAGEM]\nA mensagem pronta para enviar."],
+  texto: ["[TEXTO]\nO texto pronto para usar.", "[OBSERVAÇÕES]\nO que precisa ser confirmado ou decidido antes de usar, ou \"—\"."]
 };
 
 const TAREFAS = {
   copy: "Escreva a legenda deste post.",
   roteiro: "Escreva o roteiro deste vídeo e a legenda.",
   carrossel: "Escreva o texto de cada lâmina deste carrossel e a legenda.",
-  stories: "Escreva a sequência de stories."
+  stories: "Escreva a sequência de stories.",
+  videoGravado: "Escreva a legenda deste vídeo, que já foi gravado, a partir da transcrição.",
+  anuncio: "Escreva o texto deste anúncio, com variações para teste.",
+  artigo: "Escreva este texto (artigo ou post de blog).",
+  email: "Escreva este e-mail marketing.",
+  whatsapp: "Escreva esta mensagem de WhatsApp.",
+  texto: "Escreva o texto pedido nesta tarefa (pode ser apresentação, e-book, página, mensagem ou outro material)."
 };
 
-const CHECKLIST = {
-  base: ["Passe pelo checklist do manual (seção \"Checklist antes da entrega\").", "A abertura é adequada à proposta e o desenvolvimento entrega o que ela promete?",
-    "Está no tom de voz da marca e respeita o que ela pede para evitar?", "Se houver chamada para ação, ela é coerente com o objetivo?",
-    "Nenhum dado, preço ou data foi inventado? O que falta está marcado com [CONFIRMAR: …]?", "Soa como gente (sem as construções típicas de IA listadas no manual)?", "Cabe no formato e na rede?"]
-};
+// O checklist completo está no manual (seção 26); aqui só o que é deste pedido
+const CHECKLIST = ["Passe pelo checklist do manual (seção \"Checklist antes da entrega\").",
+  "Respeita o que a marca pede para evitar e as condições da campanha, sem inventar outras?",
+  "O que falta está marcado com [CONFIRMAR: …]?", "Cabe nos limites do formato e da rede?"];
 
 /**
  * Monta o pedido completo para a IA.
- * tipo (pelo formato do post): copy | roteiro | carrossel | stories
- * ctx: { clienteId, marcaId, post: { id, titulo, formato, rede, dataPublicacao, hora, pilar, objetivo, roteiro, copy, textoArte } }
+ * tipo (`tipoDoPedido`): copy | roteiro | carrossel | stories | videoGravado | anuncio | artigo | email | whatsapp | texto
+ * ctx: { clienteId, marcaId, post: { id, titulo, formato, rede, dataPublicacao, hora, pilar, objetivo, roteiro, copy, textoArte,
+ *        videoGravado, transcricao, campanhaId } }
  */
 export function montarPedido(tipo, ctx = {}) {
   const post = ctx.post || {};
@@ -214,12 +297,13 @@ export function montarPedido(tipo, ctx = {}) {
     "## Manual de escrita da Hyper (siga sempre)",
     manualAtual(),
     "",
-    camadaMarca(ctx.clienteId, ctx.marcaId),
+    camadaMarca(ctx.clienteId, ctx.marcaId, post.formato),
     "",
-    camadaExemplos(ctx.clienteId, ctx.marcaId, post.formato, post.id),
-    `\n${camadaConteudo(ctx)}`,
-    (post.copy || post.textoArte) && tipo !== "copy" ? `- Texto que já existe (aproveite o que estiver bom):\n${corta([post.copy, post.textoArte].filter(Boolean).join("\n\n"), 1500)}` : null,
-    `\n${camadaRegras(post)}`,
+    tipo === "texto" ? null : camadaExemplos(ctx.clienteId, ctx.marcaId, post.formato, post.id),
+    camadaCampanha(ctx) ? `\n${camadaCampanha(ctx)}` : null,
+    tipo === "texto" ? `\n## O que escrever\n- Tarefa: ${post.titulo || "(sem título)"}\n${post.notas ? `- Briefing:\n${post.notas}` : "- Briefing: não informado. Marque com [CONFIRMAR] o que precisar de informação."}` : `\n${camadaConteudo(ctx)}`,
+    (post.copy || post.textoArte) && tipo !== "copy" && tipo !== "texto" ? `- Texto que já existe (aproveite o que estiver bom):\n${corta([post.copy, post.textoArte].filter(Boolean).join("\n\n"), 1500)}` : null,
+    tipo === "texto" ? null : `\n${camadaRegras(post)}`,
     faltando.length ? `\nAtenção: a ficha da marca ainda não tem ${faltando.join(", ")}. Use bom senso e não invente fatos.` : null,
     "",
     "## Como responder",
@@ -227,7 +311,7 @@ export function montarPedido(tipo, ctx = {}) {
     ...(SAIDAS[tipo] || SAIDAS.copy),
     "",
     "## Antes de responder, confira",
-    ...CHECKLIST.base.map((l) => `- ${l}`)
+    ...CHECKLIST.map((l) => `- ${l}`)
   ].filter((l) => l !== null && l !== undefined).join("\n");
 }
 
@@ -253,11 +337,14 @@ export function lerResposta(texto = "") {
 
 /** O que vai para cada campo do post a partir da resposta lida. */
 export function camposDaResposta(r) {
+  const bloco = (k, rotulo) => (r[k] ? `${rotulo}\n${r[k]}` : "");
   const arte = [
-    r.ROTEIRO ? `ROTEIRO\n${r.ROTEIRO}` : "", r.CAPA ? `CAPA\n${r.CAPA}` : "", r.LAMINAS ? `LÂMINAS\n${r.LAMINAS}` : "",
-    r.SEQUENCIA ? `SEQUÊNCIA\n${r.SEQUENCIA}` : "", r["TEXTO DA ARTE"] ? `TEXTO DA ARTE\n${r["TEXTO DA ARTE"]}` : ""
+    bloco("ROTEIRO", "ROTEIRO"), bloco("CAPA", "CAPA"), bloco("LAMINAS", "LÂMINAS"), bloco("SEQUENCIA", "SEQUÊNCIA"),
+    bloco("ASSUNTO", "ASSUNTO"), bloco("PRE-CABECALHO", "PRÉ-CABEÇALHO"), bloco("BOTAO", "BOTÃO"),
+    bloco("TITULO", "TÍTULO"), bloco("DESCRICAO", "DESCRIÇÃO"), bloco("RESUMO", "RESUMO"), bloco("TEXTO DA ARTE", "TEXTO DA ARTE"),
+    bloco("OBSERVACOES", "OBSERVAÇÕES")
   ].filter(Boolean).join("\n\n");
-  return { copy: r.LEGENDA || "", textoArte: arte };
+  return { copy: r.LEGENDA || r["TEXTO PRINCIPAL"] || r.TEXTO || r.MENSAGEM || "", textoArte: arte };
 }
 
 /* ---------------- Abrir a IA da pessoa ---------------- */

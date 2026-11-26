@@ -4,7 +4,7 @@
 // - Cada post tem id fixo (plan-…): importar de novo o mesmo arquivo não duplica e não mexe no que já existe.
 import { el, avisar, abrirModal, normalizar, fmtData, hojeISO } from "../ui.js";
 import { dados, porId, criar, atualizar, salvarComId, marcasDo } from "../db.js";
-import { TIPO_CONTEUDO, FORMATOS, formatoAtual, statusDaEtapa, prazoDoPost } from "../constantes.js";
+import { TIPO_CONTEUDO, FORMATOS, formatoAtual, statusDaEtapa, prazoDoPost, objetivoDe } from "../constantes.js";
 import { modeloChecklist } from "./componentes.js";
 import { registrarAtividade } from "../db.js";
 import { responsavelPadrao } from "../agenda.js";
@@ -93,7 +93,7 @@ export function previaPlanejamento(plano) {
           titulo: p.titulo, tipo: TIPO_CONTEUDO, clienteId, marcaId: idsMarca[p.marca || ""] || "",
           formato, rede: p.rede || "Instagram", dataPublicacao: p.data, hora: p.hora || "", prazo: p.prazo || prazoDoPost(p.data, formato, hojeISO()),
           statusConteudo: "ideia", status: statusDaEtapa("ideia"), concluidoEm: null,
-          objetivo: p.objetivo || "", roteiro: p.roteiro || "", copy: p.copy || "", pilar: p.pilar || "", linkCanva: "", linkDrive: "", notas: p.notas || "",
+          objetivo: objetivoDe(p.objetivo || ""), roteiro: p.roteiro || "", copy: p.copy || "", pilar: p.pilar || "", linkCanva: "", linkDrive: "", notas: p.notas || "",
           responsavel: p.responsavel || responsavelPadrao(), checklist: modeloChecklist({ tipo: TIPO_CONTEUDO, formato }),
           origem: "importacao-planejamento", criadoEm: Date.now()
         });

@@ -31,7 +31,7 @@ function abrirBanco(id) {
 }
 
 const TODAS = [
-  "clientes", "marcas", "tarefas", "recorrencias", "compromissos", "membros",
+  "clientes", "marcas", "tarefas", "recorrencias", "compromissos", "membros", "campanhas",
   "financeiro", "orcamentos", "contratos", "contasAds", "manutencoes", "aprovacoes", "config"
 ];
 
@@ -252,7 +252,7 @@ function ouvirTudo(aoErro) {
     }, (erro) => { aoErro?.(traduzirErro(erro)); if (primeira) { primeira = false; pronto(); } }));
   }));
   // Documentos de configuração (lidos um a um, porque cada um tem uma regra)
-  const docs = ehCliente() ? ["meta", "listas", "manual"] : ["equipe", "agendaHyper", "clientes", "meta", "modelos", "listas", "manual", ...(pode("financeiro") && !clientesRestritos() ? ["comercial"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
+  const docs = ehCliente() ? ["meta", "listas", "manual", "datas"] : ["equipe", "agendaHyper", "clientes", "meta", "modelos", "listas", "manual", "datas", ...(pode("financeiro") && !clientesRestritos() ? ["comercial"] : []), ...(ehAdmin() ? ["email", "backup"] : [])].map((id) => new Promise((pronto) => {
     let primeira = true;
     cancelamentos.push(onSnapshot(docConfig(id), (snap) => {
       dados.config = [...dados.config.filter((c) => c.id !== id), ...(snap.exists() ? [{ id, ...snap.data() }] : [])];
@@ -327,7 +327,7 @@ export const excluirAtividade = (tarefaId, id) => comPrazo(deleteDoc(doc(refAtiv
 
 /* ---------------- Lixeira (30 dias) ---------------- */
 // O que é excluído destas coleções vai antes para a lixeira, de onde o administrador pode restaurar.
-export const COM_LIXEIRA = new Set(["tarefas", "compromissos", "clientes", "marcas", "recorrencias", "financeiro", "orcamentos", "contasAds", "manutencoes"]);
+export const COM_LIXEIRA = new Set(["tarefas", "compromissos", "clientes", "marcas", "campanhas", "recorrencias", "financeiro", "orcamentos", "contasAds", "manutencoes"]);
 export const DIAS_LIXEIRA = 30;
 
 /** Exclui. Com lixeira (padrão nas coleções acima), guarda uma cópia por 30 dias. */
@@ -499,6 +499,10 @@ export const opcoesClientes = (incluirVazio = true) => [
 ];
 /** Contrato do cliente (mensalidade, dia de vencimento). Só chega para quem tem acesso ao financeiro. */
 export const contrato = (clienteId) => porId("contratos", clienteId) || {};
+/** Campanhas do cliente (de uma marca: as dela e as do grupo inteiro), mais recentes primeiro. */
+export const campanhasDo = (clienteId, marcaId) => (dados.campanhas || [])
+  .filter((c) => c.clienteId === clienteId && (marcaId === undefined || !c.marcaId || c.marcaId === (marcaId || "")))
+  .sort((a, b) => (b.inicio || "").localeCompare(a.inicio || ""));
 
 /** Campos de identidade (aba Marca), que existem no cliente e em cada marca dele. */
 export const CAMPOS_IDENTIDADE = ["logo", "paleta", "cor", "fontes", "descricao", "tomDeVoz", "persona", "publico", "pilares", "palavrasChave", "evitar", "diretrizes", "estiloVisual", "identidadeVisual", "linkDrive", "linkCanva"];

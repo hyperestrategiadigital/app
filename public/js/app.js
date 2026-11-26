@@ -13,7 +13,7 @@ import { el, avisar, hojeISO, quandoErro } from "./ui.js";
 import { eu, pode, ehAdmin, ehCliente, AREAS, AREAS_EQUIPE } from "./permissoes.js";
 import { gerarRecorrencias } from "./recorrencias.js";
 import { abrirBusca, definirTelas, ativarAtalhoBusca } from "./busca.js";
-import { migrarTipos, migrarFormatos, alinharStatusPosts } from "./migracoes.js";
+import { migrarTipos, migrarFormatos, alinharStatusPosts, atualizarListas } from "./migracoes.js";
 import * as hoje from "./views/hoje.js";
 import * as tarefas from "./views/tarefas.js";
 import * as clientes from "./views/clientes.js";
@@ -258,7 +258,7 @@ async function entrar(usuario) {
   // Rotinas automáticas e ajustes de dados antigos: só o administrador roda
   if (ehAdmin()) {
     gerarRecorrencias().catch((e) => console.error("Recorrências:", e));
-    migrarTipos().then(migrarFormatos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).catch((e) => console.error("Ajustes de dados:", e));
+    atualizarListas().then(migrarTipos).then(migrarFormatos).then(alinharStatusPosts).then(arquivarAntigas).then(limparAntigos).catch((e) => console.error("Ajustes de dados:", e));
   }
 }
 

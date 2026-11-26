@@ -3,10 +3,7 @@
 // o app não chama nenhuma IA, só monta o pedido.
 import { el, avisar, abrirModal } from "../ui.js";
 import { identidade } from "../db.js";
-import { montarPedido, completudeMarca, lerResposta, IAS, iaPreferida, guardarIaPreferida, levarParaIA } from "../ia.js";
-
-/** Tipo mais provável para o formato do post. */
-export const tipoDoFormato = (formato) => ({ "Vídeo": "roteiro", "Carrossel": "carrossel", "Story": "stories" })[formato] || "copy";
+import { montarPedido, completudeMarca, lerResposta, IAS, iaPreferida, guardarIaPreferida, levarParaIA, tipoDoPedido } from "../ia.js";
 
 /** Barra "Ficha da marca 70%" com o que falta. */
 export function medidorMarca(clienteId, marcaId = "", { compacto = false } = {}) {
@@ -21,12 +18,13 @@ export function medidorMarca(clienteId, marcaId = "", { compacto = false } = {})
 
 /**
  * Abre o assistente de copy do post.
- * ctx: { clienteId, marcaId, post }. O pedido segue o formato do post (legenda; roteiro no vídeo; lâminas no
- * carrossel; telas nos stories). aoUsar(resposta lida, textoBruto): chamado ao clicar em "Usar resposta".
+ * ctx: { clienteId, marcaId, post }. O pedido segue o formato do post (`tipoDoPedido` em ia.js: legenda, roteiro,
+ * lâminas, stories, anúncio, artigo, e-mail, WhatsApp, vídeo já gravado) ou é um texto livre numa tarefa que não é post.
+ * aoUsar(resposta lida, textoBruto): chamado ao clicar em "Usar resposta".
  */
 export function abrirAssistenteIA({ ctx, aoUsar = null, titulo = "Criar copy" }) {
   if (!ctx?.clienteId) { avisar("Escolha o cliente primeiro.", "erro"); return; }
-  const tipo = tipoDoFormato(ctx.post?.formato);
+  const tipo = tipoDoPedido(ctx.post);
   let ia = iaPreferida();
   const nomeMarca = identidade(ctx.clienteId, ctx.marcaId || undefined).nome || "";
   const resposta = el("textarea", { rows: 8, id: "ia-resposta", placeholder: "Cole aqui a resposta inteira da IA" });
@@ -49,7 +47,7 @@ export function abrirAssistenteIA({ ctx, aoUsar = null, titulo = "Criar copy" })
   }));
   atualizarBotaoIA();
 
-  const semBriefing = ctx.post && !ctx.post.roteiro
+  const semBriefing = ctx.post && !(tipo === "texto" ? ctx.post.notas : ctx.post.roteiro || (ctx.post.videoGravado && ctx.post.transcricao))
     ? el("p", { class: "faixa-alerta" }, "Sem briefing: a IA vai usar só o tema e a marca. Para um resultado melhor, preencha o briefing (ou use \"Montar briefing\").") : null;
 
   const fechar = abrirModal(`${titulo}${nomeMarca ? ` · ${nomeMarca}` : ""}`, el("div", { class: "assistente-ia" },

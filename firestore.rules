@@ -131,6 +131,13 @@ service cloud.firestore {
         allow create: if ativo() && doCliente(cli(request.resource.data));
         allow update: if ativo() && doCliente(cli(resource.data)) && doCliente(cli(request.resource.data));
       }
+      // Campanhas (Natal, Black Friday, lançamentos…): agrupam posts e tarefas; só a equipe vê
+      match /campanhas/{id} {
+        allow read: if ativo() && podeLerEstrito(resource.data);
+        allow delete: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(resource.data));
+        allow create: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(request.resource.data));
+        allow update: if (admin() || pode('conteudo') || pode('trafego')) && doClienteEstrito(cli(resource.data)) && doClienteEstrito(cli(request.resource.data));
+      }
       match /recorrencias/{id} {
         allow read: if ativo() && podeLer(resource.data);
         allow write: if admin();
@@ -221,7 +228,7 @@ service cloud.firestore {
         allow read: if (doc == 'email' && admin())
           || (doc == 'comercial' && pode('financeiro') && todosClientes())
           || (!(doc in ['openai', 'email', 'comercial']) && ativo())
-          || (doc in ['meta', 'listas', 'manual'] && cliente());
+          || (doc in ['meta', 'listas', 'manual', 'datas'] && cliente());
         allow write: if admin();
       }
 

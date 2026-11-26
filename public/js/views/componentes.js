@@ -4,12 +4,13 @@ import { seloResposta, gerarLinkAprovacao } from "../aprovacoes.js";
 import { avisarMencao } from "../emails.js";
 import { quitarCobranca, lancamentoDe } from "../recorrencias.js";
 import { el, normalizar, formulario, confirmar, avisar, fmtPrazoRelativo, fmtData, diasAte, hojeISO, addDias, linkExterno, fecharModais } from "../ui.js";
-import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, marcasDo, desfazerExclusao, listarAtividade, registrarAtividade, excluirAtividade } from "../db.js";
-import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, FORMATO_PADRAO, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa, MODELOS_PADRAO, comAtual, prazoDoPost } from "../constantes.js";
+import { dados, criar, atualizar, excluir, nomeCliente, opcoesClientes, porId, marcasDo, campanhasDo, desfazerExclusao, listarAtividade, registrarAtividade, excluirAtividade } from "../db.js";
+import { STATUS_TAREFA, TIPOS_TAREFA, TIPO_CONTEUDO, ehConteudo, FORMATOS, FORMATO_PADRAO, REDES, STATUS_CONTEUDO, rotuloStatusConteudo, statusDaEtapa, MODELOS_PADRAO, comAtual, prazoDoPost, FORMATO_VIDEO, TIPO_FINANCEIRO, OBJETIVOS } from "../constantes.js";
 import { pilaresDe } from "../ia.js";
 import { identidade } from "../db.js";
 import { abrirAssistenteIA } from "./assistenteIA.js";
 import { camposDaResposta } from "../ia.js";
+import { postsPorSemana } from "./escopo.js";
 import { producaoDoPost, postsDaProducao, roteirosDaProducao, postsAtrasando } from "../producao.js";
 import { listarArtesTarefa, salvarArte, excluirArte, comprimirImagem } from "../arquivos.js";
 import { abrirCompromisso } from "../compromissos.js";
@@ -99,17 +100,26 @@ export function abrirTarefa(tarefa = {}) {
     { nome: "rede", rotulo: "Rede", tipo: "select", opcoes: comAtual(REDES, tarefa.rede), padrao: REDES[0] || "Instagram", largura: "metade", mostrarSe: conteudo },
     { nome: "dataPublicacao", rotulo: "Data de publicação", tipo: "date", padrao: tarefa.prazo || hojeISO(), obrigatorio: true, largura: "metade", mostrarSe: conteudo },
     { nome: "hora", rotulo: "Horário", tipo: "time", largura: "metade", mostrarSe: conteudo },
-    { nome: "objetivo", rotulo: "Objetivo", dica: "Ex.: vender plano anual, gerar leads", largura: "metade", mostrarSe: conteudo },
+    { nome: "objetivo", rotulo: "Objetivo (etapa do funil)", tipo: "select", largura: "metade", mostrarSe: conteudo,
+      opcoes: [["", "—"], ...OBJETIVOS, ...(tarefa.objetivo && !OBJETIVOS.some(([v]) => v === tarefa.objetivo) ? [[tarefa.objetivo, tarefa.objetivo]] : [])] },
     { nome: "pilar", rotulo: "Pilar de conteúdo", tipo: "select", largura: "metade",
       opcoesDe: (v) => [["", "—"], ...comAtual(pilaresDaConta(v), tarefa.pilar).map((p) => [p, p])], mostrarSe: (v) => conteudo(v) && (pilaresDaConta(v).length > 0 || !!tarefa.pilar) },
     { nome: "roteiro", rotulo: "Briefing (a ideia do post)", tipo: "textarea", linhas: 3, dica: "O que o post precisa dizer: assunto, oferta, dados, referências…", mostrarSe: conteudo },
+    { nome: "videoGravado", rotulo: "O vídeo já foi gravado (a copy sai da transcrição, sem roteiro)", tipo: "checkbox", mostrarSe: (v) => conteudo(v) && v.formato === FORMATO_VIDEO },
+    { nome: "transcricao", rotulo: "Transcrição do vídeo", tipo: "textarea", linhas: 4, dica: "Cole o que foi falado no vídeo", mostrarSe: (v) => conteudo(v) && v.formato === FORMATO_VIDEO && v.videoGravado },
     { nome: "textoArte", rotulo: "Roteiro / texto da arte", tipo: "textarea", linhas: 4, dica: "Roteiro do vídeo, lâminas do carrossel, telas dos stories ou o texto da arte", mostrarSe: conteudo },
     { nome: "copy", rotulo: "Copy / legenda final", tipo: "textarea", linhas: 5, dica: "Clique em \"✨ Criar copy\" ou escreva aqui", mostrarSe: conteudo },
+    { nome: "exemplo", rotulo: "★ Usar esta copy como exemplo da marca para a IA", tipo: "checkbox", mostrarSe: conteudo },
     { nome: "extra", rotulo: "Post extra: aparece solto nas tarefas, fora do \"Produzir semana\"", tipo: "checkbox", mostrarSe: conteudo },
+    { nome: "texto", rotulo: "Texto (apresentação, e-book, página, mensagem…)", tipo: "textarea", linhas: 5, dica: "Clique em \"✨ Criar texto\" ou escreva aqui",
+      mostrarSe: (v) => !conteudo(v) && !["Tráfego pago", TIPO_FINANCEIRO, "Reunião"].includes(v.tipo) },
 
     { tipo: "secao", rotulo: "Tarefa" },
     { nome: "responsavel", rotulo: "Responsável", tipo: "select", opcoes: opcoesResponsaveis(tarefa.responsavel), padrao: responsavelPadrao(), largura: "metade" },
     { nome: "prazo", rotulo: "Prazo de entrega", tipo: "date", padrao: hojeISO(), largura: "metade" },
+    { nome: "campanhaId", rotulo: "Campanha", tipo: "select", largura: "metade",
+      opcoesDe: (v) => [["", "—"], ...campanhasDo(v.clienteId, v.marcaId || "").filter((c) => c.ativa !== false || c.id === tarefa.campanhaId).map((c) => [c.id, c.nome])],
+      mostrarSe: (v) => !!v.clienteId && (campanhasDo(v.clienteId, v.marcaId || "").length > 0 || !!tarefa.campanhaId) },
     { nome: "checklist", rotulo: "Checklist", tipo: "checklist" },
     { nome: "linkCanva", rotulo: "Link do Canva (criativo)", dica: "https://www.canva.com/design/...", largura: "metade" },
     { nome: "linkDrive", rotulo: "Link do Drive", dica: "https://drive.google.com/...", largura: "metade" },
@@ -125,7 +135,7 @@ export function abrirTarefa(tarefa = {}) {
     editando ? el("button", {
       type: "button", class: "secundario mini", title: "Abre um post novo igual a este para você mudar a data",
       onClick: () => {
-        const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, qtdComentarios, ...copia } = { ...(porId("tarefas", tarefa.id) || tarefa), ...(ultimoForm()?.lerValores?.() || {}) };
+        const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, qtdComentarios, exemplo, ...copia } = { ...(porId("tarefas", tarefa.id) || tarefa), ...(ultimoForm()?.lerValores?.() || {}) };
         fecharModais();
         abrirTarefa({ ...copia, titulo: `${copia.titulo} (cópia)`, statusConteudo: "ideia", status: "a_fazer", checklist: (copia.checklist || []).map((i) => ({ ...i, feito: false })) });
       }
@@ -167,6 +177,9 @@ export function abrirTarefa(tarefa = {}) {
   // "✨ Criar copy" junto do campo da copy: briefing + identidade da marca
   const rotuloCopy = form?.querySelector("#f-copy")?.closest(".campo")?.querySelector(":scope > span");
   if (rotuloCopy) { rotuloCopy.classList.add("rotulo-com-botao"); rotuloCopy.append(botaoCriarComIA(form, tarefa)); }
+  // "✨ Criar texto" nas tarefas que não são post (apresentação, e-book, página…): título + observações como briefing
+  const rotuloTexto = form?.querySelector("#f-texto")?.closest(".campo")?.querySelector(":scope > span");
+  if (rotuloTexto) { rotuloTexto.classList.add("rotulo-com-botao"); rotuloTexto.append(botaoCriarTexto(form, tarefa)); }
   // Post que está dentro de um "Produzir semana": aviso com atalho
   if (form && producao) form.querySelector(".form-grade").before(el("p", { class: "faixa-info" },
     `Este post faz parte de "${producao.titulo}". `,
@@ -222,6 +235,24 @@ function botaoCriarComIA(form, tarefa) {
       }
     });
   } }, "✨ Criar copy");
+}
+
+/** "✨ Criar texto": pedido com o jeito Hyper e a marca para uma tarefa que não é post; a resposta vai para o campo Texto. */
+function botaoCriarTexto(form, tarefa) {
+  return el("button", { type: "button", class: "destaque mini", title: "Usa o título e as observações como briefing", onClick: () => {
+    const v = { ...form.lerValores(), id: tarefa.id };
+    if (!v.clienteId) { avisar("Escolha o cliente primeiro.", "erro"); return; }
+    abrirAssistenteIA({
+      ctx: { clienteId: v.clienteId, marcaId: v.marcaId || "", post: v }, titulo: "Criar texto",
+      aoUsar: (resp) => {
+        const c = form.querySelector("#f-texto");
+        const { copy, textoArte } = camposDaResposta(resp);
+        const texto = [copy, textoArte].filter(Boolean).join("\n\n");
+        if (c && texto) { c.value = texto; c.dispatchEvent(new Event("input", { bubbles: true })); avisar("Texto colocado na tarefa. Revise e salve."); }
+        else avisar("Não encontrei o texto na resposta: confira se colou tudo.", "erro");
+      }
+    });
+  } }, "✨ Criar texto");
 }
 
 /** "Montar briefing": 4 perguntas que viram o briefing do post (somam ao que já estiver escrito). */
@@ -348,6 +379,8 @@ function secaoSemana(tarefa) {
       el("h3", { class: "form-secao" }, `Posts da semana · ${fmtData(tarefa.semanaInicio, true)} a ${fmtData(fim, true)}`,
         posts.length ? el("span", { class: "contador" }, `${feitos}/${posts.length} produzidos`) : null),
       atrasando.length ? el("p", { class: "faixa-alerta" }, `⚠ ${atrasando.length} post(s) publicam em até 2 dias e ainda não foram produzidos.`) : null,
+      (() => { const previstos = Math.round(postsPorSemana(porId("clientes", tarefa.clienteId))); return previstos && posts.length < previstos
+        ? el("p", { class: "faixa-aviso" }, `O escopo prevê ${previstos} post(s) por semana; esta semana tem ${posts.length}.`) : null; })(),
       posts.length ? el("ul", { class: "checklist-producao" }, posts.map((p) => linhaPost(p, "produzido", "Produzido")))
         : el("p", { class: "subtitulo" }, "Nenhum post planejado para essa semana. Planeje o mês do cliente primeiro."),
       posts.length && feitos === posts.length ? el("p", { class: "faixa-ok" }, "Tudo produzido! Pode concluir esta tarefa.") : null,
@@ -387,7 +420,7 @@ async function copiarSemana(tarefa, posts) {
   if (!v?.semana) return;
   const delta = Math.round((new Date(`${v.semana}T12:00:00`) - new Date(`${tarefa.semanaInicio}T12:00:00`)) / 86400000);
   for (const p of posts) {
-    const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, qtdComentarios, ...copia } = p;
+    const { id, criadoEm, concluidoEm, produzido, roteiroPronto, aprovacaoCliente, ajusteCliente, aprovacaoDesde, lembreteAprovacaoEm, qtdArtes, qtdComentarios, exemplo, ...copia } = p;
     const data = addDias(p.dataPublicacao || p.prazo, delta);
     await criar("tarefas", { ...copia, dataPublicacao: data, prazo: prazoDoPost(data, p.formato, hojeISO()), statusConteudo: "ideia", status: "a_fazer",
       checklist: (p.checklist || []).map((i) => ({ ...i, feito: false })) });
@@ -436,7 +469,7 @@ export async function salvarTarefa(original, v) {
     if (!v.checklist?.length || atual === doInicio) v.checklist = modeloChecklist(v);
   }
   if (v.tipo !== TIPO_CONTEUDO) {
-    for (const k of ["formato", "rede", "dataPublicacao", "hora", "statusConteudo", "objetivo", "roteiro", "copy", "extra", "textoArte", "pilar"]) delete v[k];
+    for (const k of ["formato", "rede", "dataPublicacao", "hora", "statusConteudo", "objetivo", "roteiro", "copy", "extra", "textoArte", "pilar", "videoGravado", "transcricao", "exemplo"]) delete v[k];
   } else {
     if (!v.prazo) v.prazo = prazoDoPost(v.dataPublicacao, v.formato, hojeISO()) || v.dataPublicacao;
     v.statusConteudo ||= "ideia";
@@ -509,6 +542,7 @@ export function cartaoTarefa(t, { mostrarCliente = true } = {}) {
         mostrarCliente ? seloCliente(t.clienteId, t) : t.marcaId ? el("span", { class: "etiqueta" }, porId("marcas", t.marcaId)?.nome || "") : null,
         ehConteudo(t) ? el("span", { class: "etiqueta formato" }, `${t.formato || "Post"}${t.dataPublicacao ? " · " + fmtData(t.dataPublicacao, true) : ""}`) : t.tipo ? el("span", { class: "etiqueta" }, t.tipo) : null,
         ehConteudo(t) && t.statusConteudo ? el("span", { class: `etiqueta st-${t.statusConteudo}` }, rotuloStatusConteudo(t.statusConteudo)) : null,
+        t.campanhaId && porId("campanhas", t.campanhaId) ? el("span", { class: "etiqueta campanha", title: "Campanha" }, `◆ ${porId("campanhas", t.campanhaId).nome}`) : null,
         t.status === "andamento" ? el("span", { class: "etiqueta andamento" }, "Em andamento") : null,
         total ? el("span", { class: "progresso-mini" }, `☑ ${feitos}/${total}`) : null,
         t.semanaInicio ? progressoProducao(t) : null,

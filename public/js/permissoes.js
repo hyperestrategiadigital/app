@@ -31,7 +31,7 @@ export const pode = (area) => ehAdmin() || (area !== "financeiro" && !ehCliente(
 
 /** Tipos de tarefa que pertencem a cada área (quem não tem a área não vê essas tarefas). */
 const TIPOS_DA_AREA = {
-  conteudo: ["Conteúdo", "Produção", "Vídeo / Roteiro", "Planejamento"],
+  conteudo: ["Conteúdo", "Produção", "Planejamento"],
   trafego: ["Tráfego pago"],
   financeiro: ["Financeiro / Comercial"]
 };
@@ -44,7 +44,7 @@ export function tarefaVisivel(t) {
 /** Coleções que o usuário pode ler (as outras nem são pedidas ao banco). */
 export function colecoesPermitidas() {
   if (ehCliente()) return ["clientes", "marcas", "tarefas", "membros"];
-  const base = ["clientes", "marcas", "tarefas", "compromissos", "recorrencias", "membros"];
+  const base = ["clientes", "marcas", "tarefas", "compromissos", "recorrencias", "membros", "campanhas"];
   if (pode("financeiro")) base.push("financeiro", "orcamentos", "contratos");
   if (pode("trafego")) base.push("contasAds", "manutencoes");
   if (pode("conteudo")) base.push("aprovacoes");
