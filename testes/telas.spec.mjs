@@ -64,6 +64,7 @@ test("todas as telas abrem sem erro e o menu agrupa a administração", async ({
   }
   await expect(page.locator(".menu-grupo summary")).toHaveText(/Administração/);
   await expect(page.locator("#menu > a")).toHaveCount(6); // Tarefas e Calendário são um item só; Relatórios no menu principal
+  await expect(page.locator("#menu > a", { hasText: "Tráfego pago" }).locator(".menu-selo")).toHaveText("Beta");
   await expect(page.locator("#menu")).not.toContainText("Studio");
   for (const rota of ["lixeira"]) { await page.goto(`/#/${rota}`); await expect(page.locator("#conteudo h1").first()).toBeVisible(); }
   expect(erros).toEqual([]);
@@ -505,6 +506,9 @@ test("celular: barra de baixo com 5 atalhos e o + no meio", async ({ page }) => 
   await expect(itens.nth(2)).toHaveClass(/nav-novo/);
   const caixa = await itens.nth(2).boundingBox();
   expect(Math.abs(caixa.x + caixa.width / 2 - 195)).toBeLessThan(6);
+  await itens.nth(2).click(); // o "+" oferece post, tarefa ou compromisso
+  await expect(page.locator(".modal .escolha-dia button")).toHaveCount(3);
+  await page.keyboard.press("Escape");
   await page.goto("/#/financeiro");
   for (const n of await page.locator(".numero strong").all()) expect(await n.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
 });

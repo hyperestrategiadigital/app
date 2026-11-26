@@ -1009,3 +1009,6 @@ details.bloco.recolhivel[open] { padding-bottom: 20px; }
 .grade-cadastro .campo { grid-column: auto; }
 .cadastro-cliente { padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--cor-borda); }
 .atalhos-cliente { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+
+/* Etiqueta no menu (ex.: Beta, para telas ainda em desenvolvimento) */
+.menu-selo { margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: var(--cor-destaque); color: var(--hyper-roxo); }

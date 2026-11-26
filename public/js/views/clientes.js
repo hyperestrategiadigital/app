@@ -17,7 +17,7 @@ export function abrirCliente(cliente = {}) {
   const valores = { ...cliente, ...contrato(cliente.id), id: cliente.id };
   const fin = pode("financeiro");
   // Só cadastro, contato e contrato. Identidade (cores, fontes, tom de voz…) fica na aba Marca;
-  // redes sociais na aba Contas; contas de anúncio na aba Tráfego pago.
+  // redes sociais na aba Contas; contas de anúncio na tela Tráfego pago.
   return formulario(editando ? `Editar ${cliente.nome}` : "Novo cliente", [
     { nome: "nome", rotulo: "Nome do cliente", obrigatorio: true, largura: "metade" },
     { nome: "segmento", rotulo: "Segmento", dica: "Ex.: clínica, academia, escola", largura: "metade" },
@@ -113,8 +113,7 @@ function escolherMarca(c) {
   return el("div", { class: "tela" },
     el("a", { href: "#/clientes", class: "voltar" }, "← Clientes"),
     cabecalho(c.nome, "É um grupo. Qual marca você quer abrir?",
-      podeGerir ? el("button", { class: "secundario", onClick: () => abrirMarca(c.id) }, "+ Marca") : null,
-      podeEditar() ? el("button", { class: "secundario", onClick: () => abrirCliente(c) }, "Editar grupo") : null),
+      podeGerir ? el("button", { class: "secundario", onClick: () => abrirMarca(c.id) }, "+ Marca") : null),
     el("div", { class: "grade-clientes" },
       marcas.map(cartao),
       el("a", { class: "cartao-cliente cartao-marca cartao-geral", href: `#/clientes/${c.id}/marca/grupo`, style: { "--selo": corCliente(c) } },

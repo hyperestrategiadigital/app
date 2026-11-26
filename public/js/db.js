@@ -306,7 +306,6 @@ export async function criar(col, valores) {
   await comPrazo(setDoc(novo, { ...valores, criadoEm: Date.now() }));
   return novo;
 }
-export const novoId = (col) => doc(ref(col)).id;
 export const salvarComId = (col, id, valores) =>
   comPrazo(setDoc(col === "config" ? docConfig(id) : doc(ref(col), id), valores, { merge: true }));
 export const atualizar = (col, id, valores) => comPrazo(updateDoc(doc(ref(col), id), { ...valores, atualizadoEm: Date.now() }));

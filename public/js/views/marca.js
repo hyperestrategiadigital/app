@@ -250,7 +250,7 @@ export async function juntarUm(destino, origem, progresso, marcaExistente) {
  * O contrário de juntar: a marca sai do grupo e vira um cliente próprio (ex.: tem contrato separado).
  * Se a marca veio de um cliente que foi juntado, reativa esse cliente; senão cria um novo.
  * Posts e tarefas da marca, contas de anúncio, manutenções e criativos vão junto. Contrato e financeiro ficam
- * no grupo (o cliente novo recebe o contrato dele depois, no Editar).
+ * no grupo (o cliente novo recebe o contrato dele depois, na aba Marca).
  */
 export async function separarMarca(grupo, marca, progresso = () => {}) {
   const antigo = marca.origemClienteId ? porId("clientes", marca.origemClienteId) : null;

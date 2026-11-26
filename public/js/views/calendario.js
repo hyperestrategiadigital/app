@@ -43,8 +43,8 @@ function chipCompromisso({ c }) {
   }, el("span", { class: "chip-icone", "aria-hidden": "true" }, "◷"), rotuloCompromisso(c));
 }
 
-/** Clique num dia no modo "Tudo": escolhe entre post, tarefa e compromisso. */
-function escolherNoDia(data, clienteId) {
+/** Clique num dia no modo "Tudo" (e o "+" do celular): escolhe entre post, tarefa e compromisso. */
+export function escolherNoDia(data, clienteId) {
   const fechar = abrirModal("O que você quer criar?", el("div", { class: "escolha-dia" },
     pode("conteudo") ? el("button", { class: "destaque", onClick: () => { fechar(); novoPost({ data, clienteId }); } }, "▣ Post de conteúdo") : null,
     el("button", { onClick: () => { fechar(); abrirTarefa({ prazo: data, clienteId }); } }, "✓ Tarefa (entrega no dia)"),

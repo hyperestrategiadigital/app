@@ -58,7 +58,7 @@ export function abrirOrcamento(o = {}) {
 }
 
 async function gerarMensalidades(mes) {
-  if (!clientesAtivos().some((c) => Number(contrato(c.id).mensalidade) > 0) && !despesasFixas().length) { avisar("Nenhum cliente tem mensalidade cadastrada. Preencha em Editar, na ficha do cliente.", "erro"); return; }
+  if (!clientesAtivos().some((c) => Number(contrato(c.id).mensalidade) > 0) && !despesasFixas().length) { avisar("Nenhum cliente tem mensalidade cadastrada. Preencha em Clientes → aba Marca → Contrato, status e excluir.", "erro"); return; }
   const novas = await garantirMes(mes);
   avisar(novas ? `${novas} lançamento(s) criado(s).` : "As mensalidades e despesas fixas deste mês já estavam criadas.");
 }
@@ -107,7 +107,7 @@ function abaContratos(estado) {
         el("span", { class: "valor receita" }, fmtMoeda(Number(k.mensalidade)) + "/mês"),
         el("span", { class: `etiqueta ${situacao[0]}` }, situacao[1]),
         admin ? el("button", { class: "secundario mini", onClick: () => abrirGeradorContrato(c.id) }, k.dadosContrato ? "📄 Contrato" : "📄 Gerar contrato") : null);
-    })) : vazio("Nenhum cliente com mensalidade. Preencha no Editar de cada cliente."),
+    })) : vazio("Nenhum cliente com mensalidade. Preencha na aba Marca de cada cliente (Contrato, status e excluir)."),
     sem.length ? el("p", { class: "subtitulo" }, `Sem valor de contrato (${sem.length}): `, ...sem.flatMap(({ c }, i) => [i ? ", " : "",
       admin ? el("a", { href: "#/financeiro/contratos", onClick: (e) => { e.preventDefault(); abrirGeradorContrato(c.id); } }, c.nome) : el("a", { href: `#/clientes/${c.id}` }, c.nome)])) : null
   ];

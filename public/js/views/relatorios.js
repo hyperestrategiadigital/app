@@ -52,6 +52,7 @@ export function render({ params, estado, renderizar }) {
   // #/relatorios/<cliente> (vem da ficha do cliente): já abre nele
   if (params?.[0] && estado.paramsRel !== params[0]) { estado.paramsRel = params[0]; estado.cliente = params[0]; }
   const fin = pode("financeiro");
+  const tp = pode("trafego");
   const [de, ate] = periodo(estado);
   const r = montarRelatorio(estado.cliente, de, ate);
   const cliente = porId("clientes", estado.cliente);
@@ -78,9 +79,9 @@ export function render({ params, estado, renderizar }) {
     el("div", { class: "resumo" },
       numero("Posts publicados", `${r.publicados.length}/${r.posts.length}`, "ok"),
       numero("Tarefas concluídas", r.tarefasFeitas.length),
-      numero("Manutenções de tráfego", r.manutencoes.length),
+      tp ? numero("Manutenções de tráfego", r.manutencoes.length) : null,
       numero("Reuniões e compromissos", r.reunioes.length),
-      r.investimento ? numero("Investido em anúncios", fmtMoeda(r.investimento)) : null,
+      tp && r.investimento ? numero("Investido em anúncios", fmtMoeda(r.investimento)) : null,
       fin ? numero("Recebido", fmtMoeda(r.recebido), "ok") : null,
       fin && r.aReceber ? numero("A receber", fmtMoeda(r.aReceber), "alerta") : null,
       fin && !estado.cliente ? numero("Despesas pagas", fmtMoeda(r.despesas)) : null),
@@ -95,8 +96,8 @@ export function render({ params, estado, renderizar }) {
           el("span", {}, f), el("div", { class: "trilho" }, el("div", { class: "preenchido", style: { width: `${(n / formatos[0][1]) * 100}%` } })), el("strong", {}, n))))
           : vazio("Nenhum post publicado no período."),
         r.pendentes.length ? el("p", { class: "subtitulo" }, `${r.pendentes.length} post(s) do período ainda não publicados.`) : null,
-        el("h2", {}, "Tráfego pago"),
-        r.manutencoes.length ? r.manutencoes.map((m) => el("div", { class: "linha-tabela" },
+        tp ? el("h2", {}, "Tráfego pago") : null,
+        !tp ? null : r.manutencoes.length ? r.manutencoes.map((m) => el("div", { class: "linha-tabela" },
           el("span", { class: "data-mini" }, fmtData(m.data, true)), !estado.cliente ? el("span", {}, nomeCliente(m.clienteId)) : null,
           el("span", { class: "etiqueta" }, m.plataforma), el("span", { class: "resumo-texto" }, m.resultados || m.acoes || ""),
           m.investimento ? el("strong", {}, fmtMoeda(m.investimento)) : null))
@@ -111,10 +112,10 @@ export function render({ params, estado, renderizar }) {
     porCliente.length ? el("section", { class: "bloco" },
       el("h2", {}, "Por cliente"),
       el("table", { class: "tabela-relatorio" },
-        el("thead", {}, el("tr", {}, ["Cliente", "Posts publicados", "Tarefas", "Manutenções TP", ...(fin ? ["Recebido", "A receber"] : [])].map((h) => el("th", {}, h)))),
+        el("thead", {}, el("tr", {}, ["Cliente", "Posts publicados", "Tarefas", ...(tp ? ["Manutenções TP"] : []), ...(fin ? ["Recebido", "A receber"] : [])].map((h) => el("th", {}, h)))),
         el("tbody", {}, porCliente.map(({ c, x }) => el("tr", { onClick: () => { estado.cliente = c.id; renderizar(); } },
           el("td", {}, el("span", { class: "bolinha-cor", style: { background: corCliente(c) } }), " ", c.nome),
-          el("td", {}, `${x.publicados.length}/${x.posts.length}`), el("td", {}, x.tarefasFeitas.length), el("td", {}, x.manutencoes.length),
+          el("td", {}, `${x.publicados.length}/${x.posts.length}`), el("td", {}, x.tarefasFeitas.length), tp ? el("td", {}, x.manutencoes.length) : null,
           fin ? [el("td", {}, fmtMoeda(x.recebido)), el("td", {}, x.aReceber ? fmtMoeda(x.aReceber) : "—")] : null))))) : null);
 }
 

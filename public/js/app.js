@@ -38,7 +38,7 @@ const ROTAS = {
   tarefas: { titulo: "Tarefas", icone: "✓", view: tarefas, estado: "calendario", menu: false },
   calendario: { titulo: "Tarefas", icone: "✓", view: calendario, inclui: ["tarefas"] },
   clientes: { titulo: "Clientes", icone: "◉", view: clientes },
-  trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego, area: "trafego" },
+  trafego: { titulo: "Tráfego pago", icone: "↗", view: trafego, area: "trafego", selo: "Beta" }, // ainda em desenvolvimento
   financeiro: { titulo: "Financeiro", icone: "$", view: financeiro, area: "financeiro" },
   // Relatórios: resumo do período e resultados do Instagram/Facebook por cliente (os valores só para o financeiro)
   relatorios: { titulo: "Relatórios", icone: "▤", view: relatorios },
@@ -106,7 +106,7 @@ function montarMenu() {
 /** Volta para a última visão usada de Tarefas (calendário, quadro…). */
 const ultimaVisao = () => { const v = estadoTela.calendario?.visao; return v && v !== "calendario" ? "tarefas" : "calendario"; };
 
-/** Celular: atalhos fixos embaixo (Hoje, Tarefas, + Nova, Clientes e Financeiro ou Minha conta), com o "+" no meio. */
+/** Celular: atalhos fixos embaixo (Hoje, Tarefas, + Novo, Clientes e Financeiro ou Minha conta), com o "+" no meio. */
 function montarNavMovel(nome) {
   const item = (rota, icone, titulo, ativo = rota === nome) => el("a", { href: `#/${rota}`, class: ativo ? "ativo" : "" }, el("span", { "aria-hidden": "true" }, icone), titulo);
   if (ehCliente()) return $("nav-movel").replaceChildren(
@@ -115,7 +115,7 @@ function montarNavMovel(nome) {
     item("marca", "◉\uFE0E", "Marca"), item("resultados", "↗\uFE0E", "Resultados"));
   $("nav-movel").replaceChildren(
     item("hoje", "☀\uFE0E", "Hoje"), item(ultimaVisao(), "✓\uFE0E", "Tarefas", ["tarefas", "calendario"].includes(nome)),
-    el("button", { class: "nav-novo", onClick: () => abrirTarefa({ prazo: hojeISO() }) }, el("span", { "aria-hidden": "true" }, "+"), "Nova"),
+    el("button", { class: "nav-novo", onClick: () => calendario.escolherNoDia(hojeISO(), "") }, el("span", { "aria-hidden": "true" }, "+"), "Novo"),
     item("clientes", "◉\uFE0E", "Clientes"),
     pode("financeiro") ? item("financeiro", "$", "Financeiro") : item("conta", "☺\uFE0E", "Conta"));
 }
