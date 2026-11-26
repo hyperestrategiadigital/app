@@ -1073,3 +1073,23 @@ button.numero.numero-pendencias small { display: block; margin-top: 4px; font-si
 .secao-pendencias { margin-bottom: 20px; }
 .secao-pendencias + .secao-pendencias { border-top: 1px solid var(--cor-borda); padding-top: 14px; }
 .lista-pedidos { margin: 6px 0 10px; padding-left: 18px; }
+
+/* Aprovação: carrossel (várias imagens no mesmo post, na ordem do post) */
+.carrossel { position: relative; margin-bottom: 10px; }
+.carrossel-trilho { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; border-radius: var(--raio-pequeno); scrollbar-width: none; }
+.carrossel-trilho::-webkit-scrollbar { display: none; }
+.carrossel-trilho .aprov-imagem { flex: 0 0 100%; width: 100%; scroll-snap-align: start; margin: 0; object-fit: contain; background: var(--cor-fundo); }
+.carrossel-seta { position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%; border: 0; padding: 0; font-size: 22px; line-height: 1; background: var(--cor-superficie); color: var(--hyper-roxo); box-shadow: var(--sombra); cursor: pointer; }
+.carrossel-seta:hover { background: var(--cor-primaria-clara); color: var(--hyper-roxo); }
+.carrossel-seta:disabled { opacity: 0; pointer-events: none; }
+.carrossel-seta.anterior { left: 8px; }
+.carrossel-seta.proxima { right: 8px; }
+.carrossel-contador { position: absolute; top: 10px; right: 10px; background: var(--hyper-preto); color: var(--hyper-branco); font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; opacity: .8; }
+.carrossel-bolinhas { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+.carrossel-bolinhas span { width: 7px; height: 7px; border-radius: 50%; background: var(--cor-borda); }
+.carrossel-bolinhas span.ativa { background: var(--hyper-roxo); }
+
+/* Post: ordem dos criativos */
+.criativo figcaption { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.ordem-criativo { display: inline-flex; gap: 2px; }
+.ordem-criativo .icone { position: static; width: 24px; height: 24px; }

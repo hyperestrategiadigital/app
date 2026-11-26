@@ -1317,3 +1317,42 @@ test("Hoje: quadros Atrasadas, Hoje (para hoje | concluídas), Próximos 7 dias 
   await janela.getByRole("link", { name: /Liberar em Usuários/ }).click();
   await expect(page).toHaveURL(/#\/usuarios/);
 });
+
+test("carrossel: criativos na ordem do post (com setas para reordenar) e todos no link de aprovação", async ({ page, context }) => {
+  await abrir(page);
+  const hoje = new Date().toISOString().slice(0, 10);
+  // três imagens diferentes (cores distintas), anexadas em ordem
+  await page.evaluate(async ({ hoje, cores }) => {
+    const db = await import("/js/db.js"); const a = await import("/js/arquivos.js");
+    await db.salvarComId("tarefas", "car", { titulo: "Carrossel da loja", tipo: "Conteúdo", clienteId: "grupo", formato: "Carrossel", rede: "Instagram", dataPublicacao: hoje, statusConteudo: "aprovacao", status: "andamento", copy: "Legenda", checklist: [] });
+    await new Promise((ok) => setTimeout(ok, 200));
+    const desenhar = (cor) => { const c = document.createElement("canvas"); c.width = c.height = 4; const x = c.getContext("2d"); x.fillStyle = cor; x.fillRect(0, 0, 4, 4); return c.toDataURL("image/png"); };
+    for (const [i, cor] of cores.entries()) await a.salvarArte("grupo", "car", desenhar(cor), { nome: `lamina-${i + 1}` });
+  }, { hoje, cores: ["#ff0000", "#00ff00", "#0000ff"] });
+  // No post: na ordem anexada, numerados; a seta troca a 3ª com a 2ª
+  await page.evaluate(async () => { const c = await import("/js/views/componentes.js"); const db = await import("/js/db.js"); c.abrirTarefa(db.porId("tarefas", "car")); });
+  const figuras = page.locator(".modal .criativo");
+  await expect(figuras).toHaveCount(3);
+  expect(await figuras.locator("img").evaluateAll((l) => l.map((i) => i.alt))).toEqual(["lamina-1", "lamina-2", "lamina-3"]);
+  await expect(figuras.nth(1).locator("figcaption")).toContainText("2 de 3");
+  await page.getByRole("button", { name: "Mover o criativo 3 para a esquerda" }).click();
+  await expect.poll(() => figuras.locator("img").evaluateAll((l) => l.map((i) => i.alt))).toEqual(["lamina-1", "lamina-3", "lamina-2"]);
+  await page.keyboard.press("Escape");
+  // Link: as 3 imagens, na nova ordem
+  await page.evaluate(async () => { const a = await import("/js/aprovacoes.js"); await a.gerarLinkAprovacao("grupo", new Date().toISOString().slice(0, 7)); });
+  const link = await page.locator(".modal input[readonly]").inputValue();
+  const token = link.split("t=")[1];
+  expect(await page.evaluate((t) => window.__store["espacos/hyper/aprovacoes"][t].posts.find((p) => p.id === "car").qtdArtes, token)).toBe(3);
+  const cliente = await context.newPage();
+  await rotearMocks(cliente);
+  await cliente.goto(link.replace(/^https?:\/\/[^/]+/, ""));
+  const post = cliente.locator("article.aprov-post", { hasText: "Carrossel da loja" });
+  await expect(post.locator(".carrossel-trilho img")).toHaveCount(3);
+  await expect(post.locator(".carrossel-contador")).toHaveText("1/3");
+  const cores = await post.locator(".carrossel-trilho img").evaluateAll((l) => l.map((i) => {
+    const c = document.createElement("canvas"); c.width = c.height = 1; const x = c.getContext("2d"); x.drawImage(i, 0, 0, 1, 1); return Array.from(x.getImageData(0, 0, 1, 1).data.slice(0, 3)).map((v) => v > 128 ? 1 : 0).join("");
+  }));
+  expect(cores).toEqual(["100", "001", "010"]); // vermelho, azul, verde (a ordem arrumada no post)
+  await post.getByRole("button", { name: "Próxima imagem" }).click();
+  await expect(post.locator(".carrossel-contador")).toHaveText("2/3");
+});

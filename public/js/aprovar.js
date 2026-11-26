@@ -31,6 +31,28 @@ async function abrir() {
   return null;
 }
 
+/** Várias imagens: carrossel como no Instagram (arrasta para o lado; setas no computador; "2/5" e bolinhas). */
+function carrossel(lista, titulo) {
+  const trilho = el("div", { class: "carrossel-trilho", tabindex: "0", "aria-label": `Imagens do post (${lista.length})` },
+    lista.map((src, i) => el("img", { class: "aprov-imagem", src, alt: `${titulo}: imagem ${i + 1} de ${lista.length}`, loading: i ? "lazy" : "eager" })));
+  const contador = el("span", { class: "carrossel-contador" }, `1/${lista.length}`);
+  const bolinhas = el("div", { class: "carrossel-bolinhas", "aria-hidden": "true" }, lista.map((_, i) => el("span", { class: i ? "" : "ativa" })));
+  const atual = () => Math.round(trilho.scrollLeft / (trilho.clientWidth || 1));
+  const ir = (i) => trilho.scrollTo({ left: Math.max(0, Math.min(lista.length - 1, i)) * trilho.clientWidth, behavior: "smooth" });
+  const anterior = el("button", { type: "button", class: "carrossel-seta anterior", "aria-label": "Imagem anterior", onClick: () => ir(atual() - 1) }, "‹");
+  const proxima = el("button", { type: "button", class: "carrossel-seta proxima", "aria-label": "Próxima imagem", onClick: () => ir(atual() + 1) }, "›");
+  const marcar = () => {
+    const i = atual();
+    contador.textContent = `${i + 1}/${lista.length}`;
+    [...bolinhas.children].forEach((b, n) => b.classList.toggle("ativa", n === i));
+    anterior.disabled = i === 0; proxima.disabled = i === lista.length - 1;
+  };
+  trilho.addEventListener("scroll", () => { clearTimeout(trilho.t); trilho.t = setTimeout(marcar, 60); }, { passive: true });
+  trilho.addEventListener("keydown", (e) => { if (e.key === "ArrowRight") ir(atual() + 1); if (e.key === "ArrowLeft") ir(atual() - 1); });
+  anterior.disabled = true;
+  return el("div", { class: "carrossel" }, trilho, anterior, proxima, contador, bolinhas);
+}
+
 async function iniciar() {
   const achado = await abrir();
   if (!achado) return erro("Este link expirou ou não existe mais. Peça um novo link para a Hyper.");
@@ -39,9 +61,11 @@ async function iniciar() {
   // Respostas são pequenas: vêm antes de mostrar. As imagens (pesadas) vêm depois, uma por post.
   const respostas = await getDocs(collection(db, ...caminho("respostas")))
     .then((s) => Object.fromEntries(s.docs.map((d) => [d.id, d.data()]))).catch(() => ({}));
-  const artes = {}; // postId -> dataURL (quando chegar)
-  const carregarArte = (postId) => (artes[postId] ??= getDoc(doc(db, ...caminho("artes", postId)))
-    .then((s) => (s.exists() ? s.data().dados : null)).catch(() => null));
+  // Imagens de cada post, na ordem (carrossel): {post}, {post}__1, {post}__2… Links antigos têm uma só ({post}).
+  const artes = {}; // postId -> Promise<[dataURL…]>
+  const carregarArtes = (post) => (artes[post.id] ??= Promise.all(Array.from({ length: post.qtdArtes || 1 }, (_, i) =>
+    getDoc(doc(db, ...caminho("artes", i ? `${post.id}__${i}` : post.id))).then((s) => (s.exists() ? s.data().dados : null)).catch(() => null)))
+    .then((l) => l.filter(Boolean)));
 
   let nome = "";
   try { nome = localStorage.getItem(chaveNome) || ""; } catch {}
@@ -89,9 +113,9 @@ async function iniciar() {
         } }, "Enviar revisão")));
 
     const imagem = el("div", { class: "aprov-imagem-espaco" });
-    if (post.temArte !== false) carregarArte(post.id).then((src) => {
-      if (src) imagem.replaceChildren(el("img", { class: "aprov-imagem", src, alt: post.titulo }));
-      else imagem.remove();
+    if (post.temArte !== false) carregarArtes(post).then((lista) => {
+      if (!lista.length) imagem.remove();
+      else imagem.replaceChildren(lista.length === 1 ? el("img", { class: "aprov-imagem", src: lista[0], alt: post.titulo }) : carrossel(lista, post.titulo));
     });
     else imagem.remove();
 
