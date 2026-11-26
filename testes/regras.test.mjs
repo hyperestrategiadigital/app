@@ -280,6 +280,10 @@ test("aprovação por link: cliente sem login vê e responde só os posts do lin
   await assertFails(setDoc(doc(anon, `${E}/aprovacoes/tok1/respostas/t2`), resposta));
   await assertFails(setDoc(doc(anon, `${E}/aprovacoes/tok1/respostas/t1`), { ...resposta, status: "talvez" }));
   await assertFails(setDoc(doc(anon, `${E}/aprovacoes/tok1/respostas/t1`), { ...resposta, aplicadaEm: 1 }));
+  // Legenda editada pelo cliente na revisão: texto de até 5000 caracteres
+  await assertSucceeds(setDoc(doc(anon, `${E}/aprovacoes/tok1/respostas/t1`), { ...resposta, copyNova: "Minha legenda" }));
+  await assertFails(setDoc(doc(anon, `${E}/aprovacoes/tok1/respostas/t1`), { ...resposta, copyNova: "x".repeat(5001) }));
+  await assertFails(setDoc(doc(anon, `${E}/aprovacoes/tok1/respostas/t1`), { ...resposta, copyNova: 123 }));
   await assertFails(setDoc(doc(anon, `${E}/aprovacoes/velho/respostas/t1`), resposta));
   await assertFails(setDoc(doc(anon, `${E}/tarefas/t1`), { titulo: "invadiu" }));
   await assertSucceeds(updateDoc(doc(como("conteudo"), `${E}/aprovacoes/tok1/respostas/t1`), { aplicadaEm: 2 }));

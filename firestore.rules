@@ -212,7 +212,8 @@ service cloud.firestore {
           allow read: if linkValido() || pode('conteudo');
           // O cliente responde só sobre os posts do link, sem mexer em mais nada
           allow create, update: if linkValido() && postId in aprovacao().postIds
-                                && request.resource.data.keys().hasOnly(['status', 'comentario', 'nome', 'em'])
+                                && request.resource.data.keys().hasOnly(['status', 'comentario', 'nome', 'em', 'copyNova'])
+                                && (!('copyNova' in request.resource.data) || (request.resource.data.copyNova is string && request.resource.data.copyNova.size() <= 5000))
                                 && request.resource.data.status in ['aprovado', 'ajuste']
                                 && request.resource.data.comentario.size() <= 2000
                                 && request.resource.data.nome.size() <= 80;

@@ -3,7 +3,7 @@
 import { test, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 
-const MOCKS = { "firebase-app.js": "firebase-app.js", "firebase-auth.js": "firebase-auth.js", "firebase-firestore.js": "firebase-firestore.js" };
+const MOCKS = { "firebase-app.js": "firebase-app.js", "firebase-auth.js": "firebase-auth.js", "firebase-firestore.js": "firebase-firestore.js", "firebase-firestore-lite.js": "firebase-firestore.js" };
 const pasta = fileURLToPath(new URL("./mocks/", import.meta.url));
 
 const hoje = new Date();
@@ -317,6 +317,69 @@ test("aprovação do cliente por link: o cliente aprova e o post muda de etapa",
   await expect(cliente.locator("article.aprov-post", { hasText: "Post para aprovar" })).toContainText("Aprovado");
   await page.reload();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].p2.statusConteudo), { timeout: 10000 }).toBe("aprovado");
+});
+
+test("aprovação por link: o cliente edita a legenda ou pede revisão; a equipe vê no Hoje e decide", async ({ page, context }) => {
+  await abrir(page);
+  const hoje = new Date().toISOString().slice(0, 10);
+  await page.evaluate(async (hoje) => {
+    const db = await import("/js/db.js");
+    await db.salvarComId("tarefas", "pe", { titulo: "Post para editar", tipo: "Conteúdo", clienteId: "grupo", formato: "Estático", rede: "Instagram", dataPublicacao: hoje, statusConteudo: "producao", status: "andamento", copy: "Legenda da equipe", checklist: [] });
+    await db.salvarComId("tarefas", "pr", { titulo: "Post para revisar", tipo: "Conteúdo", clienteId: "grupo", formato: "Estático", rede: "Instagram", dataPublicacao: hoje, statusConteudo: "producao", status: "andamento", copy: "Outra legenda", checklist: [] });
+  }, hoje);
+  await page.evaluate(async () => { const a = await import("/js/aprovacoes.js"); await a.gerarLinkAprovacao("grupo", new Date().toISOString().slice(0, 7)); });
+  const link = await page.locator(".modal input[readonly]").inputValue();
+  // Sem imagem no post: a página nem busca (só quem tem temArte)
+  expect(await page.evaluate((t) => window.__store["espacos/hyper/aprovacoes"][t].posts.every((p) => p.temArte === false), link.split("t=")[1])).toBe(true);
+  const cliente = await context.newPage();
+  await rotearMocks(cliente);
+  await cliente.goto(link.replace(/^https?:\/\/[^/]+/, ""));
+  await cliente.fill("#aprov-nome", "Dona do Grupo");
+  // 1) Só edita a legenda: aprovado com o texto dela
+  const editar = cliente.locator("article.aprov-post", { hasText: "Post para editar" });
+  await editar.getByRole("button", { name: "Pedir revisão" }).click();
+  await expect(editar.getByLabel("Legenda")).toHaveValue("Legenda da equipe");
+  await editar.getByLabel("Legenda").fill("Legenda do jeito da cliente");
+  await editar.getByRole("button", { name: "Enviar revisão" }).click();
+  await expect(editar).toContainText("Aprovado com a sua legenda");
+  await expect(editar).toContainText("Legenda do jeito da cliente");
+  // 2) Sem editar nem escrever: pede um dos dois
+  const revisar = cliente.locator("article.aprov-post", { hasText: "Post para revisar" });
+  await revisar.getByRole("button", { name: "Pedir revisão" }).click();
+  await revisar.getByRole("button", { name: "Enviar revisão" }).click();
+  await expect(cliente.locator(".aviso")).toContainText("Edite a legenda ou conte o que você quer mudar");
+  await revisar.getByPlaceholder(/Quer mudar mais alguma coisa/).fill("Trocar a foto por uma da fachada");
+  await revisar.getByRole("button", { name: "Enviar revisão" }).click();
+  await expect(revisar).toContainText("Revisão pedida");
+  // No app: as etapas mudam, mas a legenda dela NÃO troca a nossa sozinha: fica pendente para a equipe ver
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.statusConteudo), { timeout: 10000 }).toBe("aprovado");
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pr.ajusteCliente)).toBe("Trocar a foto por uma da fachada");
+  expect(await page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.copy)).toBe("Legenda da equipe");
+  // Quadro "Pendências" no Hoje e número no menu
+  await page.goto("/#/hoje");
+  await expect(page.locator("#menu > a", { hasText: "Hoje" }).locator(".menu-contador")).toHaveText("2");
+  const quadro = page.locator(".numero-pendencias");
+  await expect(quadro.locator("strong")).toHaveText("2");
+  await expect(quadro).toContainText("2 resposta(s) de cliente");
+  await quadro.click();
+  const janela = page.locator(".modal").last();
+  await expect(janela.locator(".item-resposta")).toHaveCount(2);
+  const editado = janela.locator(".item-resposta", { hasText: "Post para editar" });
+  await expect(editado.locator(".comparar-legendas")).toContainText("Legenda da equipe");
+  await expect(editado.locator(".comparar-legendas")).toContainText("Legenda do jeito da cliente");
+  await editado.getByRole("button", { name: "Usar a do cliente" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pe.copy)).toBe("Legenda do jeito da cliente");
+  await expect(janela.locator(".item-resposta")).toHaveCount(1);
+  await expect(janela.locator(".item-resposta")).toContainText("Trocar a foto por uma da fachada");
+  await page.keyboard.press("Escape");
+  // No post: a resposta aparece no topo, com o botão para dar como vista
+  await page.evaluate(async () => { const c = await import("/js/views/componentes.js"); const db = await import("/js/db.js"); c.abrirTarefa(db.porId("tarefas", "pr")); });
+  await expect(page.locator(".modal .resposta-cliente")).toContainText("Pediu revisão");
+  await page.locator(".modal .resposta-cliente").getByRole("button", { name: "Ok, visto" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].pr.respostaCliente ?? null)).toBe(null);
+  const historico = await page.evaluate(() => Object.values(window.__store["espacos/hyper/tarefas/pe/atividade"] || {}).map((a) => a.texto).join("\n"));
+  expect(historico).toContain("Legenda anterior:\nLegenda da equipe");
 });
 
 test("resultados sem a Meta ligada mostram o caminho (em Relatórios, com o cliente)", async ({ page }) => {
@@ -1234,4 +1297,23 @@ test("excluir um post pelo Produzir semana tira do card e do calendário, mesmo 
   await page.locator(".modal").last().getByRole("button", { name: "Confirmar" }).click();
   await expect(page.locator(".chip-conteudo", { hasText: "Post que caiu" })).toHaveCount(0);
   await expect(page.locator(".chip-conteudo", { hasText: "Post que fica" }).first()).toBeVisible();
+});
+
+test("Hoje: quadros Atrasadas, Hoje (para hoje | concluídas), Próximos 7 dias e Pendências com pedido de acesso", async ({ page }) => {
+  await abrir(page, { membros: {
+    hyper: { nome: "Hyper", email: "hyper@x.com", papel: "admin", permissoes: [], status: "ativo" },
+    novo: { nome: "Pessoa Nova", email: "nova@x.com", papel: "basico", permissoes: [], status: "pendente" } } });
+  await page.goto("/#/hoje");
+  const numeros = page.locator(".resumo > .numero");
+  await expect(numeros).toHaveCount(4);
+  await expect(page.locator(".numero-duplo")).toContainText("Para hoje");
+  await expect(page.locator(".numero-duplo")).toContainText("Concluídas hoje");
+  await expect(page.locator(".numero-pendencias strong")).toHaveText("1");
+  await expect(page.locator("#menu > a", { hasText: "Hoje" }).locator(".menu-contador")).toHaveText("1");
+  await page.locator(".numero-pendencias").click();
+  const janela = page.locator(".modal").last();
+  await expect(janela).toContainText("Pedidos de acesso (1)");
+  await expect(janela).toContainText("Pessoa Nova");
+  await janela.getByRole("link", { name: /Liberar em Usuários/ }).click();
+  await expect(page).toHaveURL(/#\/usuarios/);
 });

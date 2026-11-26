@@ -8,6 +8,7 @@ import { conectar, desconectar, aoMudar, pedirAcesso, arquivarAntigas, dados, es
 import { limparCriativosPublicados, indexarArtes } from "./arquivos.js";
 import { aplicarListas } from "./constantes.js";
 import { acompanharRespostas } from "./aprovacoes.js";
+import { contarPendencias } from "./pendencias.js";
 import { avisarAdmins, sincronizarAdmins } from "./emails.js";
 import { avatar, abrirTarefa } from "./views/componentes.js";
 import { el, avisar, hojeISO, quandoErro } from "./ui.js";
@@ -33,7 +34,8 @@ import * as portal from "./views/portal.js";
 // `area`: quem não tem essa área não vê a tela ("admin" = só administradores)
 // `grupo: "admin"`: fica dentro de "Administração" no menu. `menu: false`: tela sem item no menu.
 const ROTAS = {
-  hoje: { titulo: "Hoje", icone: "☀", view: hoje },
+  // O número no Hoje: respostas de clientes (link de aprovação) que a equipe ainda não viu
+  hoje: { titulo: "Hoje", icone: "☀", view: hoje, selo: () => contarPendencias() || "", seloClasse: "menu-contador" },
   // Tarefas e Calendário são uma tela só (visões Calendário, Quadro, Lista e Carga da equipe), com os mesmos filtros
   tarefas: { titulo: "Tarefas", icone: "✓", view: tarefas, estado: "calendario", menu: false },
   calendario: { titulo: "Tarefas", icone: "✓", view: calendario, inclui: ["tarefas"] },
@@ -82,11 +84,12 @@ function rotaAtual() {
 }
 
 
+const seloDe = (r) => (typeof r.selo === "function" ? r.selo() : r.selo);
 let adminAberto = null; // grupo "Administração" aberto/fechado (lembra a escolha)
 function montarMenu() {
   const { nome } = rotaAtual();
   const item = ([chave, r]) => el("a", { href: `#/${chave === "calendario" ? ultimaVisao() : chave}`, class: chave === nome || r.inclui?.includes(nome) ? "ativo" : "" },
-    el("span", { class: "menu-icone", "aria-hidden": "true" }, r.icone), r.titulo, r.selo ? el("small", { class: "menu-selo" }, r.selo) : null);
+    el("span", { class: "menu-icone", "aria-hidden": "true" }, r.icone), r.titulo, seloDe(r) ? el("small", { class: `menu-selo ${r.seloClasse || ""}`, title: r.seloClasse ? "Pendências" : undefined }, seloDe(r)) : null);
   const visiveis = Object.entries(rotas()).filter(([, r]) => liberada(r) && r.menu !== false);
   if (ehCliente()) return $("menu").replaceChildren(...visiveis.map(([chave, r]) => el("a", { href: `#/${chave}`, class: chave === nome ? "ativo" : "" },
     el("span", { class: "menu-icone", "aria-hidden": "true" }, r.icone), r.titulo)));
