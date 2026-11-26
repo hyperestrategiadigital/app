@@ -281,7 +281,7 @@ test("Hoje pessoal, primeiros passos e carga da equipe", async ({ page }) => {
 test("excluir vai para a lixeira e o administrador restaura", async ({ page }) => {
   await abrir(page);
   await page.evaluate(async () => { const db = await import("/js/db.js"); await db.excluir("tarefas", "t1"); });
-  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/lixeira"]?.["tarefas__t1"]?.titulo)).toBe("Revisar campanhas");
+  await expect.poll(() => page.evaluate(() => Object.entries(window.__store["espacos/hyper/lixeira"] || {}).find(([k]) => k.startsWith("tarefas__t1__"))?.[1]?.titulo)).toBe("Revisar campanhas");
   await page.goto("/#/lixeira");
   await page.locator(".linha-tabela", { hasText: "Revisar campanhas" }).getByRole("button", { name: "Restaurar" }).click();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].t1?.titulo)).toBe("Revisar campanhas");
@@ -1190,4 +1190,38 @@ test("tráfego: sem aviso no Hoje (Beta), atraso no cartão e números da Meta n
   await page.goto("/#/relatorios/loja");
   await expect(page.locator("#conteudo h2", { hasText: "Anúncios da Meta" })).toHaveCount(1);
   await expect(page.locator(".numeros-anuncios")).toContainText("Leads");
+});
+
+test("excluir um post pelo Produzir semana tira do card e do calendário, mesmo excluído antes com o mesmo id", async ({ page }) => {
+  await abrir(page, { extra: {
+    tarefas: {
+      prod: { titulo: "Produzir semana — Loja Exemplo", tipo: "Produção", clienteId: "loja", prazo: dia(0), status: "a_fazer", semanaInicio: dia(2), rotina: "producao", checklist: [] },
+      pA: { titulo: "Post que caiu", tipo: "Conteúdo", clienteId: "loja", formato: "Carrossel", rede: "Instagram", dataPublicacao: dia(3), prazo: dia(2), statusConteudo: "ideia", status: "a_fazer", checklist: [] },
+      pB: { titulo: "Post que fica", tipo: "Conteúdo", clienteId: "loja", formato: "Estático", rede: "Instagram", dataPublicacao: dia(4), prazo: dia(3), statusConteudo: "ideia", status: "a_fazer", checklist: [] }
+    },
+    // cópia antiga do mesmo post na lixeira (ele foi excluído e voltou com o mesmo id)
+    lixeira: { "tarefas__pA": { colecao: "tarefas", idOriginal: "pA", dados: { titulo: "Post que caiu" }, clienteId: "loja", titulo: "Post que caiu", excluidoEm: 1, excluidoPorUid: "x" } }
+  } });
+  await page.goto("/#/tarefas");
+  await page.locator(".visoes-tarefas").getByRole("tab", { name: /Quadro/ }).click();
+  await page.locator(".cartao-tarefa", { hasText: "Produzir semana" }).click();
+  await expect(page.locator(".checklist-producao li")).toHaveCount(2);
+  await page.locator(".item-producao", { hasText: "Post que caiu" }).click();
+  await page.locator(".modal").last().getByRole("button", { name: "Excluir" }).click();
+  await page.locator(".modal").last().getByRole("button", { name: "Confirmar" }).click();
+  await expect.poll(() => page.evaluate(() => !!window.__store["espacos/hyper/tarefas"].pA)).toBe(false);
+  // a cópia antiga continua; a nova tem nome próprio
+  const copias = await page.evaluate(() => Object.keys(window.__store["espacos/hyper/lixeira"]).filter((k) => k.startsWith("tarefas__pA")));
+  expect(copias.length).toBe(2);
+  // Desfazer devolve o post e tira só a cópia nova
+  await page.locator(".aviso").getByRole("button", { name: "Desfazer" }).click();
+  await expect.poll(() => page.evaluate(() => !!window.__store["espacos/hyper/tarefas"].pA)).toBe(true);
+  await expect.poll(() => page.evaluate(() => Object.keys(window.__store["espacos/hyper/lixeira"]).filter((k) => k.startsWith("tarefas__pA")))).toEqual(["tarefas__pA"]);
+  // No calendário (no mês do post), excluir de novo também tira de lá
+  await page.goto(`/#/calendario/loja/${dia(3).slice(0, 7)}`);
+  await page.locator(".chip-conteudo", { hasText: "Post que caiu" }).first().click();
+  await page.locator(".modal").last().getByRole("button", { name: "Excluir" }).click();
+  await page.locator(".modal").last().getByRole("button", { name: "Confirmar" }).click();
+  await expect(page.locator(".chip-conteudo", { hasText: "Post que caiu" })).toHaveCount(0);
+  await expect(page.locator(".chip-conteudo", { hasText: "Post que fica" }).first()).toBeVisible();
 });

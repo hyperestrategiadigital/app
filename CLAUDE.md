@@ -18,7 +18,7 @@ Toda interface deste repositório segue `docs/identidade-visual.md`.
 - Convites em `convites/{email em minúsculas}`; pedidos em `membros/{uid}.pedido`. A própria pessoa só muda `nome`, `foto` e `pedido` (Minha conta, `views/conta.js`).
 - E-mails: `emails.js` + Apps Script (`docs/email/Codigo.gs`). Só administradores enviam (precisam do segredo em `config/email`); sem segredo o script só avisa os administradores. As cores da marca vão escritas em `emails.js` porque e-mail não aceita variáveis de CSS.
 - Conexões pessoais (e-mail da agenda, Facebook/Instagram) ficam em Minha conta, não em Ajustes. Tokens (Google, Meta) nunca vão para o banco.
-- Excluir sempre por `excluir()` de `db.js`: nas coleções de `COM_LIXEIRA` guarda uma cópia na `lixeira` (30 dias). Para mover dados (não é exclusão de verdade), use `{ lixeira: false }`. O desfazer usa `desfazerExclusao()`.
+- Excluir sempre por `excluir()` de `db.js`: nas coleções de `COM_LIXEIRA` guarda uma cópia na `lixeira` (30 dias), com nome único por exclusão (`<col>__<id>__<hora>`): as regras só deixam criar na lixeira, e um nome fixo travava a exclusão de item recriado com o mesmo id. Para mover dados (não é exclusão de verdade), use `{ lixeira: false }`. O desfazer usa `desfazerExclusao()`.
 - Mudanças relevantes em tarefas entram no histórico (`registrarAtividade`); comentários ficam em `tarefas/{id}/atividade`.
 - Erros mostrados com `avisar(..., "erro")` e erros não tratados vão para `erros` (Ajustes → Erros recentes).
 - Aprovação do cliente: `aprovacoes/{token}` (público por token, expira) e `aprovar.html` + `js/aprovar.js` (sem login). Nunca coloque valores de contrato ou dados internos na fotografia do link.
