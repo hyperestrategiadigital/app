@@ -7,7 +7,10 @@ import { metaDisponivel, metaConectada, conectarMeta, anuncios, somarAnuncios } 
 
 /** Dias sem manutenção para virar aviso (no Hoje e no cartão do cliente). */
 export const DIAS_MANUTENCAO = 7;
-/** Clientes ativos com conta de anúncio ativa e sem manutenção há mais de DIAS_MANUTENCAO dias: [{ c, dias }] (dias null = nunca). */
+/**
+ * Clientes ativos com conta de anúncio ativa e sem manutenção há mais de DIAS_MANUTENCAO dias: [{ c, dias }] (dias null = nunca).
+ * O aviso no Hoje saiu por enquanto (Tráfego em Beta); a função fica pronta para quando voltar (docs/proximos-passos.md).
+ */
 export function manutencoesAtrasadas() {
   const ids = new Set(dados.contasAds.filter((x) => x.ativo !== false).map((x) => x.clienteId));
   return clientesAtivos().filter((c) => ids.has(c.id)).map((c) => {

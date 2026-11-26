@@ -1158,7 +1158,7 @@ test("criativos: o post guarda os ids e abre só os dele; posts antigos são ind
   expect(r.antigo).toEqual(["arte-antiga"]);
 });
 
-test("tráfego: aviso de manutenção atrasada no Hoje e números da Meta no cartão e nos Relatórios", async ({ page }) => {
+test("tráfego: sem aviso no Hoje (Beta), atraso no cartão e números da Meta no cartão e nos Relatórios", async ({ page }) => {
   // Facebook já conectado neste navegador e a Graph API simulada (cada campo pedido separado)
   await page.addInitScript(() => sessionStorage.setItem("hyper-meta", JSON.stringify({ token: "t", nome: "Teste", expira: Date.now() + 3600000 })));
   await abrir(page, { extra: {
@@ -1176,9 +1176,11 @@ test("tráfego: aviso de manutenção atrasada no Hoje e números da Meta no car
     return route.fulfill({ json: { data: [{ [campo]: valores[campo] }] } });
   });
   await page.goto("/#/hoje");
-  await expect(page.locator(".faixa-alerta", { hasText: "Manutenção de tráfego atrasada" })).toContainText("Loja Exemplo (nunca)");
+  await expect(page.locator("#conteudo")).toContainText("Hoje");
+  await expect(page.locator(".faixa-alerta", { hasText: "tráfego" })).toHaveCount(0); // aviso desligado enquanto o Tráfego está em Beta
 
   await page.goto("/#/trafego");
+  await expect(page.locator(".cartao-cliente", { hasText: "Loja Exemplo" }).locator(".ultima-manutencao.alerta")).toHaveText("Nenhuma manutenção registrada");
   const numeros = page.locator(".cartao-cliente", { hasText: "Loja Exemplo" }).locator(".numeros-anuncios");
   await expect(numeros).toContainText("R$ 1.000,00");
   await expect(numeros.locator(".numero-anuncio", { hasText: "Custo por lead" })).toContainText("R$ 20,00");
