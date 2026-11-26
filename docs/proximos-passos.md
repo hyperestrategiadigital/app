@@ -18,9 +18,10 @@ O repositório é público: nada de nomes de clientes, valores ou dados internos
 
 ## Tráfego pago (em Beta)
 
-Feito em 26/11/2026: números dos anúncios da Meta (investido, leads, custo por lead, conversas, alcance, cliques) no cartão do cliente e nos Relatórios; aviso de manutenção atrasada no Hoje.
+Feito em 26/11/2026: números dos anúncios da Meta (investido, leads, custo por lead, conversas, alcance, cliques) no cartão do cliente e nos Relatórios.
 Para tirar o Beta:
 - Matheus acrescentar `ads_read` na configuração do Login para Empresas do app da Meta e conferir os números com o Gerenciador de Anúncios.
+- **Voltar o aviso de manutenção atrasada no Hoje** (feito e tirado em 26/11/2026 a pedido do Matheus: incomodava enquanto o tráfego está em Beta). A função `manutencoesAtrasadas()` está pronta em `views/trafego.js`; o aviso era uma faixa no Hoje, só para quem é do tráfego, com os clientes sem manutenção há mais de 7 dias. Pensar em ligar por pessoa (quem cuida do tráfego) ou só para o responsável da conta.
 - Levar os números dos anúncios para o PDF do relatório.
 - Escolher o período nos cartões (hoje fixo em 30 dias) e ver por campanha.
 - Depois: Google Ads (API exige conta de desenvolvedor aprovada; ver custo e prazo antes).
@@ -47,10 +48,11 @@ Saíram em 11/2026 para o app ficar enxuto. Não trazer de volta sem pedido.
 
 - Dar à conta de serviço do GitHub os papéis "Administrador do Firebase Rules" e "Consumidor do Service Usage", para o deploy publicar as regras sozinho (hoje as regras são coladas no console).
 - Confirmar qual banco do Firestore está em uso (`(default)` aparece em Ajustes → Backup).
-- Atualizar o Apps Script com a versão de `docs/email/Codigo.gs` quando ele mudar.
+- Atualizar o Apps Script com a versão de `docs/email/Codigo.gs` quando ele mudar (última mudança: 25/11/2026, backup com as campanhas).
+- Meta: `ads_read` na configuração do Login para Empresas (feito pelo Matheus em 26/11/2026).
 
 ## Feito
 
 - 11/2026: IA só para copy; datas comemorativas por marca; campanhas; escopo; importação de briefing na marca.
-- 26/11/2026 (PR #45, revisão): criativos lidos por id do post (sem baixar as imagens do cliente inteiro); importação do planejamento sem duplicar; aba Marca em quadros; etiqueta com ✕ para cada filtro; aviso no portal no lugar da arte apagada; números de anúncios da Meta e aviso de manutenção atrasada.
+- 26/11/2026 (PR #45, revisão): criativos lidos por id do post (sem baixar as imagens do cliente inteiro); importação do planejamento sem duplicar; aba Marca em quadros; etiqueta com ✕ para cada filtro; aviso no portal no lugar da arte apagada; números de anúncios da Meta.
 - 26/11/2026 (PR #45): importação de planejamento; Ajustes recolhíveis; faxina das imagens de posts publicados (7 dias); + Novo no Hoje e no celular; filtros de Tarefas; cadastro na aba Marca; ficha enxuta; Relatórios no menu com resultados da Meta; Tráfego pago em Beta.
