@@ -2,7 +2,7 @@
 // depois a pessoa cola a resposta e o app distribui pelos campos. É o único uso de IA na plataforma:
 // o app não chama nenhuma IA, só monta o pedido.
 import { el, avisar, abrirModal } from "../ui.js";
-import { identidade } from "../db.js";
+import { identidade, porId } from "../db.js";
 import { montarPedido, completudeMarca, lerResposta, IAS, iaPreferida, guardarIaPreferida, levarParaIA, tipoDoPedido } from "../ia.js";
 
 /** Barra "Ficha da marca 70%" com o que falta. */
@@ -47,8 +47,11 @@ export function abrirAssistenteIA({ ctx, aoUsar = null, titulo = "Criar copy" })
   }));
   atualizarBotaoIA();
 
-  const semBriefing = ctx.post && !(tipo === "texto" ? ctx.post.notas : ctx.post.roteiro || (ctx.post.videoGravado && ctx.post.transcricao))
-    ? el("p", { class: "faixa-alerta" }, "Sem briefing: a IA vai usar só o tema e a marca. Para um resultado melhor, preencha o briefing (ou use \"Montar briefing\").") : null;
+  const campanha = ctx.post?.campanhaId && porId("campanhas", ctx.post.campanhaId);
+  const semBriefing = campanha
+    ? el("p", { class: "faixa-info" }, `◆ Vai junto o briefing da campanha "${campanha.nome}".${ctx.post.roteiro ? " O briefing do post entra como o detalhe desta peça." : " Sem briefing próprio, a IA segue a campanha pelo tema do post."}`)
+    : ctx.post && !(tipo === "texto" ? ctx.post.notas : ctx.post.roteiro || (ctx.post.videoGravado && ctx.post.transcricao))
+      ? el("p", { class: "faixa-alerta" }, "Sem briefing: a IA vai usar só o tema e a marca. Para um resultado melhor, preencha o briefing (ou use \"Montar briefing\").") : null;
 
   const fechar = abrirModal(`${titulo}${nomeMarca ? ` · ${nomeMarca}` : ""}`, el("div", { class: "assistente-ia" },
     medidorMarca(ctx.clienteId, ctx.marcaId),

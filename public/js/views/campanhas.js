@@ -22,6 +22,7 @@ export async function abrirCampanha(campanha) {
     { nome: "objetivo", rotulo: "Objetivo", dica: "Ex.: aumentar as encomendas de cestas de Natal" },
     { nome: "mensagem", rotulo: "Mensagem central", tipo: "textarea", linhas: 2, dica: "A ideia que todas as peças reforçam" },
     { nome: "condicoes", rotulo: "Condições comerciais", tipo: "textarea", linhas: 2, dica: "Preços, prazos, cupons, regras. Vão exatamente assim para a copy." },
+    { nome: "chamada", rotulo: "Chamada e link", dica: "O que a pessoa deve fazer e onde. Ex.: Garanta sua vaga pelo link da bio / WhatsApp (11) 99999-9999" },
     { nome: "briefing", rotulo: "Briefing da campanha", tipo: "textarea", linhas: 5, dica: "Contexto, público, referências, o que evitar nesta campanha" },
     { nome: "ativa", rotulo: "Campanha ativa (aparece para escolher nos posts)", tipo: "checkbox", padrao: true }
   ].filter(Boolean), { ativa: true, ...campanha }, {
@@ -64,7 +65,7 @@ export function abaCampanhas(c, marca) {
   };
   return el("div", { class: "aba-campanhas" },
     el("div", { class: "com-acao" },
-      el("p", { class: "subtitulo" }, "Uma campanha junta as peças de um mesmo objetivo. O briefing, a mensagem e as condições vão junto no pedido de copy de cada peça."),
+      el("p", { class: "subtitulo" }, "Uma campanha junta as peças de um mesmo objetivo. Preencha o briefing uma vez aqui: em cada post da campanha ele já vai junto no pedido de copy, e no post você só escreve o que é específico dele."),
       el("button", { onClick: () => abrirCampanha({ clienteId: c.id, marcaId: marca?.id || "", inicio: hoje }) }, "+ Campanha")),
     ativas.length ? ativas.map(cartao) : vazio("Nenhuma campanha em andamento."),
     antigas.length ? el("details", {}, el("summary", {}, `Campanhas encerradas (${antigas.length})`), antigas.map(cartao)) : null);
