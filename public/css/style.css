@@ -1040,4 +1040,4 @@ details.quadro-marca .cadastro-cliente { border-bottom: 0; margin-bottom: 0; pad
 .numero-anuncio { display: flex; flex-direction: column; }
 .numero-anuncio strong { font-size: 16px; color: var(--cor-texto); }
 .numero-anuncio span { font-size: 11px; color: var(--cor-texto-suave); }
-.form-nota { grid-column: 1 / -1; margin: 0; }
+.form-nota { grid-column: 1 / -1; margin: 0; padding: 10px 14px; border-radius: var(--raio-pequeno); font-size: 14px; background: var(--cor-primaria-clara); color: var(--hyper-roxo); }
