@@ -54,7 +54,6 @@ beforeEach(async () => {
     await setDoc(doc(db, `${E}/manutencoes/x1`), { acoes: "ajuste" });
     await setDoc(doc(db, `${E}/config/openai`), { chave: "sk-teste" });
     await setDoc(doc(db, `${E}/config/equipe`), { pessoas: [] });
-    await setDoc(doc(db, `${E}/config/datas`), { lista: [] });
     await setDoc(doc(db, `${E}/campanhas/k1`), { nome: "Natal", clienteId: "c1", condicoes: "10% no Pix" });
     await setDoc(doc(db, `${E}/config/comercial`), { reserva: 30, despesasFixas: [{ descricao: "Canva", valor: 35 }] });
     await setDoc(doc(db, `${E}/recorrencias/r1`), { modelo: "livre" });
@@ -301,7 +300,6 @@ test("cliente: vê só os posts, a marca e o cadastro dele; nada da equipe", asy
   await assertSucceeds(ler("cli", `${E}/config/meta`));
   await assertSucceeds(ler("cli", `${E}/config/listas`));
   await assertSucceeds(ler("cli", `${E}/config/manual`));
-  await assertSucceeds(ler("cli", `${E}/config/datas`));
   await assertFails(ler("cli", `${E}/campanhas/k1`)); // campanha pode ter condições internas
   await assertFails(gravar("cli", `${E}/clientes/c1`, { nome: "Mudei" }));
   await assertFails(gravar("cli", `${E}/marcas/m1`, { tomDeVoz: "Mudei" }));

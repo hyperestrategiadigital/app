@@ -8,6 +8,7 @@ import { ehAdmin, pode } from "../permissoes.js";
 import { caminhoArtes, comprimirImagem } from "../arquivos.js";
 import { CAMPOS_REDES } from "../constantes.js";
 import { ajustesPedidos } from "../ia.js";
+import { quandoDoTexto, quandoParaTela } from "../datas.js";
 import { medidorMarca } from "./assistenteIA.js";
 
 // Texto digitado e ainda não salvo sobrevive às atualizações de tela
@@ -58,6 +59,34 @@ function campoTexto(alvo, campo, rotulo, dica, linhas = 4) {
     el("div", { class: "com-acao" }, el("h3", {}, rotulo),
       el("div", { class: "tela-acoes" }, botao)),
     area);
+}
+
+/**
+ * Datas comemorativas da marca (aniversário, Dia do Queijo, Semana da Segurança…): aparecem no calendário e no
+ * planejamento do mês, e vão para o pedido de copy dos posts perto delas. Feriados nacionais o app já tem.
+ * Na marca de um grupo, vazio = usa as do grupo.
+ */
+function campoDatas(alvo) {
+  const lista = [...(alvo.obj.datas || [])];
+  const herdadas = !lista.length && alvo.herda?.datas?.length ? alvo.herda.datas : null;
+  const nome = el("input", { type: "text", placeholder: "Ex.: Aniversário da loja", "aria-label": "Nome da data", id: "marca-data-nome" });
+  const quando = el("input", { type: "text", placeholder: "DD/MM, MM ou DD/MM/AAAA", "aria-label": "Quando", id: "marca-data-quando" });
+  const salvar = (nova) => gravar(alvo, { datas: nova });
+  const ordem = (d) => (d.quando.length === 2 ? `${d.quando}-00` : d.quando.slice(-5));
+  return el("div", { class: "campo-marca datas-marca" },
+    el("h3", {}, "Datas comemorativas da marca"),
+    el("p", { class: "subtitulo" }, "As que esta marca celebra. Aparecem no calendário e no planejamento do mês e vão para o pedido de copy dos posts perto delas. Feriados nacionais e datas como Dia das Mães o app já conhece."),
+    herdadas ? el("p", { class: "nota" }, `Vazio: usa as do grupo (${herdadas.map((d) => d.nome).join(", ")}).`) : null,
+    lista.length ? el("ul", { class: "lista-editavel" }, [...lista].sort((a, b) => ordem(a).localeCompare(ordem(b))).map((d) => el("li", {},
+      el("span", { class: "lista-editavel-nome" }, el("strong", {}, quandoParaTela(d.quando)), ` · ${d.nome}${d.quando.length === 2 ? " (o mês todo)" : ""}`),
+      el("button", { class: "icone", "aria-label": `Tirar ${d.nome}`, onClick: async () => { await salvar(lista.filter((x) => x !== d)); avisar("Data tirada."); } }, "✕")))) : null,
+    el("div", { class: "linha-data-marca" }, quando, nome,
+      el("button", { class: "secundario mini", onClick: async () => {
+        const q = quandoDoTexto(quando.value);
+        if (!q || !nome.value.trim()) { avisar("Preencha a data (DD/MM, MM para o mês todo ou DD/MM/AAAA) e o nome.", "erro"); return; }
+        await salvar([...lista, { quando: q, nome: nome.value.trim() }]);
+        avisar("Data adicionada.");
+      } }, "+ Data")));
 }
 
 /** Logo da marca (imagem pequena guardada na própria marca; os arquivos originais ficam na pasta do Drive). */
@@ -340,6 +369,7 @@ export function abaMarca(c, estado = {}, renderizar = () => {}) {
     campoTexto(alvo, "palavrasChave", "Palavras e expressões da marca", "Termos que a marca usa e quer ver nos textos. Ex.: \"comunidade\", \"treino inteligente\", o nome dos planos.", 2),
     campoTexto(alvo, "evitar", "O que evitar", "Palavras, assuntos e jeitos de falar que a marca não usa. Ex.: gírias, \"barato\", promessas de resultado, comparar com concorrente.", 3),
     campoTexto(alvo, "pilares", "Pilares de conteúdo", "Um por linha. Ex.: Educativo, Bastidores, Prova social, Oferta. Cada post escolhe um pilar, e o calendário mostra se o mês está equilibrado.", 4),
+    campoDatas(alvo),
     campoTexto(alvo, "diretrizes", "Diretrizes de conteúdo",
       "Linha editorial de cada pilar, estrutura das legendas, CTAs, rodapé padrão, hashtags, emojis e séries fixas. Uma regra que vale só para um formato começa com ele entre colchetes, ex.: \"[Vídeo] capa só com o título\" ou \"[E-mail marketing] assinar como equipe\": ela só vai no pedido desse formato.", 8));
 }

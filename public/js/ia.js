@@ -5,6 +5,7 @@
 import { dados, porId, identidade, marcasDo } from "./db.js";
 import { TIPO_CONTEUDO, rotuloObjetivo } from "./constantes.js";
 import { MANUAL_PADRAO } from "./manual.js";
+import { datasEntre } from "./datas.js";
 
 /* ---------------- Básicos ---------------- */
 
@@ -20,57 +21,14 @@ const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0
 const somar = (data, n) => { const d = new Date(`${data}T12:00:00`); d.setDate(d.getDate() + n); return iso(d); };
 const corta = (t, n) => { const s = String(t || "").trim(); return s.length > n ? `${s.slice(0, n).trim()}…` : s; };
 
-/* ---------------- Datas comemorativas ---------------- */
+/* ---------------- Datas comemorativas (datas.js) ---------------- */
 
-function pascoa(ano) {
-  const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
-  return iso(new Date(ano, mes - 1, dia));
-}
-const nDomingo = (ano, mes, n) => { const d = new Date(ano, mes - 1, 1); const primeiro = 1 + ((7 - d.getDay()) % 7); return iso(new Date(ano, mes - 1, primeiro + 7 * (n - 1))); };
-/** Datas comemorativas comuns no marketing brasileiro. */
-export function datasComemorativas(ano) {
-  const fixas = { "01-01": "Ano Novo", "03-08": "Dia Internacional da Mulher", "03-15": "Dia do Consumidor", "04-07": "Dia Mundial da Saúde",
-    "04-28": "Dia Mundial da Segurança e Saúde no Trabalho", "05-01": "Dia do Trabalhador", "06-12": "Dia dos Namorados", "06-24": "São João",
-    "09-07": "Independência do Brasil", "09-15": "Dia do Cliente", "10-12": "Dia das Crianças", "10-15": "Dia do Professor",
-    "10-18": "Dia Mundial da Menopausa", "11-20": "Dia da Consciência Negra", "12-25": "Natal", "12-31": "Réveillon" };
-  const r = Object.fromEntries(Object.entries(fixas).map(([md, nome]) => [`${ano}-${md}`, nome]));
-  const p = pascoa(ano);
-  r[p] = "Páscoa"; r[somar(p, -47)] = "Carnaval";
-  r[nDomingo(ano, 5, 2)] = "Dia das Mães"; r[nDomingo(ano, 8, 2)] = "Dia dos Pais";
-  const nov = new Date(ano, 10, 1); const quinta = 1 + ((4 - nov.getDay() + 7) % 7) + 21;
-  r[iso(new Date(ano, 10, quinta + 1))] = "Black Friday";
-  return r;
-}
-/** Campanhas que duram o mês todo (valem para qualquer post do mês). */
-const MESES_TEMA = { "01": "Janeiro Branco (saúde mental)", "04": "Abril Verde (segurança no trabalho)", "05": "Maio, mês das noivas",
-  "09": "Setembro Amarelo (prevenção do suicídio)", "10": "Outubro Rosa", "11": "Novembro Azul e Black November" };
-
-/**
- * Datas de Ajustes → Datas comemorativas (config/datas): { quando: "MM-DD" | "MM" (o mês todo) | "AAAA-MM-DD", nome, contas: [ids] }.
- * Sem contas = vale para todas as marcas; com contas = só para essas (id do cliente ou da marca).
- */
-export const datasDaHyper = () => (dados.config.find((c) => c.id === "datas")?.lista || []).filter((d) => d?.nome && d?.quando);
-const valeParaConta = (d, clienteId, marcaId) => !(d.contas || []).length || d.contas.includes(marcaId || clienteId) || d.contas.includes(clienteId);
-
-/** Datas comemorativas de `data` até `dias` depois, mais as do mês todo; as de Ajustes só para as marcas escolhidas. */
+/** Feriados, datas comerciais e as datas da marca de `data` até `dias` depois, mais as do mês todo. */
 export function datasPerto(data, dias = 3, clienteId = "", marcaId = "") {
   if (!data) return [];
-  const ano = Number(data.slice(0, 4));
-  const todas = { ...datasComemorativas(ano), ...datasComemorativas(ano + 1) };
-  const r = Object.entries(todas).filter(([d]) => d >= data && d <= somar(data, dias)).map(([d, nome]) => ({ data: d, nome }));
-  const mes = data.slice(5, 7);
-  if (MESES_TEMA[mes]) r.push({ data: "", nome: MESES_TEMA[mes] });
-  for (const d of datasDaHyper()) {
-    if (!valeParaConta(d, clienteId, marcaId)) continue;
-    const q = String(d.quando).trim();
-    if (/^\d{2}$/.test(q)) { if (q === mes) r.push({ data: "", nome: d.nome }); continue; }
-    const dia = /^\d{2}-\d{2}$/.test(q) ? [`${ano}-${q}`, `${ano + 1}-${q}`] : [q];
-    for (const x of dia) if (x >= data && x <= somar(data, dias)) r.push({ data: x, nome: d.nome });
-  }
-  return r.sort((a, b) => (a.data || "0").localeCompare(b.data || "0"));
+  const doMes = datasEntre(`${data.slice(0, 7)}-01`, `${data.slice(0, 7)}-28`, { clienteId, marcaId: marcaId || "" }).filter((d) => d.tipo === "mes");
+  const perto = datasEntre(data, somar(data, dias), { clienteId, marcaId: marcaId || "" }).filter((d) => d.tipo !== "mes");
+  return [...perto, ...doMes.map((d) => ({ ...d, data: "" }))];
 }
 
 /* ---------------- Exemplos e completude ---------------- */

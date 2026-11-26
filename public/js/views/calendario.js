@@ -5,6 +5,7 @@ import { gerarLinkAprovacao, seloResposta } from "../aprovacoes.js";
 import { el, hojeISO, addDias, fmtData, vazio, formulario, dataDe, avisar, normalizar } from "../ui.js";
 import { dados, marcasDo, porId, opcoesClientes, nomeCliente, atualizar, registrarAtividade, identidade } from "../db.js";
 import { pilaresDe } from "../ia.js";
+import { datasEntre } from "../datas.js";
 import { cabecalho, abas, seloCliente, abrirTarefa, corCliente, corDoItem, nomeComMarca, mudarEtapa, proximaEtapa, visoesTarefas, seletorResponsavel, atrasada } from "./componentes.js";
 import { STATUS_CONTEUDO, rotuloStatusConteudo, TIPO_CONTEUDO } from "../constantes.js";
 import { dataPost, exportarPDF, nomeMes } from "../exportacao.js";
@@ -227,6 +228,15 @@ export function render({ params, estado, renderizar }) {
     semPilar ? el("span", { class: "subtitulo" }, `${semPilar} sem pilar`) : null) : null;
 
   const [ini, fimP] = [`${estado.mes}-01`, addDias(`${estado.mes}-01`, 41)];
+  // Feriados sempre; com um cliente filtrado, também as datas comerciais e as da marca (aba Marca)
+  const datasPeriodo = datasEntre(addDias(ini, -7), fimP, { clienteId: estado.cliente || "", marcaId: estado.cliente ? (estado.marca ?? undefined) : "", comerciais: !!estado.cliente });
+  const datasDoDia = (d) => datasPeriodo.filter((x) => x.data === d && x.tipo !== "mes");
+  const temasDoMes = datasPeriodo.filter((x) => x.tipo === "mes" && x.data.startsWith(estado.mes));
+  const seloData = (x) => el("span", { class: `data-cal ${x.tipo}`, title: x.tipo === "feriado" ? "Feriado" : x.tipo === "marca" ? "Data da marca" : "Data comemorativa" }, x.nome);
+  const datasDoMes = datasPeriodo.filter((x) => x.data.startsWith(estado.mes));
+  const faixaDatas = datasDoMes.length ? el("div", { class: "datas-do-mes", "aria-label": "Datas do mês" },
+    el("strong", {}, "Datas do mês:"),
+    datasDoMes.map((x) => el("span", { class: `data-cal ${x.tipo}` }, x.tipo === "mes" ? `${x.nome} (o mês todo)` : `${fmtData(x.data, true)} ${x.nome}`))) : null;
   const compromissosDoPeriodo = compromissosEntre(addDias(ini, -7), fimP)
     .filter((x) => (!estado.cliente || x.c.clienteId === estado.cliente) && (!busca || normalizar(x.c.titulo || "").includes(busca)));
 
@@ -252,7 +262,7 @@ export function render({ params, estado, renderizar }) {
             : estado.camada === "conteudo" ? novoPost({ data: d, clienteId: estado.cliente || "", marcaId: estado.marca || "" })
             : estado.camada === "tarefas" ? abrirTarefa({ prazo: d, clienteId: estado.cliente || "" }) : escolherNoDia(d, estado.cliente || ""),
           title: "Clique para criar neste dia"
-        }, el("span", { class: "cal-num" }, Number(d.slice(8))), comps.map(chipCompromisso), doDia.map(chip), tarefasDia.map(chipTarefa));
+        }, el("span", { class: "cal-num" }, Number(d.slice(8))), datasDoDia(d).map(seloData), comps.map(chipCompromisso), doDia.map(chip), tarefasDia.map(chipTarefa));
       }));
   } else {
     const itens = [
@@ -289,6 +299,6 @@ export function render({ params, estado, renderizar }) {
   return el("div", { class: "tela tela-tarefas" },
     ...topo,
     verCompromissos ? avisoPendentes() : null,
-    verPosts ? legenda : null, verPosts ? resumoPilares : null, corpo,
+    verPosts ? legenda : null, verPosts ? resumoPilares : null, faixaDatas, corpo,
     el("p", { class: "nota" }, "Posts aparecem no dia da publicação e as outras tarefas (○) no dia do prazo. Compromissos (◷) são reuniões, gravações e visitas: só eles vão para a Google Agenda. Planejar, link de aprovação e PDF ficam em Ações do mês."));
 }

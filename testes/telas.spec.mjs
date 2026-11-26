@@ -1083,17 +1083,23 @@ test("escopo do cliente, datas comemorativas da Hyper e espaço dos criativos", 
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.escopo?.at(-1))).toMatchObject({ servico: "Social media", frequencia: "Semanal", quantidade: "2", quem: "Hyper" });
   expect(await page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.servicos)).toContain("Social media");
 
-  await page.goto("/#/config");
-  await page.getByRole("button", { name: "+ Data" }).click();
-  await page.fill("#f-nome", "Dia do Queijo");
-  await page.fill("#f-quando", "20/01");
-  await page.locator(".modal .chip-check", { hasText: "Loja Exemplo" }).locator("input").check();
-  await page.click(".modal button[type=submit]");
-  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/config"]?.datas?.lista?.[0])).toMatchObject({ nome: "Dia do Queijo", quando: "01-20", contas: ["loja"] });
+  // Datas comemorativas ficam na marca; feriados aparecem no calendário de todos
+  await page.getByRole("tab", { name: "Marca" }).click();
+  await page.fill("#marca-data-quando", "20/01");
+  await page.fill("#marca-data-nome", "Dia do Queijo");
+  await page.locator(".datas-marca").getByRole("button", { name: "+ Data" }).click();
+  await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/clientes"].loja.datas)).toEqual([{ quando: "01-20", nome: "Dia do Queijo" }]);
   const datas = await page.evaluate(async () => { const ia = await import("/js/ia.js"); return [ia.datasPerto("2027-01-18", 3, "loja", "").map((d) => d.nome), ia.datasPerto("2027-01-18", 3, "grupo", "").map((d) => d.nome)]; });
   expect(datas[0]).toContain("Dia do Queijo");
   expect(datas[0]).toContain("Janeiro Branco (saúde mental)");
   expect(datas[1]).not.toContain("Dia do Queijo");
+  await page.goto("/#/calendario/loja/2027-01");
+  await expect(page.locator(".datas-do-mes")).toContainText("Dia do Queijo");
+  await expect(page.locator(".cal-dia .data-cal.feriado", { hasText: "Confraternização Universal" })).toHaveCount(1);
+  await page.goto("/#/calendario/loja/2027-01/planejar");
+  await expect(page.locator(".plano-dia .data-cal.marca", { hasText: "Dia do Queijo" })).toHaveCount(1);
+  await page.goto("/#/config");
+  await expect(page.locator("#conteudo h2", { hasText: "Datas comemorativas" })).toHaveCount(0);
   await page.getByRole("button", { name: "Ver o espaço dos criativos" }).click();
   await expect(page.locator("#conteudo")).toContainText("do plano gratuito");
 });
@@ -1115,4 +1121,5 @@ test("aprovação de tema: ideia aprovada pelo link vai para a produção", asyn
   await page.reload();
   await expect.poll(() => page.evaluate(() => window.__store["espacos/hyper/tarefas"].id1.statusConteudo), { timeout: 10000 }).toBe("producao");
 });
+
 

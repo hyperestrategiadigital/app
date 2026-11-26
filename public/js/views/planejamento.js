@@ -4,6 +4,7 @@ import { el, hojeISO, addDias, dataDe, fmtDiaSemana, fmtData, avisar, abrirModal
 import { porId, criar, atualizar, excluir, clientesAtivos, marcasDo } from "../db.js";
 import { cabecalho, abas, modeloChecklist } from "./componentes.js";
 import { responsavelPadrao } from "../agenda.js";
+import { datasEntre } from "../datas.js";
 import { FORMATOS, formatoAtual, prazoDoPost, REDES, STATUS_CONTEUDO, TIPO_CONTEUDO, DIAS_SEMANA, rotuloStatusConteudo, statusDaEtapa, OBJETIVOS, rotuloObjetivo } from "../constantes.js";
 import { postsDoMes, dataPost, exportarPDF, nomeMes, temPrefixo } from "../exportacao.js";
 import { corCliente } from "./calendario.js";
@@ -303,6 +304,9 @@ function calendarioPlano({ estado, mes, cliente, renderizar, marcar }) {
   const dias = Array.from({ length: 42 }, (_, i) => addDias(inicio, i));
   const semanas = dias[35].slice(0, 7) === mes ? 6 : 5;
   const hoje = hojeISO();
+  // Feriados, datas comerciais e as datas das marcas do cliente (aba Marca): para planejar em cima delas
+  const datas = datasEntre(dias[0], dias[semanas * 7 - 1], { clienteId: estado.clienteId });
+  const datasDoMes = datas.filter((x) => x.data.startsWith(mes));
 
   const celula = (d) => {
     const doMes = d.startsWith(mes);
@@ -331,6 +335,7 @@ function calendarioPlano({ estado, mes, cliente, renderizar, marcar }) {
       } : undefined
     },
     el("div", { class: "plano-data" }, el("strong", {}, Number(d.slice(8))), el("span", {}, `/${d.slice(5, 7)}`)),
+    datas.filter((x) => x.data === d && x.tipo !== "mes").map((x) => el("span", { class: `data-cal ${x.tipo}`, title: x.nome }, x.nome)),
     doDia.map((l) => {
       const marcaL = porId("marcas", l.marcaId);
       const chip = el("button", {
@@ -347,6 +352,8 @@ function calendarioPlano({ estado, mes, cliente, renderizar, marcar }) {
   };
 
   return el("div", { class: "bloco plano-calendario", style: { "--selo": cliente.paleta?.[0] || cliente.cor || "#4E2CA3" } },
+    datasDoMes.length ? el("div", { class: "datas-do-mes", "aria-label": "Datas do mês" }, el("strong", {}, "Datas do mês:"),
+      datasDoMes.map((x) => el("span", { class: `data-cal ${x.tipo}` }, x.tipo === "mes" ? `${x.nome} (o mês todo)` : `${fmtData(x.data, true)} ${x.nome}`))) : null,
     el("div", { class: "plano-grade" },
       ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"].map((n) => el("div", { class: "plano-cabeca" }, n)),
       dias.slice(0, semanas * 7).map(celula)),

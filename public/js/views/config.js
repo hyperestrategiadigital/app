@@ -1,5 +1,5 @@
 // Ajustes (só administradores): e-mails automáticos, Meta, importação dos arquivos do Claude e backup.
-import { el, formulario, confirmar, avisar, abrirModal, hojeISO, vazio, normalizar, baixar } from "../ui.js";
+import { el, confirmar, avisar, abrirModal, hojeISO, vazio, normalizar, baixar } from "../ui.js";
 import { dados, criar, atualizar, marcasDo } from "../db.js";
 import { cabecalho } from "./componentes.js";
 import { previaPlanejamento } from "./importarPlanejamento.js";
@@ -11,7 +11,7 @@ import { ehAdmin } from "../permissoes.js";
 import { configMeta } from "../meta.js";
 import { configAgenda, agendaConectada, testarAgenda } from "../agenda.js";
 import { MANUAL_PADRAO } from "../manual.js";
-import { datasDaHyper } from "../ia.js";
+import { quandoDoTexto } from "../datas.js";
 import { MODELOS_PADRAO, FORMATOS, TIPOS_TAREFA, TIPO_CONTEUDO, REDES, TIPOS_FIXOS, ANTECEDENCIA, LISTAS_PADRAO, antecedenciaDe } from "../constantes.js";
 import { configEmail, emailAtivo, conectarEmail, testarEmail, desconectarEmail, backupAgora, resumoAgora } from "../emails.js";
 
@@ -28,7 +28,6 @@ export function render() {
     blocoMeta(),
     blocoManual(),
     ehAdmin() ? blocoListas() : null,
-    ehAdmin() ? blocoDatas() : null,
     blocoModelos(),
     blocoErros(),
 
@@ -90,8 +89,8 @@ function blocoCriativos() {
     criativos.texto ? el("p", { class: "subtitulo" }, criativos.texto) : null);
 }
 
-const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "palavrasChave", "evitar", "pilares", "diretrizes", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];
-const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", pilares: "pilares", diretrizes: "diretrizes de conteúdo", palavrasChave: "palavras e expressões", evitar: "o que evitar", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
+const CAMPOS_MARCA = ["descricao", "tomDeVoz", "publico", "persona", "palavrasChave", "evitar", "pilares", "diretrizes", "datas", "fontes", "observacoes", "instagram", "linkDrive", "linkCanva", "paleta"];
+const ROTULO_CAMPO = { tomDeVoz: "tom de voz", persona: "persona", publico: "público", pilares: "pilares", diretrizes: "diretrizes de conteúdo", palavrasChave: "palavras e expressões", evitar: "o que evitar", datas: "datas comemorativas", fontes: "fontes", observacoes: "observações", descricao: "sobre a marca", instagram: "Instagram", linkDrive: "Drive", linkCanva: "Canva", paleta: "paleta" };
 const preenchido = (x) => (Array.isArray(x) ? x.filter(Boolean).length : String(x ?? "").trim());
 const chaveNome = (s) => normalizar(s || "").replace(/[^a-z0-9]/g, "");
 /** Cliente pelo nome, aceitando pequenas diferenças ("Domo" acha "Domo Empório"; "Jocelene" acha "Jocelene Fernandes"). */
@@ -200,6 +199,7 @@ function previaMarcas(lista) {
             const v = {};
             for (const k of d.campos) if (sobrescrever.checked || !atual || !preenchido(atual[k])) v[k] = m[k];
             if (v.paleta) v.cor = v.paleta[0];
+            if (v.datas) v.datas = (Array.isArray(v.datas) ? v.datas : []).map((d) => ({ nome: String(d?.nome || "").trim(), quando: quandoDoTexto(d?.quando) })).filter((d) => d.nome && d.quando);
             if (!Object.keys(v).length) continue;
             if (marca) await atualizar("marcas", marca.id, v);
             else if (d.criarMarca) await criar("marcas", { nome: d.criarMarca, clienteId, ativo: true, paleta: [], criadoEm: Date.now(), ...v });
@@ -238,53 +238,6 @@ function blocoImportar() {
     el("label", { class: "botao-link secundario", for: "importar-arquivo" }, "Escolher arquivo .json", entrada),
     el("details", {}, el("summary", {}, "Ou colar o texto"), colado,
       el("div", { class: "acoes" }, el("button", { class: "secundario", onClick: () => { if (colado.value.trim()) importarTexto(colado.value); } }, "Importar texto colado"))));
-}
-
-/**
- * Datas comemorativas da Hyper (config/datas), além das nacionais que o app já conhece. Cada uma vale para todas as
- * marcas ou só para as escolhidas, e entra no pedido de copy dos posts perto dela.
- */
-function blocoDatas() {
-  const contas = dados.clientes.filter((c) => c.ativo !== false).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
-    .flatMap((c) => marcasDo(c.id).length ? marcasDo(c.id).map((m) => [m.id, m.nome]) : [[c.id, c.nome]]);
-  const nomeDe = (id) => contas.find(([v]) => v === id)?.[1] || "?";
-  const salvar = (lista) => salvarComId("config", "datas", { lista, atualizadoEm: Date.now() });
-  const editar = async (i) => {
-    const lista = [...datasDaHyper()];
-    const atual = i >= 0 ? lista[i] : { contas: [] };
-    const v = await formulario(i >= 0 ? "Editar data" : "Nova data comemorativa", [
-      { nome: "nome", rotulo: "Nome", obrigatorio: true, dica: "Ex.: Dia do Queijo, Aniversário da Body Ride, Semana da Segurança" },
-      { nome: "quando", rotulo: "Quando", obrigatorio: true, dica: "DD/MM (todo ano), MM (o mês todo) ou DD/MM/AAAA (só esse ano)" },
-      { nome: "contas", rotulo: "Para quais marcas (nenhuma marcada = todas)", tipo: "multi", opcoes: contas }
-    ], { ...atual, quando: paraTela(atual.quando) }, { largo: true });
-    if (!v) return;
-    const quando = doTexto(v.quando);
-    if (!quando) { avisar("Use DD/MM, MM ou DD/MM/AAAA.", "erro"); return; }
-    const item = { nome: v.nome, quando, contas: v.contas || [] };
-    if (i >= 0) lista[i] = item; else lista.push(item);
-    await salvar(lista);
-    avisar("Data salva.");
-  };
-  // Guardado como MM-DD, MM ou AAAA-MM-DD; mostrado como DD/MM, MM ou DD/MM/AAAA
-  const paraTela = (q = "") => /^\d{2}-\d{2}$/.test(q) ? `${q.slice(3)}/${q.slice(0, 2)}` : /^\d{4}-\d{2}-\d{2}$/.test(q) ? `${q.slice(8)}/${q.slice(5, 7)}/${q.slice(0, 4)}` : q;
-  const doTexto = (t = "") => {
-    const s = t.trim(); let m;
-    if ((m = s.match(/^(\d{1,2})$/)) && +m[1] >= 1 && +m[1] <= 12) return m[1].padStart(2, "0");
-    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})$/))) return `${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-    return "";
-  };
-  const lista = datasDaHyper();
-  return el("section", { class: "bloco" },
-    el("h2", {}, "Datas comemorativas"),
-    el("p", {}, "O app já conhece as nacionais (Dia das Mães, Black Friday, Natal…) e as campanhas do mês (Janeiro Branco, Abril Verde, Setembro Amarelo, Outubro Rosa…). Aqui entram as da Hyper e de cada segmento. Elas vão no pedido de copy dos posts até 3 dias antes; a IA usa só quando tiver relação com o tema."),
-    lista.length ? el("ul", { class: "lista-editavel" }, lista.map((d, i) => el("li", {},
-      el("span", { class: "lista-editavel-nome" }, el("strong", {}, d.nome), ` · ${paraTela(d.quando)}${/^\d{2}$/.test(d.quando) ? " (o mês todo)" : ""}`,
-        el("small", { class: "subtitulo" }, ` · ${(d.contas || []).length ? d.contas.map(nomeDe).join(", ") : "todas as marcas"}`)),
-      el("button", { class: "link", onClick: () => editar(i) }, "Editar"),
-      el("button", { class: "icone", "aria-label": `Tirar ${d.nome}`, onClick: async () => { await salvar(lista.filter((_, j) => j !== i)); avisar("Data tirada."); } }, "✕"))))
-      : el("p", { class: "subtitulo" }, "Nenhuma data própria ainda."),
-    el("button", { class: "secundario", onClick: () => editar(-1) }, "+ Data"));
 }
 
 /** E-mails e automações pelo Google Apps Script da conta da Hyper (docs/email). */
